@@ -17,8 +17,14 @@ pre-commit = "^3.3.3"
 tqdm = "^4.66.1"
 wandb = "^0.15.8"
 black = "^23.7.0"
+tomli = "^2.0.1"
 
 
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.ruff]
+line-length = 120
+
+ignore = ["E711"]
