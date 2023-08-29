@@ -2,7 +2,7 @@
 import os
 import subprocess
 from collections import defaultdict
-from src.misc.utils import mat2str
+from multi_agent_reinforcement_learning.misc.utils import mat2str
 
 
 def solveRebFlow(env, res_path, desiredAcc, CPLEXPATH):
@@ -11,7 +11,10 @@ def solveRebFlow(env, res_path, desiredAcc, CPLEXPATH):
     accRLTuple = [(n, int(round(desiredAcc[n]))) for n in desiredAcc]
     accTuple = [(n, int(env.acc[n][t + 1])) for n in env.acc]
     edgeAttr = [(i, j, env.G.edges[i, j]["time"]) for i, j in env.G.edges]
-    modPath = os.getcwd().replace("\\", "/") + "/src/cplex_mod/"
+    modPath = (
+        os.getcwd().replace("\\", "/")
+        + "/multi_agent_reinforcement_learning/cplex_mod/"
+    )
     OPTPath = (
         os.getcwd().replace("\\", "/")
         + "/saved_files/cplex_logs/rebalancing/"
