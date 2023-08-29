@@ -48,7 +48,7 @@ parser.add_argument(
 parser.add_argument(
     "--cplexpath",
     type=str,
-    default="/opt/ibm/ILOG/CPLEX_Studio128/opl/bin/x86-64_linux/",
+    default="/opt/ibm/ILOG/CPLEX_Studio2211/opl/bin/x86-64_linux/",
     help="defines directory of the CPLEX installation",
 )
 parser.add_argument(
@@ -71,7 +71,9 @@ parser.add_argument(
     metavar="N",
     help="number of steps per episode (default: T=60)",
 )
-parser.add_argument("--no-cuda", type=bool, default=True, help="disables CUDA training")
+parser.add_argument(
+    "--no-cuda", type=bool, default=False, help="disables CUDA training"
+)
 
 args = parser.parse_args()
 args.cuda = not args.no_cuda and torch.cuda.is_available()
@@ -79,7 +81,7 @@ device = torch.device("cuda" if args.cuda else "cpu")
 
 # Define AMoD Simulator Environment
 scenario = Scenario(
-    json_file="data/scenario_nyc4x4.json",
+    json_file="../data/scenario_nyc4x4.json",
     sd=args.seed,
     demand_ratio=args.demand_ratio,
     json_hr=args.json_hr,

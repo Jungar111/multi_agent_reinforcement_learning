@@ -107,7 +107,7 @@ class GNNParser:
 class GNNActor(nn.Module):
     """Actor pi(a_t | s_t) parametrizing the concentration parameters of a Dirichlet Policy."""
 
-    def __init__(self, in_channels, out_channels):
+    def __init__(self, in_channels, out_channels, device="cuda:0"):
         """Init method for an GNNActor."""
         super().__init__()
 
@@ -115,11 +115,14 @@ class GNNActor(nn.Module):
         self.lin1 = nn.Linear(in_channels, 32)
         self.lin2 = nn.Linear(32, 32)
         self.lin3 = nn.Linear(32, 1)
+        self.device = device
 
     def forward(self, data):
         """Take one forward pass."""
-        out = F.relu(self.conv1(data.x, data.edge_index))
-        x = out + data.x
+        out = F.relu(
+            self.conv1(data.x.to(self.device), data.edge_index.to(self.device))
+        ).to(self.device)
+        x = out + data.x.to(self.device)
         x = F.relu(self.lin1(x))
         x = F.relu(self.lin2(x))
         x = self.lin3(x)
@@ -167,7 +170,7 @@ class A2C(nn.Module):
         env,
         input_size,
         eps=np.finfo(np.float32).eps.item(),
-        device=torch.device("cpu"),
+        device=torch.device("cuda:0"),
     ):
         """Init method for A2C."""
         super(A2C, self).__init__()
@@ -177,8 +180,8 @@ class A2C(nn.Module):
         self.hidden_size = input_size
         self.device = device
 
-        self.actor = GNNActor(self.input_size, self.hidden_size)
-        self.critic = GNNCritic(self.input_size, self.hidden_size)
+        self.actor = GNNActor(self.input_size, self.hidden_size).to(self.device)
+        self.critic = GNNCritic(self.input_size, self.hidden_size).to(self.device)
         self.obs_parser = GNNParser(self.env)
 
         self.optimizers = self.configure_optimizers()
