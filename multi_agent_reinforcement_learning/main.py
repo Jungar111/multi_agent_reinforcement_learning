@@ -4,6 +4,7 @@ import argparse
 from tqdm import trange
 import numpy as np
 import torch
+import wandb
 
 from src.envs.amod_env import Scenario, AMoD
 from src.algos.a2c_gnn import A2C
@@ -79,6 +80,8 @@ args = parser.parse_args()
 args.cuda = not args.no_cuda and torch.cuda.is_available()
 device = torch.device("cuda" if args.cuda else "cpu")
 
+wandb.init(project="master2023", config={**vars(args)})
+
 # Define AMoD Simulator Environment
 scenario = Scenario(
     json_file="../data/scenario_nyc4x4.json",
@@ -152,6 +155,13 @@ if not args.test:
         log["train_served_demand"].append(episode_served_demand)
         log["train_reb_cost"].append(episode_rebalancing_cost)
         model.log(log, path=f"./{args.directory}/rl_logs/nyc4/a2c_gnn_test.pth")
+        wandb.log(
+            {
+                "test_reward": episode_reward,
+                "test_served_demand": episode_served_demand,
+                "test_reb_cost": episode_rebalancing_cost,
+            }
+        )
 else:
     # Load pre-trained model
     model.load_checkpoint(path=f"./{args.directory}/ckpt/nyc4/a2c_gnn.pth")
@@ -202,3 +212,5 @@ else:
         log["test_reb_cost"].append(episode_rebalancing_cost)
         model.log(log, path=f"./{args.directory}/rl_logs/nyc4/a2c_gnn_test.pth")
         break
+
+    wandb.finish()
