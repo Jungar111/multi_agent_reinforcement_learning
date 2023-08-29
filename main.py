@@ -5,91 +5,22 @@ from tqdm import trange
 import numpy as np
 import torch
 import wandb
+import platform
 
-from src.envs.amod_env import Scenario, AMoD
-from src.algos.a2c_gnn import A2C
-from src.algos.reb_flow_solver import solveRebFlow
-from src.misc.utils import dictsum
+from multi_agent_reinforcement_learning.envs.amod_env import Scenario, AMoD
+from multi_agent_reinforcement_learning.algos.a2c_gnn import A2C
+from multi_agent_reinforcement_learning.algos.reb_flow_solver import solveRebFlow
+from multi_agent_reinforcement_learning.misc.utils import dictsum
 
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="A2C-GNN")
-
-    # Simulator parameters
-    parser.add_argument(
-        "--seed", type=int, default=10, metavar="S", help="random seed (default: 10)"
-    )
-    parser.add_argument(
-        "--demand_ratio",
-        type=int,
-        default=0.5,
-        metavar="S",
-        help="demand_ratio (default: 0.5)",
-    )
-    parser.add_argument(
-        "--json_hr", type=int, default=7, metavar="S", help="json_hr (default: 7)"
-    )
-    parser.add_argument(
-        "--json_tsetp",
-        type=int,
-        default=3,
-        metavar="S",
-        help="minutes per timestep (default: 3min)",
-    )
-    parser.add_argument(
-        "--beta",
-        type=int,
-        default=0.5,
-        metavar="S",
-        help="cost of rebalancing (default: 0.5)",
-    )
-
-    # Model parameters
-    parser.add_argument(
-        "--test",
-        type=bool,
-        default=False,
-        help="activates test mode for agent evaluation",
-    )
-    parser.add_argument(
-        "--cplexpath",
-        type=str,
-        default="/opt/ibm/ILOG/CPLEX_Studio2211/opl/bin/x86-64_linux/",
-        help="defines directory of the CPLEX installation",
-    )
-    parser.add_argument(
-        "--directory",
-        type=str,
-        default="saved_files",
-        help="defines directory where to save files",
-    )
-    parser.add_argument(
-        "--max_episodes",
-        type=int,
-        default=16000,
-        metavar="N",
-        help="number of episodes to train agent (default: 16k)",
-    )
-    parser.add_argument(
-        "--max_steps",
-        type=int,
-        default=60,
-        metavar="N",
-        help="number of steps per episode (default: T=60)",
-    )
-    parser.add_argument(
-        "--no-cuda", type=bool, default=False, help="disables CUDA training"
-    )
-
-    args = parser.parse_args()
-    args.cuda = not args.no_cuda and torch.cuda.is_available()
+def main(args):
+    """Run main training loop."""
     device = torch.device("cuda" if args.cuda else "cpu")
-
     wandb.init(project="master2023", config={**vars(args)})
 
     # Define AMoD Simulator Environment
     scenario = Scenario(
-        json_file="../data/scenario_nyc4x4.json",
+        json_file="data/scenario_nyc4x4.json",
         sd=args.seed,
         demand_ratio=args.demand_ratio,
         json_hr=args.json_hr,
@@ -223,3 +154,88 @@ if __name__ == "__main__":
             break
 
         wandb.finish()
+
+
+if __name__ == "__main__":
+    cplex_path = ""
+    if platform.system() == "Linux":
+        cplex_path = "/opt/ibm/ILOG/CPLEX_Studio2211/opl/bin/x86-64_linux/"
+    elif platform.system() == "Windows":
+        cplex_path = (
+            r"C:\Program Files\IBM\ILOG\CPLEX_Studio2211\\opl\\bin\\x64_win64\\"
+        )
+    else:
+        raise NotImplementedError()
+
+    parser = argparse.ArgumentParser(description="A2C-GNN")
+
+    # Simulator parameters
+    parser.add_argument(
+        "--seed", type=int, default=10, metavar="S", help="random seed (default: 10)"
+    )
+    parser.add_argument(
+        "--demand_ratio",
+        type=int,
+        default=0.5,
+        metavar="S",
+        help="demand_ratio (default: 0.5)",
+    )
+    parser.add_argument(
+        "--json_hr", type=int, default=7, metavar="S", help="json_hr (default: 7)"
+    )
+    parser.add_argument(
+        "--json_tsetp",
+        type=int,
+        default=3,
+        metavar="S",
+        help="minutes per timestep (default: 3min)",
+    )
+    parser.add_argument(
+        "--beta",
+        type=int,
+        default=0.5,
+        metavar="S",
+        help="cost of rebalancing (default: 0.5)",
+    )
+
+    # Model parameters
+    parser.add_argument(
+        "--test",
+        type=bool,
+        default=False,
+        help="activates test mode for agent evaluation",
+    )
+    parser.add_argument(
+        "--cplexpath",
+        type=str,
+        default=cplex_path,
+        help="defines directory of the CPLEX installation",
+    )
+    parser.add_argument(
+        "--directory",
+        type=str,
+        default="saved_files",
+        help="defines directory where to save files",
+    )
+    parser.add_argument(
+        "--max_episodes",
+        type=int,
+        default=16000,
+        metavar="N",
+        help="number of episodes to train agent (default: 16k)",
+    )
+    parser.add_argument(
+        "--max_steps",
+        type=int,
+        default=60,
+        metavar="N",
+        help="number of steps per episode (default: T=60)",
+    )
+    parser.add_argument(
+        "--no-cuda", type=bool, default=False, help="disables CUDA training"
+    )
+
+    args = parser.parse_args()
+    args.cuda = not args.no_cuda and torch.cuda.is_available()
+
+    main(args)

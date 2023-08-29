@@ -16,7 +16,7 @@ import numpy as np
 import subprocess
 import os
 import networkx as nx
-from src.misc.utils import mat2str
+from multi_agent_reinforcement_learning.misc.utils import mat2str
 from copy import deepcopy
 import json
 
@@ -115,7 +115,10 @@ class AMoD:
             if t in self.demand[i, j] and self.demand[i, j][t] > 1e-3
         ]
         accTuple = [(n, self.acc[n][t + 1]) for n in self.acc]
-        modPath = os.getcwd().replace("\\", "/") + "/src/cplex_mod/"
+        modPath = (
+            os.getcwd().replace("\\", "/")
+            + "/multi_agent_reinforcement_learning/cplex_mod/"
+        )
         matchingPath = (
             os.getcwd().replace("\\", "/")
             + "/saved_files/cplex_logs/matching/"
