@@ -16,7 +16,7 @@ from multi_agent_reinforcement_learning.misc.utils import dictsum
 def main(args):
     """Run main training loop."""
     device = torch.device("cuda" if args.cuda else "cpu")
-    wandb.init(project="master2023", config={**vars(args)})
+    wandb.init(project="master2023", name="making_stuff_work", config={**vars(args)})
 
     # Define AMoD Simulator Environment
     scenario = Scenario(
