@@ -17,6 +17,7 @@ def main(args):
     """Run main training loop."""
     device = torch.device("cuda" if args.cuda else "cpu")
     wandb.init(project="master2023", name="making_stuff_work", config={**vars(args)})
+    print(device)
 
     # Define AMoD Simulator Environment
     scenario = Scenario(
@@ -28,7 +29,7 @@ def main(args):
     )
     env = AMoD(scenario, beta=args.beta)
     # Initialize A2C-GNN
-    model = A2C(env=env, input_size=21).to(device)
+    model = A2C(env=env, input_size=21, device=device).to(device)
 
     if not args.test:
         #######################################

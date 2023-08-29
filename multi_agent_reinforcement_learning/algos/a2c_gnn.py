@@ -180,7 +180,9 @@ class A2C(nn.Module):
         self.hidden_size = input_size
         self.device = device
 
-        self.actor = GNNActor(self.input_size, self.hidden_size).to(self.device)
+        self.actor = GNNActor(self.input_size, self.hidden_size, device=self.device).to(
+            self.device
+        )
         self.critic = GNNCritic(self.input_size, self.hidden_size).to(self.device)
         self.obs_parser = GNNParser(self.env)
 
