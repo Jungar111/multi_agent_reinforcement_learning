@@ -56,24 +56,42 @@ def main(args):
                 )
                 episode_reward += paxreward
                 # use GNN-RL policy (Step 2 in paper)
-                action_rl = model.select_action(obs)
+                action_rl_1, action_rl_2 = model.select_action(obs)
                 # transform sample from Dirichlet into actual vehicle counts (i.e. (x1*x2*..*xn)*num_vehicles)
-                desiredAcc = {
-                    env.region[i]: int(action_rl[i] * dictsum(env.acc, env.time + 1))
+                desiredAcc_1 = {
+                    env.region[i]: int(action_rl_1[i] * dictsum(env.acc, env.time + 1))
+                    for i in range(len(env.region))
+                }
+
+                desiredAcc_2 = {
+                    env.region[i]: int(action_rl_2[i] * dictsum(env.acc, env.time + 1))
                     for i in range(len(env.region))
                 }
                 # solve minimum rebalancing distance problem (Step 3 in paper)
-                rebAction = solveRebFlow(
-                    env, "scenario_nyc4", desiredAcc, args.cplexpath
+                rebAction_1 = solveRebFlow(
+                    env, "scenario_nyc4", desiredAcc_1, args.cplexpath
+                )
+
+                rebAction_2 = solveRebFlow(
+                    env, "scenario_nyc4", desiredAcc_2, args.cplexpath
                 )
                 # Take action in environment
-                new_obs, rebreward, done, info = env.reb_step(rebAction)
-                episode_reward += rebreward
+                new_obs_1, rebreward_1, done_1, info_1 = env.reb_step(rebAction_1)
+                new_obs_2, rebreward_2, done_2, info_2 = env.reb_step(
+                    rebAction_2, update_time=True
+                )
+                episode_reward += rebreward_1
+                episode_reward += rebreward_2
                 # Store the transition in memory
-                model.rewards.append(paxreward + rebreward)
+                model.rewards_1.append(paxreward + rebreward_1)
+                model.rewards_2.append(paxreward + rebreward_2)
                 # track performance over episode
-                episode_served_demand += info["served_demand"]
-                episode_rebalancing_cost += info["rebalancing_cost"]
+                episode_served_demand += (
+                    info_1["served_demand"] + info_2["served_demand"]
+                )
+                episode_rebalancing_cost += (
+                    info_1["rebalancing_cost"] + info_2["rebalancing_cost"]
+                )
                 # stop episode if terminating conditions are met
                 if done:
                     break
@@ -125,22 +143,39 @@ def main(args):
                 )
                 episode_reward += paxreward
                 # use GNN-RL policy (Step 2 in paper)
-                action_rl = model.select_action(obs)
+                action_rl_1, action_rl_2 = model.select_action(obs)
                 # transform sample from Dirichlet into actual vehicle counts (i.e. (x1*x2*..*xn)*num_vehicles)
-                desiredAcc = {
-                    env.region[i]: int(action_rl[i] * dictsum(env.acc, env.time + 1))
+                desiredAcc_1 = {
+                    env.region[i]: int(action_rl_1[i] * dictsum(env.acc, env.time + 1))
+                    for i in range(len(env.region))
+                }
+
+                desiredAcc_2 = {
+                    env.region[i]: int(action_rl_2[i] * dictsum(env.acc, env.time + 1))
                     for i in range(len(env.region))
                 }
                 # solve minimum rebalancing distance problem (Step 3 in paper)
-                rebAction = solveRebFlow(
-                    env, "scenario_nyc4_test", desiredAcc, args.cplexpath
+                rebAction_1 = solveRebFlow(
+                    env, "scenario_nyc4_test", desiredAcc_1, args.cplexpath
+                )
+
+                rebAction_2 = solveRebFlow(
+                    env, "scenario_nyc4_test", desiredAcc_2, args.cplexpath
                 )
                 # Take action in environment
-                new_obs, rebreward, done, info = env.reb_step(rebAction)
-                episode_reward += rebreward
+                new_obs_1, rebreward_1, done_1, info_1 = env.reb_step(rebAction_1)
+                new_obs_2, rebreward_2, done_2, info_2 = env.reb_step(
+                    rebAction_2, update_time=True
+                )
+
+                episode_reward += rebreward_1 + rebreward_2
                 # track performance over episode
-                episode_served_demand += info["served_demand"]
-                episode_rebalancing_cost += info["rebalancing_cost"]
+                episode_served_demand += (
+                    info_1["served_demand"] + info_2["served_demand"]
+                )
+                episode_rebalancing_cost += (
+                    info_1["rebalancing_cost"] + info_2["rebalancing_cost"]
+                )
                 k += 1
             # Send current statistics to screen
             epochs.set_description(

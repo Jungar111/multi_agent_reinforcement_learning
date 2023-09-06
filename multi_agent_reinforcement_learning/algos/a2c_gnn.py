@@ -180,17 +180,24 @@ class A2C(nn.Module):
         self.hidden_size = input_size
         self.device = device
 
-        self.actor = GNNActor(self.input_size, self.hidden_size, device=self.device).to(
-            self.device
-        )
+        self.actor_1 = GNNActor(
+            self.input_size, self.hidden_size, device=self.device
+        ).to(self.device)
+
+        self.actor_2 = GNNActor(
+            self.input_size, self.hidden_size, device=self.device
+        ).to(self.device)
+
         self.critic = GNNCritic(self.input_size, self.hidden_size).to(self.device)
         self.obs_parser = GNNParser(self.env)
 
         self.optimizers = self.configure_optimizers()
 
         # action & reward buffer
-        self.saved_actions = []
-        self.rewards = []
+        self.saved_actions_1 = []
+        self.saved_actions_2 = []
+        self.rewards_1 = []
+        self.rewards_2 = []
         self.to(self.device)
 
     def forward(self, obs, jitter=1e-20):
@@ -199,12 +206,15 @@ class A2C(nn.Module):
         x = self.parse_obs(obs).to(self.device)
 
         # actor: computes concentration parameters of a Dirichlet distribution
-        a_out = self.actor(x)
-        concentration = F.softplus(a_out).reshape(-1) + jitter
+        a_out_1 = self.actor_1(x)
+        a_out_2 = self.actor_2(x)
+
+        concentration_1 = F.softplus(a_out_1).reshape(-1) + jitter
+        concentration_2 = F.softplus(a_out_2).reshape(-1) + jitter
 
         # critic: estimates V(s_t)
         value = self.critic(x)
-        return concentration, value
+        return concentration_1, concentration_2, value
 
     def parse_obs(self, obs):
         """Parse observations."""
@@ -213,36 +223,59 @@ class A2C(nn.Module):
 
     def select_action(self, obs):
         """Select an action."""
-        concentration, value = self.forward(obs)
+        concentration_1, concentration_2, value = self.forward(obs)
 
-        m = Dirichlet(concentration)
+        m_1 = Dirichlet(concentration_1)
+        m_2 = Dirichlet(concentration_2)
 
-        action = m.sample()
-        self.saved_actions.append(SavedAction(m.log_prob(action), value))
-        return list(action.cpu().numpy())
+        action_1 = m_1.sample()
+        action_2 = m_2.sample()
+
+        self.saved_actions_1.append(SavedAction(m_1.log_prob(action_1), value))
+        self.saved_actions_2.append(SavedAction(m_2.log_prob(action_2), value))
+
+        return list(action_1.cpu().numpy()), list(action_2.cpu().numpy())
 
     def training_step(self):
         """Take one training step."""
-        R = 0
-        saved_actions = self.saved_actions
-        policy_losses = []  # list to save actor (policy) loss
+        R_1 = 0
+        R_2 = 0
+        saved_actions_1 = self.saved_actions_1
+        saved_actions_2 = self.saved_actions_2
+        policy_losses_1 = []  # list to save actor (policy) loss
         value_losses = []  # list to save critic (value) loss
-        returns = []  # list to save the true values
+        returns_1 = []  # list to save the true values
+        policy_losses_2 = []  # list to save actor (policy) loss
+        returns_2 = []  # list to save the true values
 
         # calculate the true value using rewards returned from the environment
-        for r in self.rewards[::-1]:
+        for r in self.rewards_1[::-1]:
             # calculate the discounted value
-            R = r + args.gamma * R
-            returns.insert(0, R)
+            R_1 = r + args.gamma * R_1
+            returns_1.insert(0, R_1)
 
-        returns = torch.tensor(returns)
-        returns = (returns - returns.mean()) / (returns.std() + self.eps)
+        for r in self.rewards_2[::-1]:
+            # calculate the discounted value
+            R_2 = r + args.gamma * R_2
+            returns_2.insert(0, R_2)
 
-        for (log_prob, value), R in zip(saved_actions, returns):
+        returns_1 = torch.tensor(returns_1)
+        returns_1 = (returns_1 - returns_1.mean()) / (returns_1.std() + self.eps)
+
+        returns_2 = torch.tensor(returns_2)
+        returns_2 = (returns_2 - returns_2.mean()) / (returns_2.std() + self.eps)
+
+        for (log_prob, value), R in zip(saved_actions_1, returns_1):
             advantage = R - value.item()
 
             # calculate actor (policy) loss
-            policy_losses.append(-log_prob * advantage)
+            policy_losses_1.append(-log_prob * advantage)
+
+        for (log_prob, value), R in zip(saved_actions_2, returns_2):
+            advantage = R - value.item()
+
+            # calculate actor (policy) loss
+            policy_losses_2.append(-log_prob * advantage)
 
             # calculate critic (value) loss using L1 smooth loss
             value_losses.append(
@@ -250,10 +283,14 @@ class A2C(nn.Module):
             )
 
         # take gradient steps
-        self.optimizers["a_optimizer"].zero_grad()
-        a_loss = torch.stack(policy_losses).sum()
-        a_loss.backward()
-        self.optimizers["a_optimizer"].step()
+        self.optimizers["a_optimizer_1"].zero_grad()
+        self.optimizers["a_optimizer_2"].zero_grad()
+        a_loss_1 = torch.stack(policy_losses_1).sum()
+        a_loss_2 = torch.stack(policy_losses_2).sum()
+        a_loss_1.backward()
+        a_loss_2.backward()
+        self.optimizers["a_optimizer_1"].step()
+        self.optimizers["a_optimizer_2"].step()
 
         self.optimizers["c_optimizer"].zero_grad()
         v_loss = torch.stack(value_losses).sum()
@@ -261,15 +298,19 @@ class A2C(nn.Module):
         self.optimizers["c_optimizer"].step()
 
         # reset rewards and action buffer
-        del self.rewards[:]
-        del self.saved_actions[:]
+        del self.rewards_1[:]
+        del self.rewards_2[:]
+        del self.saved_actions_1[:]
+        del self.saved_actions_2[:]
 
     def configure_optimizers(self):
         """Configure the optimisers for the GNN."""
         optimizers = dict()
-        actor_params = list(self.actor.parameters())
+        actor_params_1 = list(self.actor_1.parameters())
+        actor_params_2 = list(self.actor_2.parameters())
         critic_params = list(self.critic.parameters())
-        optimizers["a_optimizer"] = torch.optim.Adam(actor_params, lr=1e-3)
+        optimizers["a_optimizer_1"] = torch.optim.Adam(actor_params_1, lr=1e-3)
+        optimizers["a_optimizer_2"] = torch.optim.Adam(actor_params_2, lr=1e-3)
         optimizers["c_optimizer"] = torch.optim.Adam(critic_params, lr=1e-3)
         return optimizers
 

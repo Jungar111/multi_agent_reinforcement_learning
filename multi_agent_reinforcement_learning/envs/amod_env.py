@@ -216,7 +216,7 @@ class AMoD:
         return self.obs, max(0, self.reward), done, self.info
 
     # reb step
-    def reb_step(self, rebAction):
+    def reb_step(self, rebAction, update_time=False):
         """Take on reb step."""
         t = self.time
         self.reward = 0  # reward is calculated from before this to the next rebalancing, we may also have two rewards,
@@ -256,7 +256,9 @@ class AMoD:
                 ]  # this means that after pax arrived, vehicles can only be rebalanced in the next time step, let me
                 # know if you have different opinion
 
-        self.time += 1
+        if update_time:
+            self.time += 1
+
         self.obs = (
             self.acc,
             self.time,
@@ -619,45 +621,3 @@ class Scenario:
                     tripAttr.append((i, j, t, demand[i, j][t], price[i, j][t]))
 
         return tripAttr
-
-
-# TODO: Needed?
-class Star2Complete(Scenario):
-    """No clue honestly."""
-
-    def __init__(
-        self,
-        N1=4,
-        N2=4,
-        sd=10,
-        star_demand=20,
-        complete_demand=1,
-        star_center=[5, 6, 9, 10],
-        grid_travel_time=3,
-        ninit=50,
-        demand_ratio=[1, 1.5, 1.5, 1],
-        alpha=0.2,
-        fix_price=False,
-    ):
-        """Init for the class.
-
-        beta: Proportion of star network
-        alpha: parameter for uniform distribution of demand [1-alpha, 1+alpha]
-        """
-        super(Star2Complete, self).__init__(
-            N1=N1,
-            N2=N2,
-            sd=sd,
-            ninit=ninit,
-            grid_travel_time=grid_travel_time,
-            fix_price=fix_price,
-            alpha=alpha,
-            demand_ratio=demand_ratio,
-            demand_input={
-                (i, j): complete_demand
-                + (star_demand if i in star_center and j not in star_center else 0)
-                for i in range(0, N1 * N2)
-                for j in range(0, N1 * N2)
-                if i != j
-            },
-        )
