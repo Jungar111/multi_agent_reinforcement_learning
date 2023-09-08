@@ -56,7 +56,9 @@ def main(args):
                 )
                 episode_reward += paxreward
                 # use GNN-RL policy (Step 2 in paper)
-                action_rl = model.select_action(obs)
+                action_rl = model.select_action(
+                    obs
+                )  # Selects actions given the observations
                 # transform sample from Dirichlet into actual vehicle counts (i.e. (x1*x2*..*xn)*num_vehicles)
                 desiredAcc = {
                     env.region[i]: int(action_rl[i] * dictsum(env.acc, env.time + 1))
@@ -176,7 +178,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--demand_ratio",
-        type=int,
+        type=float,
         default=0.5,
         metavar="S",
         help="demand_ratio (default: 0.5)",
@@ -193,7 +195,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--beta",
-        type=int,
+        type=float,
         default=0.5,
         metavar="S",
         help="cost of rebalancing (default: 0.5)",
