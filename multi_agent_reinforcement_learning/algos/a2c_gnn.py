@@ -22,6 +22,7 @@ from torch_geometric.nn import GCNConv
 from torch_geometric.utils import grid
 from collections import namedtuple
 from multi_agent_reinforcement_learning.envs.amod_env import AMoD
+import typing as T
 
 SavedAction = namedtuple("SavedAction", ["log_prob", "value"])
 args = namedtuple("args", ("render", "gamma", "log_interval"))
@@ -53,7 +54,7 @@ class GNNParser:
         self.grid_h = grid_h
         self.grid_w = grid_w
 
-    def parse_obs(self, obs: tuple):
+    def parse_obs(self, obs: T.Tuple[dict, int, dict, dict]):
         """Parse observations.
 
         Return the data object called 'data' which is used in the Actors and critc forward pass.
@@ -207,7 +208,7 @@ class A2C(nn.Module):
         self.rewards = []
         self.to(self.device)
 
-    def forward(self, obs: tuple, jitter: float = 1e-20):
+    def forward(self, obs: T.Tuple[dict, int, dict, dict], jitter: float = 1e-20):
         """Forward of both actor and critic in the current enviorenment defined by data.
 
         softplus used on the actor along with 'jitter'.
@@ -226,7 +227,7 @@ class A2C(nn.Module):
         value = self.critic(x)
         return concentration, value
 
-    def parse_obs(self, obs: tuple):
+    def parse_obs(self, obs: T.Tuple[dict, int, dict, dict]):
         """Parse observations.
 
         state: current state of the enviorenment
@@ -235,7 +236,7 @@ class A2C(nn.Module):
         state = self.obs_parser.parse_obs(obs)
         return state
 
-    def select_action(self, obs: tuple):
+    def select_action(self, obs: T.Tuple[dict, int, dict, dict]):
         """Select an action based on the distribution of the vehicles with Dirichlet.
 
         Saves the log of the new action along with the value computed by the critic
