@@ -8,16 +8,16 @@ import wandb
 import platform
 
 from multi_agent_reinforcement_learning.envs.amod_env import Scenario, AMoD
-from multi_agent_reinforcement_learning.algos.a2c_gnn import A2C
+from multi_agent_reinforcement_learning.algos.a2c_gnn import ActorCritic
 from multi_agent_reinforcement_learning.algos.reb_flow_solver import solveRebFlow
 from multi_agent_reinforcement_learning.misc.utils import dictsum
+from multi_agent_reinforcement_learning.algos.uniform_actor import UniformActor
 
 
 def main(args):
     """Run main training loop."""
     device = torch.device("cuda" if args.cuda else "cpu")
     wandb.init(project="master2023", name="making_stuff_work", config={**vars(args)})
-    print(device)
 
     # Define AMoD Simulator Environment
     scenario = Scenario(
@@ -28,8 +28,9 @@ def main(args):
         json_tstep=args.json_tsetp,
     )
     env = AMoD(scenario, beta=args.beta)
-    # Initialize A2C-GNN
-    model = A2C(env=env, input_size=21, device=device).to(device)
+    # Initialize ActorCritic-GNN
+    model = ActorCritic(env=env, input_size=21, device=device).to(device)
+    uniform_actor = UniformActor(model.critic, 10)
 
     if not args.test:
         #######################################
@@ -43,37 +44,64 @@ def main(args):
         epochs = trange(train_episodes)  # epoch iterator
         best_reward = -np.inf  # set best reward
         model.train()  # set model in train mode
+        n_actions = len(env.region)
 
         for i_episode in epochs:
             obs = env.reset()  # initialize environment
             episode_reward = 0
             episode_served_demand = 0
             episode_rebalancing_cost = 0
+            episode_reward_uniform = 0
+            episode_served_demand_uniform = 0
+            episode_rebalancing_cost_uniform = 0
             for step in range(T):
                 # take matching step (Step 1 in paper)
-                obs, paxreward, done, info = env.pax_step(
+                obs, pax_reward, done, info = env.pax_step(
                     CPLEXPATH=args.cplexpath, PATH="scenario_nyc4"
                 )
-                episode_reward += paxreward
+                episode_reward += pax_reward
                 # use GNN-RL policy (Step 2 in paper)
                 action_rl = model.select_action(obs)
+                print(T)
+                action_uniform = uniform_actor.select_action(n_actions=n_actions)
                 # transform sample from Dirichlet into actual vehicle counts (i.e. (x1*x2*..*xn)*num_vehicles)
-                desiredAcc = {
-                    env.region[i]: int(action_rl[i] * dictsum(env.acc, env.time + 1))
-                    for i in range(len(env.region))
+
+                n_vehicles = dictsum(env.acc, env.time + 1)
+
+                desired_acc = {
+                    env.region[i]: int(action_rl[i] * n_vehicles)
+                    for i in range(n_actions)
                 }
+
+                desired_acc_uniform = {
+                    env.region[i]: int(action_uniform[i] * n_vehicles)
+                    for i in range(n_actions)
+                }
+
                 # solve minimum rebalancing distance problem (Step 3 in paper)
-                rebAction = solveRebFlow(
-                    env, "scenario_nyc4", desiredAcc, args.cplexpath
+                reb_action = solveRebFlow(
+                    env, "scenario_nyc4", desired_acc, args.cplexpath
                 )
+
+                reb_action_uniform = solveRebFlow(
+                    env, "scenario_nyc4", desired_acc_uniform, args.cplexpath
+                )
+
+                _, reb_reward_uniform, _, info_uniform = env.reb_step(
+                    reb_action_uniform
+                )
+                episode_reward_uniform += reb_reward_uniform
+
                 # Take action in environment
-                new_obs, rebreward, done, info = env.reb_step(rebAction)
-                episode_reward += rebreward
+                _, reb_reward, done, info = env.reb_step(reb_action)
+                episode_reward += reb_reward
                 # Store the transition in memory
-                model.rewards.append(paxreward + rebreward)
+                model.rewards.append(pax_reward + reb_reward)
                 # track performance over episode
                 episode_served_demand += info["served_demand"]
                 episode_rebalancing_cost += info["rebalancing_cost"]
+                episode_served_demand_uniform += info_uniform["served_demand"]
+                episode_rebalancing_cost_uniform += info_uniform["rebalancing_cost"]
                 # stop episode if terminating conditions are met
                 if done:
                     break
@@ -101,6 +129,9 @@ def main(args):
                     "test_reward": episode_reward,
                     "test_served_demand": episode_served_demand,
                     "test_reb_cost": episode_rebalancing_cost,
+                    "test_reward_uniform": episode_reward_uniform,
+                    "test_served_demand_uniform": episode_served_demand_uniform,
+                    "test_reb_cost_uniform": episode_rebalancing_cost_uniform,
                 }
             )
     else:
@@ -120,24 +151,24 @@ def main(args):
             k = 0
             while not done:
                 # take matching step (Step 1 in paper)
-                obs, paxreward, done, info = env.pax_step(
+                obs, pax_reward, done, info = env.pax_step(
                     CPLEXPATH=args.cplexpath, PATH="scenario_nyc4_test"
                 )
-                episode_reward += paxreward
+                episode_reward += pax_reward
                 # use GNN-RL policy (Step 2 in paper)
                 action_rl = model.select_action(obs)
                 # transform sample from Dirichlet into actual vehicle counts (i.e. (x1*x2*..*xn)*num_vehicles)
-                desiredAcc = {
+                desired_acc = {
                     env.region[i]: int(action_rl[i] * dictsum(env.acc, env.time + 1))
                     for i in range(len(env.region))
                 }
                 # solve minimum rebalancing distance problem (Step 3 in paper)
-                rebAction = solveRebFlow(
-                    env, "scenario_nyc4_test", desiredAcc, args.cplexpath
+                reb_action = solveRebFlow(
+                    env, "scenario_nyc4_test", desired_acc, args.cplexpath
                 )
                 # Take action in environment
-                new_obs, rebreward, done, info = env.reb_step(rebAction)
-                episode_reward += rebreward
+                new_obs, reb_reward, done, info = env.reb_step(reb_action)
+                episode_reward += reb_reward
                 # track performance over episode
                 episode_served_demand += info["served_demand"]
                 episode_rebalancing_cost += info["rebalancing_cost"]
@@ -168,7 +199,7 @@ if __name__ == "__main__":
     else:
         raise NotImplementedError()
 
-    parser = argparse.ArgumentParser(description="A2C-GNN")
+    parser = argparse.ArgumentParser(description="ActorCritic-GNN")
 
     # Simulator parameters
     parser.add_argument(

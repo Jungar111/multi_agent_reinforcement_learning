@@ -1,14 +1,16 @@
-"""A2C-GNN.
+"""ActorCritic-GNN.
 
 -------
-This file contains the A2C-GNN specifications. In particular, we implement:
+This file contains the ActorCritic-GNN specifications. In particular, we implement:
 (1) GNNParser
     Converts raw environment observations to agent inputs (s_t).
 (2) GNNActor:
     Policy parametrized by Graph Convolution Networks (Section III-C in the paper)
 (3) GNNCritic:
     Critic parametrized by Graph Convolution Networks (Section III-C in the paper)
-(4) A2C:
+(4) ActorCritic:
+
+
     Advantage Actor Critic algorithm using a GNN parametrization for both Actor and Critic.
 """
 
@@ -21,6 +23,7 @@ from torch_geometric.data import Data
 from torch_geometric.nn import GCNConv
 from torch_geometric.utils import grid
 from collections import namedtuple
+import typing as T
 
 SavedAction = namedtuple("SavedAction", ["log_prob", "value"])
 args = namedtuple("args", ("render", "gamma", "log_interval"))
@@ -107,7 +110,9 @@ class GNNParser:
 class GNNActor(nn.Module):
     """Actor pi(a_t | s_t) parametrizing the concentration parameters of a Dirichlet Policy."""
 
-    def __init__(self, in_channels, out_channels, device="cuda:0"):
+    def __init__(
+        self, in_channels, out_channels, device: T.Union[str, torch.device] = "cuda:0"
+    ):
         """Init method for an GNNActor."""
         super().__init__()
 
@@ -158,11 +163,11 @@ class GNNCritic(nn.Module):
 
 
 #########################################
-############## A2C AGENT ################
+###### ActorCritic AGENT ################
 #########################################
 
 
-class A2C(nn.Module):
+class ActorCritic(nn.Module):
     """Advantage Actor Critic algorithm for the AMoD control problem."""
 
     def __init__(
@@ -172,8 +177,8 @@ class A2C(nn.Module):
         eps=np.finfo(np.float32).eps.item(),
         device=torch.device("cuda:0"),
     ):
-        """Init method for A2C."""
-        super(A2C, self).__init__()
+        """Init method for ActorCritic."""
+        super(ActorCritic, self).__init__()
         self.env = env
         self.eps = eps
         self.input_size = input_size

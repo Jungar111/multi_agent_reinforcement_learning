@@ -8,7 +8,7 @@ This file contains the specifications for the AMoD system simulator. In particul
     Policy parametrized by Graph Convolution Networks (Section III-C in the paper)
 (3) GNNCritic:
     Critic parametrized by Graph Convolution Networks (Section III-C in the paper)
-(4) A2C:
+(4) ActorCritic:
     Advantage Actor Critic algorithm using a GNN parametrization for both Actor and Critic.
 """
 from collections import defaultdict
