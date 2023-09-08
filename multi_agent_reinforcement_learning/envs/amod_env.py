@@ -2,6 +2,7 @@
 
 -----------------------------------------
 This file contains the specifications for the AMoD system simulator. In particular, we implement:
+<<<<<<< HEAD
 (1) GNNParser
     Converts raw environment observations to agent inputs (s_t).
 (2) GNNActor:
@@ -10,6 +11,10 @@ This file contains the specifications for the AMoD system simulator. In particul
     Critic parametrized by Graph Convolution Networks (Section III-C in the paper)
 (4) ActorCritic:
     Advantage Actor Critic algorithm using a GNN parametrization for both Actor and Critic.
+=======
+(1) Class AMoD:
+    Defines all aspects of the enviorenment with vehicles and demand
+>>>>>>> main
 """
 from collections import defaultdict
 import numpy as np
@@ -25,8 +30,12 @@ class AMoD:
     """Class for the environement."""
 
     # initialization
-    def __init__(self, scenario, beta=0.2):
-        """Initialise env."""
+    def __init__(self, scenario, beta: float = 0.2):
+        """Initialise env.
+
+        scenario: The current scenario
+        beta: cost of rebalancing
+        """
         # updated to take scenario and beta (cost for rebalancing) as input
         self.scenario = deepcopy(
             scenario
@@ -74,7 +83,7 @@ class AMoD:
         )  # number of vehicles with passengers, key: (i,j) - (origin, destination), t - time
         self.edges = []  # set of rebalancing edges
         self.nregion = len(scenario.G)  # number of regions
-        for i in self.G:
+        for i in self.G:  # Append all nodes to itself so staying is a possibility
             self.edges.append((i, i))
             for e in self.G.out_edges(i):
                 self.edges.append(e)
@@ -83,14 +92,16 @@ class AMoD:
             len(self.G.out_edges(n)) + 1 for n in self.region
         ]  # number of edges leaving each region
         for i, j in self.G.edges:
-            self.G.edges[i, j]["time"] = self.rebTime[i, j][self.time]
+            self.G.edges[i, j]["time"] = self.rebTime[i, j][
+                self.time
+            ]  # Append the time it takes to rebalance to all edges
             self.rebFlow[i, j] = defaultdict(float)
         for i, j in self.demand:
             self.paxFlow[i, j] = defaultdict(float)
         for n in self.region:
             self.acc[n][0] = self.G.nodes[n]["accInit"]
             self.dacc[n] = defaultdict(float)
-        self.beta = beta * scenario.tstep
+        self.beta = beta * scenario.tstep  # Rebalancing cost
         t = self.time
         self.servedDemand = defaultdict(dict)
         for i, j in self.demand:
@@ -106,14 +117,17 @@ class AMoD:
         # observation: current vehicle distribution, time, future arrivals, demand
         self.obs = (self.acc, self.time, self.dacc, self.demand)
 
-    def matching(self, CPLEXPATH=None, PATH="", platform="linux"):
-        """Match in the class."""
+    def matching(self, CPLEXPATH: str = None, PATH: str = "", platform: str = "linux"):
+        """Match in the class Matches passengers with vehicles.
+
+        return: paxAction
+        """
         t = self.time
         demandAttr = [
             (i, j, self.demand[i, j][t], self.price[i, j][t])
             for i, j in self.demand
             if t in self.demand[i, j] and self.demand[i, j][t] > 1e-3
-        ]
+        ]  # Setup demand and price at time t.
         accTuple = [(n, self.acc[n][t + 1]) for n in self.acc]
         modPath = (
             os.getcwd().replace("\\", "/")
@@ -161,9 +175,18 @@ class AMoD:
         paxAction = [flow[i, j] if (i, j) in flow else 0 for i, j in self.edges]
         return paxAction
 
-    # pax step
-    def pax_step(self, paxAction=None, CPLEXPATH=None, PATH="", platform="linux"):
-        """Take one pax step."""
+    def pax_step(
+        self,
+        paxAction: list = None,
+        CPLEXPATH: str = None,
+        PATH: str = "",
+        platform: str = "linux",
+    ):
+        """Take one pax step.
+
+        paxAction: Passenger actions for timestep
+        returns: self.obs, max(0, self.reward), done, self.info
+        """
         t = self.time
         self.reward = 0
         for i in self.region:
@@ -178,8 +201,7 @@ class AMoD:
             # acc[t+1], therefore this part cannot be put forward
             paxAction = self.matching(CPLEXPATH=CPLEXPATH, PATH=PATH, platform=platform)
         self.paxAction = paxAction
-        # serving passengers
-
+        # serving passengers, if vehicle is in same section
         for k in range(len(self.edges)):
             i, j = self.edges[k]
             if (
@@ -191,20 +213,26 @@ class AMoD:
             # I moved the min operator above, since we want paxFlow to be consistent with paxAction
             assert paxAction[k] < self.acc[i][t + 1] + 1e-3
             self.paxAction[k] = min(self.acc[i][t + 1], paxAction[k])
-            self.servedDemand[i, j][t] = self.paxAction[k]
+            self.servedDemand[i, j][t] = self.paxAction[
+                k
+            ]  # define servedDemand as the current passenger action
             self.paxFlow[i, j][t + self.demandTime[i, j][t]] = self.paxAction[k]
             self.info["operating_cost"] += (
                 self.demandTime[i, j][t] * self.beta * self.paxAction[k]
-            )
+            )  # define the cost of picking of the current passenger
             self.acc[i][t + 1] -= self.paxAction[k]
-            self.info["served_demand"] += self.servedDemand[i, j][t]
+            self.info["served_demand"] += self.servedDemand[i, j][
+                t
+            ]  # Add to served_demand
             self.dacc[j][t + self.demandTime[i, j][t]] += self.paxFlow[i, j][
                 t + self.demandTime[i, j][t]
             ]
             self.reward += self.paxAction[k] * (
                 self.price[i, j][t] - self.demandTime[i, j][t] * self.beta
-            )
-            self.info["revenue"] += self.paxAction[k] * (self.price[i, j][t])
+            )  # add to reward
+            self.info["revenue"] += self.paxAction[k] * (
+                self.price[i, j][t]
+            )  # Add passenger action * price to revenue
 
         self.obs = (
             self.acc,
@@ -215,14 +243,17 @@ class AMoD:
         done = False  # if passenger matching is executed first
         return self.obs, max(0, self.reward), done, self.info
 
-    # reb step
-    def reb_step(self, rebAction):
-        """Take on reb step."""
+    def reb_step(self, rebAction: list):
+        """Take on reb step, Adjusting costs, reward.
+
+        rebAction: the action of rebalancing
+        returns: self.obs, self.reward, done, self.info
+        """
         t = self.time
         self.reward = 0  # reward is calculated from before this to the next rebalancing, we may also have two rewards,
         # one for pax matching and one for rebalancing
         self.rebAction = rebAction
-        # rebalancing
+        # rebalancing loop
         for k in range(len(self.edges)):
             i, j = self.edges[k]
             if (i, j) not in self.G.edges:
@@ -256,20 +287,24 @@ class AMoD:
                 ]  # this means that after pax arrived, vehicles can only be rebalanced in the next time step, let me
                 # know if you have different opinion
 
-        self.time += 1
+        self.time += 1  # Advance one time step
         self.obs = (
             self.acc,
             self.time,
             self.dacc,
             self.demand,
         )  # use self.time to index the next time step
+
         for i, j in self.G.edges:
             self.G.edges[i, j]["time"] = self.rebTime[i, j][self.time]
         done = self.tf == t + 1  # if the episode is completed
         return self.obs, self.reward, done, self.info
 
     def reset(self):
-        """Reset the episode."""
+        """Reset the episode.
+
+        return: selv.obs
+        """
         self.acc = defaultdict(dict)
         self.dacc = defaultdict(dict)
         self.rebFlow = defaultdict(dict)
@@ -321,25 +356,25 @@ class Scenario:
 
     def __init__(
         self,
-        N1=2,
-        N2=4,
-        tf=60,
+        N1: int = 2,  # grid size
+        N2: int = 4,  # grid size
+        tf: int = 60,  # Timeframe
         sd=None,
-        ninit=5,
+        ninit: int = 5,  # Initial number of vehicles in each region
         tripAttr=None,
         demand_input=None,
-        demand_ratio=None,
-        trip_length_preference=0.25,
-        grid_travel_time=1,
-        fix_price=True,
-        alpha=0.2,
-        json_file=None,
-        json_hr=9,
-        json_tstep=2,
-        varying_time=False,
+        demand_ratio: float = None,
+        trip_length_preference: float = 0.25,
+        grid_travel_time: int = 1,
+        fix_price: bool = True,
+        alpha: float = 0.2,
+        json_file: bool = None,
+        json_hr: int = 9,
+        json_tstep: int = 2,
+        varying_time: bool = False,
         json_regions=None,
     ):
-        """Init mothod for a scenario.
+        """Init method for a scenario.
 
         trip_length_preference: positive - more shorter trips, negative - more longer trips
         grid_travel_time: travel time between grids
@@ -353,7 +388,7 @@ class Scenario:
         self.sd = sd
         if sd != None:
             np.random.seed(self.sd)
-        if json_file == None:
+        if json_file == None:  # simulate enviorienment when json is none.
             self.varying_time = varying_time
             self.is_json = False
             self.alpha = alpha
@@ -439,7 +474,7 @@ class Scenario:
             else:
                 self.tripAttr = self.get_random_demand()  # randomly generated demand
 
-        else:
+        else:  # if json is true
             self.varying_time = varying_time
             self.is_json = True
             with open(json_file, "r") as file:
@@ -540,12 +575,13 @@ class Scenario:
                         self.G.nodes[n]["accInit"] = int(acc / len(self.G))
             self.tripAttr = self.get_random_demand()
 
-    def get_random_demand(self, reset=False):
+    def get_random_demand(self, reset: bool = False):
         """Generate demand and price.
 
         reset = True means that the function is called in the reset() method of AMoD enviroment,
         assuming static demand is already generated
         reset = False means that the function is called when initializing the demand
+        return: tripAttr
         """
         demand = defaultdict(dict)
         price = defaultdict(dict)
@@ -564,7 +600,7 @@ class Scenario:
                         demand[i, j][t] = 0
                         price[i, j][t] = 0
                     tripAttr.append((i, j, t, demand[i, j][t], price[i, j][t]))
-        else:
+        else:  # Generate random demand
             self.static_demand = dict()
             region_rand = np.random.rand(len(self.G)) * self.alpha * 2 + 1 - self.alpha
             if type(self.demand_input) in [float, int, list, np.array]:

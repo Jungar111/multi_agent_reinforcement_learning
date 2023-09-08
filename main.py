@@ -62,7 +62,6 @@ def main(args):
                 episode_reward += pax_reward
                 # use GNN-RL policy (Step 2 in paper)
                 action_rl = model.select_action(obs)
-                print(T)
                 action_uniform = uniform_actor.select_action(n_actions=n_actions)
                 # transform sample from Dirichlet into actual vehicle counts (i.e. (x1*x2*..*xn)*num_vehicles)
 
