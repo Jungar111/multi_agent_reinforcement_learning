@@ -102,3 +102,7 @@ def args_to_config():
     """Convert args to Pydantic model."""
     args = parse_arguments()
     return Config(**vars(args))
+
+
+if __name__ == "__main__":
+    print(args_to_config())

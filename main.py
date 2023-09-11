@@ -4,11 +4,10 @@ from __future__ import print_function
 from datetime import datetime
 
 import numpy as np
-import torch
 from tqdm import trange
 
 import wandb
-from multi_agent_reinforcement_learning.algos.a2c_gnn import A2C
+from multi_agent_reinforcement_learning.algos.a2c_gnn import ActorCritic
 from multi_agent_reinforcement_learning.algos.reb_flow_solver import solveRebFlow
 from multi_agent_reinforcement_learning.data_models.logs import ModelLog
 from multi_agent_reinforcement_learning.envs.amod_env import AMoD, Scenario
@@ -19,7 +18,6 @@ from multi_agent_reinforcement_learning.data_models.config import Config
 
 def main(config: Config):
     """Run main training loop."""
-    device = torch.device("cuda" if config.cuda else "cpu")
     wandb.init(
         project="master2023",
         name=f"test_log ({datetime.now().strftime('%Y-%m-%d %H:%M')})"
@@ -38,7 +36,7 @@ def main(config: Config):
     )
     env = AMoD(scenario, beta=config.beta)
     # Initialize A2C-GNN
-    model = A2C(env=env, input_size=21, device=device).to(device)
+    model = ActorCritic(env=env, input_size=21, config=config)
 
     if not config.test:
         #######################################
@@ -58,7 +56,7 @@ def main(config: Config):
             for step in range(T):
                 # take matching step (Step 1 in paper)
                 obs, paxreward, done, info = env.pax_step(
-                    CPLEXPATH=config.cplexpath, PATH="scenario_nyc4"
+                    CPLEXPATH=config.cplex_path, PATH="scenario_nyc4"
                 )
                 train_log.reward += paxreward
                 # use GNN-RL policy (Step 2 in paper)
@@ -72,7 +70,7 @@ def main(config: Config):
                 }
                 # solve minimum rebalancing distance problem (Step 3 in paper)
                 rebAction = solveRebFlow(
-                    env, "scenario_nyc4", desiredAcc, config.cplexpath
+                    env, "scenario_nyc4", desiredAcc, config.cplex_path
                 )
                 # Take action in environment
                 new_obs, rebreward, done, info = env.reb_step(rebAction)

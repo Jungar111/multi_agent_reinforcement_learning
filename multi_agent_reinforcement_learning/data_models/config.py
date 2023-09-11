@@ -1,15 +1,12 @@
 """Config for the entire project."""
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 import torch
 
 
 class Config(BaseModel):
     """Config class."""
 
-    class Config:
-        """Configure pydantic."""
-
-        arbitrary_types = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     cplex_path: str
     seed: int

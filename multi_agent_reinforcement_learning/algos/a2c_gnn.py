@@ -1,14 +1,6 @@
 """A2C-GNN.
 
--------
-This file contains the A2C-GNN specifications. In particular, we implement:
-(1) GNNParser
-    Converts raw environment observations to agent inputs (s_t).
-(2) GNNActor:
-    Policy parametrized by Graph Convolution Networks (Section III-C in the paper)
-(3) GNNCritic:
-    Critic parametrized by Graph Convolution Networks (Section III-C in the paper)
-(4) A2C:
+A2C:
     Advantage Actor Critic algorithm using a GNN parametrization for both Actor and Critic.
 """
 
@@ -28,7 +20,7 @@ from multi_agent_reinforcement_learning.data_models.config import Config
 from multi_agent_reinforcement_learning.data_models.a2c_data import SavedAction
 
 
-class A2C(nn.Module):
+class ActorCritic(nn.Module):
     """Advantage Actor Critic algorithm for the AMoD control problem."""
 
     # Defines env, input size, episodes and device
@@ -46,7 +38,7 @@ class A2C(nn.Module):
         obs_parser: Defined by GNNParser
         optimizer: Defines the optimizer
         """
-        super(A2C, self).__init__()
+        super(ActorCritic, self).__init__()
         self.env = env
         self.eps = eps
         self.input_size = input_size
@@ -131,15 +123,18 @@ class A2C(nn.Module):
             returns.std() + self.eps
         )  # Standadize the returns object
 
-        for (log_prob, value), R in zip(saved_actions, returns):
-            advantage = R - value.item()  # Don't know what this is?
+        for saved_action, R in zip(saved_actions, returns):
+            advantage = R - saved_action.value.item()
 
             # calculate actor (policy) loss
-            policy_losses.append(-log_prob * advantage)
+            policy_losses.append(-saved_action.log_prob * advantage)
 
             # calculate critic (value) loss using L1 smooth loss
             value_losses.append(
-                F.smooth_l1_loss(value, torch.tensor([R]).to(self.config.device))
+                F.smooth_l1_loss(
+                    saved_action.value.to(self.config.device),
+                    torch.tensor([R]).to(self.config.device),
+                )
             )
 
         # take gradient steps a = actor, c = critic

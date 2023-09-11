@@ -1,9 +1,12 @@
 """Datamodels for saving actions."""
-from pydantic import BaseModel
+import torch
+from pydantic import BaseModel, ConfigDict
 
 
 class SavedAction(BaseModel):
     """Save actions for ActorCritic module."""
 
-    log_prob: float
-    value: float
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    log_prob: torch.Tensor
+    value: torch.Tensor
