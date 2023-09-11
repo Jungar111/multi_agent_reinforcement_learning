@@ -1,51 +1,53 @@
 """Main file for project."""
 from __future__ import print_function
-import argparse
+
 from datetime import datetime
-from tqdm import trange
+
 import numpy as np
 import torch
-import wandb
-import platform
+from tqdm import trange
 
-from multi_agent_reinforcement_learning.envs.amod_env import Scenario, AMoD
+import wandb
 from multi_agent_reinforcement_learning.algos.a2c_gnn import A2C
 from multi_agent_reinforcement_learning.algos.reb_flow_solver import solveRebFlow
+from multi_agent_reinforcement_learning.data_models.logs import ModelLog
+from multi_agent_reinforcement_learning.envs.amod_env import AMoD, Scenario
 from multi_agent_reinforcement_learning.misc.utils import dictsum
-from multi_agent_reinforcement_learning.logs import ModelLog
+from multi_agent_reinforcement_learning.utils.argument_parser import args_to_config
+from multi_agent_reinforcement_learning.data_models.config import Config
 
 
-def main(args):
+def main(config: Config):
     """Run main training loop."""
-    device = torch.device("cuda" if args.cuda else "cpu")
+    device = torch.device("cuda" if config.cuda else "cpu")
     wandb.init(
         project="master2023",
         name=f"test_log ({datetime.now().strftime('%Y-%m-%d %H:%M')})"
-        if args.test
+        if config.test
         else f"train_log ({datetime.now().strftime('%Y-%m-%d %H:%M')})",
-        config={**vars(args)},
+        config={**vars(config)},
     )
 
     # Define AMoD Simulator Environment
     scenario = Scenario(
         json_file="data/scenario_nyc4x4.json",
-        sd=args.seed,
-        demand_ratio=args.demand_ratio,
-        json_hr=args.json_hr,
-        json_tstep=args.json_tsetp,
+        sd=config.seed,
+        demand_ratio=config.demand_ratio,
+        json_hr=config.json_hr,
+        json_tstep=config.json_tsetp,
     )
-    env = AMoD(scenario, beta=args.beta)
+    env = AMoD(scenario, beta=config.beta)
     # Initialize A2C-GNN
     model = A2C(env=env, input_size=21, device=device).to(device)
 
-    if not args.test:
+    if not config.test:
         #######################################
         #############Training Loop#############
         #######################################
 
         # Initialize lists for logging
-        train_episodes = args.max_episodes  # set max number of training episodes
-        T = args.max_steps  # set episode length
+        train_episodes = config.max_episodes  # set max number of training episodes
+        T = config.max_steps  # set episode length
         epochs = trange(train_episodes)  # epoch iterator
         best_reward = -np.inf  # set best reward
         model.train()  # set model in train mode
@@ -56,7 +58,7 @@ def main(args):
             for step in range(T):
                 # take matching step (Step 1 in paper)
                 obs, paxreward, done, info = env.pax_step(
-                    CPLEXPATH=args.cplexpath, PATH="scenario_nyc4"
+                    CPLEXPATH=config.cplexpath, PATH="scenario_nyc4"
                 )
                 train_log.reward += paxreward
                 # use GNN-RL policy (Step 2 in paper)
@@ -70,7 +72,7 @@ def main(args):
                 }
                 # solve minimum rebalancing distance problem (Step 3 in paper)
                 rebAction = solveRebFlow(
-                    env, "scenario_nyc4", desiredAcc, args.cplexpath
+                    env, "scenario_nyc4", desiredAcc, config.cplexpath
                 )
                 # Take action in environment
                 new_obs, rebreward, done, info = env.reb_step(rebAction)
@@ -94,16 +96,16 @@ def main(args):
             # Checkpoint best performing model
             if train_log.reward >= best_reward:
                 model.save_checkpoint(
-                    path=f"./{args.directory}/ckpt/nyc4/a2c_gnn_test.pth"
+                    path=f"./{config.directory}/ckpt/nyc4/a2c_gnn_test.pth"
                 )
                 best_reward = train_log.reward
             # Log KPIs on weights and biases
             wandb.log({**dict(train_log)})
     else:
         # Load pre-trained model
-        model.load_checkpoint(path=f"./{args.directory}/ckpt/nyc4/a2c_gnn.pth")
-        test_episodes = args.max_episodes  # set max number of training episodes
-        T = args.max_steps  # set episode length
+        model.load_checkpoint(path=f"./{config.directory}/ckpt/nyc4/a2c_gnn.pth")
+        test_episodes = config.max_episodes  # set max number of training episodes
+        T = config.max_steps  # set episode length
         epochs = trange(test_episodes)  # epoch iterator
         # Initialize lists for logging
         for episode in epochs:
@@ -114,7 +116,7 @@ def main(args):
             while not done:
                 # take matching step (Step 1 in paper)
                 obs, paxreward, done, info = env.pax_step(
-                    CPLEXPATH=args.cplexpath, PATH="scenario_nyc4_test"
+                    CPLEXPATH=config.cplex_path, PATH="scenario_nyc4_test"
                 )
                 test_log.reward += paxreward
                 # use GNN-RL policy (Step 2 in paper)
@@ -126,7 +128,7 @@ def main(args):
                 }
                 # solve minimum rebalancing distance problem (Step 3 in paper)
                 rebAction = solveRebFlow(
-                    env, "scenario_nyc4_test", desiredAcc, args.cplexpath
+                    env, "scenario_nyc4_test", desiredAcc, config.cplex_path
                 )
                 # Take action in environment
                 new_obs, rebreward, done, info = env.reb_step(rebAction)
@@ -147,85 +149,5 @@ def main(args):
 
 
 if __name__ == "__main__":
-    cplex_path = ""
-    if platform.system() == "Linux":
-        cplex_path = "/opt/ibm/ILOG/CPLEX_Studio2211/opl/bin/x86-64_linux/"
-    elif platform.system() == "Windows":
-        cplex_path = (
-            r"C:\Program Files\IBM\ILOG\CPLEX_Studio2211\\opl\\bin\\x64_win64\\"
-        )
-    else:
-        raise NotImplementedError()
-
-    parser = argparse.ArgumentParser(description="A2C-GNN")
-
-    # Simulator parameters
-    parser.add_argument(
-        "--seed", type=int, default=10, metavar="S", help="random seed (default: 10)"
-    )
-    parser.add_argument(
-        "--demand_ratio",
-        type=float,
-        default=0.5,
-        metavar="S",
-        help="demand_ratio (default: 0.5)",
-    )
-    parser.add_argument(
-        "--json_hr", type=int, default=7, metavar="S", help="json_hr (default: 7)"
-    )
-    parser.add_argument(
-        "--json_tsetp",
-        type=int,
-        default=3,
-        metavar="S",
-        help="minutes per timestep (default: 3min)",
-    )
-    parser.add_argument(
-        "--beta",
-        type=float,
-        default=0.5,
-        metavar="S",
-        help="cost of rebalancing (default: 0.5)",
-    )
-
-    # Model parameters
-    parser.add_argument(
-        "--test",
-        type=bool,
-        default=False,
-        help="activates test mode for agent evaluation",
-    )
-    parser.add_argument(
-        "--cplexpath",
-        type=str,
-        default=cplex_path,
-        help="defines directory of the CPLEX installation",
-    )
-    parser.add_argument(
-        "--directory",
-        type=str,
-        default="saved_files",
-        help="defines directory where to save files",
-    )
-    parser.add_argument(
-        "--max_episodes",
-        type=int,
-        default=16000,
-        metavar="N",
-        help="number of episodes to train agent (default: 16k)",
-    )
-    parser.add_argument(
-        "--max_steps",
-        type=int,
-        default=60,
-        metavar="N",
-        help="number of steps per episode (default: T=60)",
-    )
-    parser.add_argument(
-        "--no-cuda", type=bool, default=False, help="disables CUDA training"
-    )
-
-    args = parser.parse_args()
-    args.cuda = not args.no_cuda and torch.cuda.is_available()
-
+    args = args_to_config()
     main(args)

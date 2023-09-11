@@ -12,162 +12,20 @@ This file contains the A2C-GNN specifications. In particular, we implement:
     Advantage Actor Critic algorithm using a GNN parametrization for both Actor and Critic.
 """
 
-import numpy as np
-import torch
-from torch import nn
-import torch.nn.functional as F
-from torch.distributions import Dirichlet
-from torch_geometric.data import Data
-from torch_geometric.nn import GCNConv
-from torch_geometric.utils import grid
-from collections import namedtuple
-from multi_agent_reinforcement_learning.envs.amod_env import AMoD
 import typing as T
 
-SavedAction = namedtuple("SavedAction", ["log_prob", "value"])
-args = namedtuple("args", ("render", "gamma", "log_interval"))
-args.render = True
-args.gamma = 0.97
-args.log_interval = 10
+import numpy as np
+import torch
+import torch.nn.functional as F
+from torch import nn
+from torch.distributions import Dirichlet
 
-#########################################
-############## PARSER ###################
-#########################################
-
-
-class GNNParser:
-    """Parser converting raw environment observations to agent inputs (s_t)."""
-
-    def __init__(
-        self,
-        env: AMoD,
-        T: int = 10,
-        grid_h: int = 4,
-        grid_w: int = 4,
-        scale_factor: int = 0.01,
-    ):
-        """Initialise GNN Parser."""
-        super().__init__()
-        self.env = env
-        self.T = T
-        self.s = scale_factor
-        self.grid_h = grid_h
-        self.grid_w = grid_w
-
-    def parse_obs(self, obs: T.Tuple[dict, int, dict, dict]):
-        """Parse observations.
-
-        Return the data object called 'data' which is used in the Actors and critc forward pass.
-        """
-        first_t = torch.tensor(
-            [obs[0][n][self.env.time + 1] * self.s for n in self.env.region]
-        )
-        second_t = torch.tensor(
-            [
-                [
-                    (obs[0][n][self.env.time + 1] + self.env.dacc[n][t]) * self.s
-                    for n in self.env.region
-                ]
-                for t in range(self.env.time + 1, self.env.time + self.T + 1)
-            ]
-        )
-        third_t = torch.tensor(
-            [
-                [
-                    sum(
-                        [
-                            (self.env.scenario.demand_input[i, j][t])
-                            * (self.env.price[i, j][t])
-                            * self.s
-                            for j in self.env.region
-                        ]
-                    )
-                    for i in self.env.region
-                ]
-                for t in range(self.env.time + 1, self.env.time + self.T + 1)
-            ]
-        )
-        x = (
-            torch.cat(
-                (
-                    first_t.view(1, 1, self.env.nregion).float(),
-                    second_t.view(1, self.T, self.env.nregion).float(),
-                    third_t.view(1, self.T, self.env.nregion).float(),
-                ),
-                dim=1,
-            )
-            .squeeze(0)
-            .view(21, self.env.nregion)
-            .T
-        )
-        # Define width and height of the grid.
-        edge_index, pos_coord = grid(height=self.grid_h, width=self.grid_w)
-        data = Data(x, edge_index)
-        return data
-
-
-#########################################
-############## ACTOR ####################
-#########################################
-class GNNActor(nn.Module):
-    """Actor pi(a_t | s_t) parametrizing the concentration parameters of a Dirichlet Policy."""
-
-    def __init__(self, in_channels: int, out_channels: int, device: str = "cuda:0"):
-        """Init method for an GNNActor. Defining the model architecture."""
-        super().__init__()
-
-        self.conv1 = GCNConv(in_channels, in_channels)
-        self.lin1 = nn.Linear(in_channels, 32)
-        self.lin2 = nn.Linear(32, 32)
-        self.lin3 = nn.Linear(32, 1)
-        self.device = device
-
-    def forward(self, data: Data):
-        """Take one forward pass in the model defined in init and return x."""
-        out = F.relu(
-            self.conv1(data.x.to(self.device), data.edge_index.to(self.device))
-        ).to(self.device)
-        x = out + data.x.to(self.device)
-        x = F.relu(self.lin1(x))
-        x = F.relu(self.lin2(x))
-        x = self.lin3(x)
-        return x
-
-
-#########################################
-############## CRITIC ###################
-#########################################
-
-
-class GNNCritic(nn.Module):
-    """Critic parametrizing the value function estimator V(s_t)."""
-
-    def __init__(self, in_channels: int, out_channels: int):
-        """Init method for GNNCritic.
-
-        Defines the architecture of the network which is different form the actor network.
-        """
-        super().__init__()
-
-        self.conv1 = GCNConv(in_channels, in_channels)
-        self.lin1 = nn.Linear(in_channels, 32)
-        self.lin2 = nn.Linear(32, 32)
-        self.lin3 = nn.Linear(32, 1)
-
-    def forward(self, data: Data):
-        """Make a forward pass. With data from GNNParser and returns x."""
-        out = F.relu(self.conv1(data.x, data.edge_index))
-        x = out + data.x
-        x = torch.sum(x, dim=0)
-        x = F.relu(self.lin1(x))
-        x = F.relu(self.lin2(x))
-        x = self.lin3(x)
-        return x
-
-
-#########################################
-############## A2C AGENT ################
-#########################################
+from multi_agent_reinforcement_learning.envs.amod_env import AMoD
+from multi_agent_reinforcement_learning.algos.gnn_actor import GNNActor
+from multi_agent_reinforcement_learning.algos.gnn_critic import GNNCritic
+from multi_agent_reinforcement_learning.algos.gnn_parser import GNNParser
+from multi_agent_reinforcement_learning.data_models.config import Config
+from multi_agent_reinforcement_learning.data_models.a2c_data import SavedAction
 
 
 class A2C(nn.Module):
@@ -178,8 +36,8 @@ class A2C(nn.Module):
         self,
         env: AMoD,
         input_size: int,
-        eps: int = np.finfo(np.float32).eps.item(),
-        device=torch.device("cuda:0"),
+        config: Config,
+        eps: float = np.finfo(np.float32).eps.item(),
     ):
         """Init method for A2C. Sets up the desired attributes including.
 
@@ -193,12 +51,15 @@ class A2C(nn.Module):
         self.eps = eps
         self.input_size = input_size
         self.hidden_size = input_size
-        self.device = device
+        self.config = config
 
-        self.actor = GNNActor(self.input_size, self.hidden_size, device=self.device).to(
-            self.device
+        self.actor = GNNActor(
+            self.input_size, self.hidden_size, device=self.config.device
+        ).to(self.config.device)
+
+        self.critic = GNNCritic(self.input_size, self.hidden_size).to(
+            self.config.device
         )
-        self.critic = GNNCritic(self.input_size, self.hidden_size).to(self.device)
         self.obs_parser = GNNParser(self.env)
 
         self.optimizers = self.configure_optimizers()
@@ -206,7 +67,7 @@ class A2C(nn.Module):
         # action & reward buffer
         self.saved_actions = []
         self.rewards = []
-        self.to(self.device)
+        self.to(self.config.device)
 
     def forward(self, obs: T.Tuple[dict, int, dict, dict], jitter: float = 1e-20):
         """Forward of both actor and critic in the current enviorenment defined by data.
@@ -217,7 +78,7 @@ class A2C(nn.Module):
         returns: concentration, value
         """
         # parse raw environment data in model format
-        x = self.parse_obs(obs).to(self.device)
+        x = self.parse_obs(obs).to(self.config.device)
 
         # actor: computes concentration parameters of a Dirichlet distribution
         a_out = self.actor(x)
@@ -248,7 +109,7 @@ class A2C(nn.Module):
         m = Dirichlet(concentration)
 
         action = m.sample()
-        self.saved_actions.append(SavedAction(m.log_prob(action), value))
+        self.saved_actions.append(SavedAction(log_prob=m.log_prob(action), value=value))
         return list(action.cpu().numpy())
 
     def training_step(self):
@@ -262,7 +123,7 @@ class A2C(nn.Module):
         # calculate the true value using rewards returned from the environment
         for r in self.rewards[::-1]:
             # calculate the discounted value
-            R = r + args.gamma * R
+            R = r + self.config.gamma * R
             returns.insert(0, R)
 
         returns = torch.tensor(returns)
@@ -278,7 +139,7 @@ class A2C(nn.Module):
 
             # calculate critic (value) loss using L1 smooth loss
             value_losses.append(
-                F.smooth_l1_loss(value, torch.tensor([R]).to(self.device))
+                F.smooth_l1_loss(value, torch.tensor([R]).to(self.config.device))
             )
 
         # take gradient steps a = actor, c = critic
