@@ -17,7 +17,7 @@ from multi_agent_reinforcement_learning.algos.gnn_actor import GNNActor
 from multi_agent_reinforcement_learning.algos.gnn_critic import GNNCritic
 from multi_agent_reinforcement_learning.algos.gnn_parser import GNNParser
 from multi_agent_reinforcement_learning.data_models.config import Config
-from multi_agent_reinforcement_learning.data_models.a2c_data import SavedAction
+from multi_agent_reinforcement_learning.data_models.actor_critic_data import SavedAction
 
 
 class ActorCritic(nn.Module):
