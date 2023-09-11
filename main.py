@@ -7,7 +7,7 @@ import numpy as np
 from tqdm import trange
 
 import wandb
-from multi_agent_reinforcement_learning.algos.a2c_gnn import ActorCritic
+from multi_agent_reinforcement_learning.algos.actor_critic_gnn import ActorCritic
 from multi_agent_reinforcement_learning.algos.reb_flow_solver import solveRebFlow
 from multi_agent_reinforcement_learning.data_models.logs import ModelLog
 from multi_agent_reinforcement_learning.envs.amod_env import AMoD, Scenario
