@@ -22,10 +22,8 @@ class UniformActor:
 
     def select_action(self, n_actions: int):
         """Select a random action based on the uniform distribution."""
-        m = Uniform(0, 1)
-        print(n_actions)
+        m = Uniform(0, 0.05)
         action = m.sample(sample_shape=torch.Size([n_actions]))
-        print(action)
 
         self.saved_actions.append(m.log_prob(action))
 

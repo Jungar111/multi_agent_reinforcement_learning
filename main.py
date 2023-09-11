@@ -1,23 +1,29 @@
 """Main file for project."""
 from __future__ import print_function
+
 import argparse
-from tqdm import trange
-import numpy as np
-import torch
-import wandb
 import platform
 
-from multi_agent_reinforcement_learning.envs.amod_env import Scenario, AMoD
+import numpy as np
+import torch
+from tqdm import trange
+
+import wandb
 from multi_agent_reinforcement_learning.algos.a2c_gnn import ActorCritic
 from multi_agent_reinforcement_learning.algos.reb_flow_solver import solveRebFlow
-from multi_agent_reinforcement_learning.misc.utils import dictsum
 from multi_agent_reinforcement_learning.algos.uniform_actor import UniformActor
+from multi_agent_reinforcement_learning.envs.amod_env import AMoD, Scenario
+from multi_agent_reinforcement_learning.misc.utils import dictsum
 
 
 def main(args):
     """Run main training loop."""
     device = torch.device("cuda" if args.cuda else "cpu")
-    wandb.init(project="master2023", name="making_stuff_work", config={**vars(args)})
+    wandb.init(
+        project="master2023",
+        name="making_stuff_work" if args.test else "making_stuff_test",
+        config={**vars(args)},
+    )
 
     # Define AMoD Simulator Environment
     scenario = Scenario(
@@ -30,7 +36,7 @@ def main(args):
     env = AMoD(scenario, beta=args.beta)
     # Initialize ActorCritic-GNN
     model = ActorCritic(env=env, input_size=21, device=device).to(device)
-    uniform_actor = UniformActor(model.critic, 10)
+    uniform_actor = UniformActor(10)
 
     if not args.test:
         #######################################
@@ -40,7 +46,7 @@ def main(args):
         # Initialize lists for logging
         log = {"train_reward": [], "train_served_demand": [], "train_reb_cost": []}
         train_episodes = args.max_episodes  # set max number of training episodes
-        T = args.max_steps  # set episode length
+        t = args.max_steps  # set episode length
         epochs = trange(train_episodes)  # epoch iterator
         best_reward = -np.inf  # set best reward
         model.train()  # set model in train mode
@@ -54,7 +60,7 @@ def main(args):
             episode_reward_uniform = 0
             episode_served_demand_uniform = 0
             episode_rebalancing_cost_uniform = 0
-            for step in range(T):
+            for step in range(t):
                 # take matching step (Step 1 in paper)
                 obs, pax_reward, done, info = env.pax_step(
                     CPLEXPATH=args.cplexpath, PATH="scenario_nyc4"
@@ -63,8 +69,8 @@ def main(args):
                 # use GNN-RL policy (Step 2 in paper)
                 action_rl = model.select_action(obs)
                 action_uniform = uniform_actor.select_action(n_actions=n_actions)
-                # transform sample from Dirichlet into actual vehicle counts (i.e. (x1*x2*..*xn)*num_vehicles)
 
+                # transform sample from Dirichlet into actual vehicle counts (i.e. (x1*x2*..*xn)*num_vehicles)
                 n_vehicles = dictsum(env.acc, env.time + 1)
 
                 desired_acc = {
@@ -78,16 +84,19 @@ def main(args):
                 }
 
                 # solve minimum rebalancing distance problem (Step 3 in paper)
-                reb_action = solveRebFlow(
-                    env, "scenario_nyc4", desired_acc, args.cplexpath
-                )
-
                 reb_action_uniform = solveRebFlow(
                     env, "scenario_nyc4", desired_acc_uniform, args.cplexpath
                 )
 
+                reb_action = solveRebFlow(
+                    env, "scenario_nyc4", desired_acc, args.cplexpath
+                )
+
+                # @TODO this does not work. Transform desired_acc_uniform to be
+                # a list of 256 where index i*j is the number of vehicles from i
+                # to j.
                 _, reb_reward_uniform, _, info_uniform = env.reb_step(
-                    reb_action_uniform
+                    reb_action_uniform, advance_time=False
                 )
                 episode_reward_uniform += reb_reward_uniform
 
@@ -137,7 +146,7 @@ def main(args):
         # Load pre-trained model
         model.load_checkpoint(path=f"./{args.directory}/ckpt/nyc4/a2c_gnn.pth")
         test_episodes = args.max_episodes  # set max number of training episodes
-        T = args.max_steps  # set episode length
+        t = args.max_steps  # set episode length
         epochs = trange(test_episodes)  # epoch iterator
         # Initialize lists for logging
         log = {"test_reward": [], "test_served_demand": [], "test_reb_cost": []}
@@ -177,7 +186,7 @@ def main(args):
                 f"Episode {episode+1} | Reward: {episode_reward:.2f} | ServedDemand:"
                 f"{episode_served_demand:.2f} | Reb. Cost: {episode_rebalancing_cost}"
             )
-            # Log KPIs
+
             log["test_reward"].append(episode_reward)
             log["test_served_demand"].append(episode_served_demand)
             log["test_reb_cost"].append(episode_rebalancing_cost)

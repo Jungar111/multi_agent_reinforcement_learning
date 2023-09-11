@@ -2,28 +2,20 @@
 
 -----------------------------------------
 This file contains the specifications for the AMoD system simulator. In particular, we implement:
-<<<<<<< HEAD
-(1) GNNParser
-    Converts raw environment observations to agent inputs (s_t).
-(2) GNNActor:
-    Policy parametrized by Graph Convolution Networks (Section III-C in the paper)
-(3) GNNCritic:
-    Critic parametrized by Graph Convolution Networks (Section III-C in the paper)
-(4) ActorCritic:
-    Advantage Actor Critic algorithm using a GNN parametrization for both Actor and Critic.
-=======
 (1) Class AMoD:
     Defines all aspects of the enviorenment with vehicles and demand
->>>>>>> main
 """
-from collections import defaultdict
-import numpy as np
-import subprocess
-import os
-import networkx as nx
-from multi_agent_reinforcement_learning.misc.utils import mat2str
-from copy import deepcopy
 import json
+import os
+import subprocess
+import typing as T
+from collections import defaultdict
+from copy import deepcopy
+
+import networkx as nx
+import numpy as np
+
+from multi_agent_reinforcement_learning.misc.utils import mat2str
 
 
 class AMoD:
@@ -117,7 +109,9 @@ class AMoD:
         # observation: current vehicle distribution, time, future arrivals, demand
         self.obs = (self.acc, self.time, self.dacc, self.demand)
 
-    def matching(self, CPLEXPATH: str = None, PATH: str = "", platform: str = "linux"):
+    def matching(
+        self, CPLEXPATH: T.Optional[str] = None, PATH: str = "", platform: str = "linux"
+    ):
         """Match in the class Matches passengers with vehicles.
 
         return: paxAction
@@ -177,8 +171,8 @@ class AMoD:
 
     def pax_step(
         self,
-        paxAction: list = None,
-        CPLEXPATH: str = None,
+        paxAction: T.Optional[list] = None,
+        CPLEXPATH: T.Optional[str] = None,
         PATH: str = "",
         platform: str = "linux",
     ):
@@ -243,7 +237,7 @@ class AMoD:
         done = False  # if passenger matching is executed first
         return self.obs, max(0, self.reward), done, self.info
 
-    def reb_step(self, rebAction: list):
+    def reb_step(self, rebAction: list, advance_time: bool = True):
         """Take on reb step, Adjusting costs, reward.
 
         rebAction: the action of rebalancing
@@ -287,7 +281,8 @@ class AMoD:
                 ]  # this means that after pax arrived, vehicles can only be rebalanced in the next time step, let me
                 # know if you have different opinion
 
-        self.time += 1  # Advance one time step
+        if advance_time:
+            self.time += 1  # Advance one time step
         self.obs = (
             self.acc,
             self.time,
@@ -363,12 +358,12 @@ class Scenario:
         ninit: int = 5,  # Initial number of vehicles in each region
         tripAttr=None,
         demand_input=None,
-        demand_ratio: float = None,
+        demand_ratio: T.Optional[float] = None,
         trip_length_preference: float = 0.25,
         grid_travel_time: int = 1,
         fix_price: bool = True,
         alpha: float = 0.2,
-        json_file: bool = None,
+        json_file: T.Optional[str] = None,
         json_hr: int = 9,
         json_tstep: int = 2,
         varying_time: bool = False,
@@ -418,9 +413,9 @@ class Scenario:
             self.tf = tf
             self.demand_ratio = defaultdict(list)
 
-            if demand_ratio == None or type(demand_ratio) == list:
+            if demand_ratio == None or isinstance(demand_ratio, list):
                 for i, j in self.edges:
-                    if type(demand_ratio) == list:
+                    if isinstance(demand_ratio, list):
                         self.demand_ratio[i, j] = (
                             list(
                                 np.interp(
