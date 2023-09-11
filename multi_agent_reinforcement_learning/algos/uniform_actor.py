@@ -21,7 +21,10 @@ class UniformActor:
         self.device = device
 
     def select_action(self, n_actions: int):
-        """Select a random action based on the uniform distribution."""
+        """Select a random action based on the uniform distribution.
+
+        @TODO 1/regions for the dirichlet, for actions.
+        """
         m = Uniform(0, 0.05)
         action = m.sample(sample_shape=torch.Size([n_actions]))
 
