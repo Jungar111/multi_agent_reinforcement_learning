@@ -15,7 +15,7 @@ from copy import deepcopy
 import networkx as nx
 import numpy as np
 
-from multi_agent_reinforcement_learning.misc.utils import mat2str
+from multi_agent_reinforcement_learning.utils.minor_utils import mat2str
 
 
 class AMoD:

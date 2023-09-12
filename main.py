@@ -11,7 +11,7 @@ from multi_agent_reinforcement_learning.algos.actor_critic_gnn import ActorCriti
 from multi_agent_reinforcement_learning.algos.reb_flow_solver import solveRebFlow
 from multi_agent_reinforcement_learning.data_models.logs import ModelLog
 from multi_agent_reinforcement_learning.envs.amod_env import AMoD, Scenario
-from multi_agent_reinforcement_learning.misc.utils import dictsum
+from multi_agent_reinforcement_learning.utils.minor_utils import dictsum
 from multi_agent_reinforcement_learning.utils.argument_parser import args_to_config
 from multi_agent_reinforcement_learning.data_models.config import Config
 from multi_agent_reinforcement_learning.algos.uniform_actor import UniformActor
@@ -35,6 +35,7 @@ def main(config: Config):
         json_hr=config.json_hr,
         json_tstep=config.json_tsetp,
     )
+
     env = AMoD(scenario, beta=config.beta)
     # Initialize A2C-GNN
     model = ActorCritic(env=env, input_size=21, config=config)

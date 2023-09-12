@@ -2,7 +2,7 @@
 import os
 import subprocess
 from collections import defaultdict
-from multi_agent_reinforcement_learning.misc.utils import mat2str
+from multi_agent_reinforcement_learning.utils.minor_utils import mat2str
 
 
 def solveRebFlow(env, res_path, desiredAcc, CPLEXPATH):
