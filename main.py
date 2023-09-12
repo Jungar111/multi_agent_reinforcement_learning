@@ -26,14 +26,41 @@ def main(args):
         config={**vars(args)},
     )
 
+    # # Define AMoD Simulator Environment
+    # scenario = Scenario(
+    #     json_file="data/scenario_nyc4x4.json",
+    #     sd=args.seed,
+    #     demand_ratio=args.demand_ratio,
+    #     json_hr=args.json_hr,
+    #     json_tstep=args.json_tsetp,
+    # )
+
     # Define AMoD Simulator Environment
     scenario = Scenario(
-        json_file="data/scenario_nyc4x4.json",
-        sd=args.seed,
-        demand_ratio=args.demand_ratio,
-        json_hr=args.json_hr,
-        json_tstep=args.json_tsetp,
+        json_file=None,
+        tf=20,
+        demand_ratio={
+            0: [1, 1, 1, 2, 2, 3, 3, 1, 1, 1, 2, 2],
+            1: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+            2: [1, 1, 1, 2, 2, 3, 4, 4, 2, 1, 1, 1],
+            3: [1, 1, 1, 2, 2, 2, 2, 2, 2, 1, 1, 1],
+            4: [1, 1, 1, 2, 2, 1, 1, 1, 1, 1, 1, 1],
+            5: [1, 1, 1, 1, 1, 1, 2, 2, 4, 4, 2, 2],
+        },
+        demand_input={
+            (5, 1): 3,
+            (5, 3): 4,
+            (5, 2): 5,
+            (2, 3): 6,
+            (2, 4): 5,
+            (2, 0): 4,
+            (1, 4): 3,
+            (0, 3): 4,
+            "default": 1,
+        },
+        ninit=80,
     )
+
     env = AMoD(scenario, beta=args.beta)
     # Initialize A2C-GNN
     model = A2C(env=env, input_size=21, device=device).to(device)
@@ -55,7 +82,7 @@ def main(args):
             obs = env.reset()  # initialize environment
             for step in range(T):
                 # take matching step (Step 1 in paper)
-                obs, paxreward, done, info = env.pax_step(
+                obs, paxreward, done, info, ext_reward, ext_done = env.pax_step(
                     CPLEXPATH=args.cplexpath, PATH="scenario_nyc4"
                 )
                 train_log.reward += paxreward

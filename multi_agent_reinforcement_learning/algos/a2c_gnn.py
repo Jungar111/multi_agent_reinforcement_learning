@@ -42,8 +42,8 @@ class GNNParser:
         self,
         env: AMoD,
         T: int = 10,
-        grid_h: int = 4,
-        grid_w: int = 4,
+        grid_h: int = 2,
+        grid_w: int = 3,
         scale_factor: int = 0.01,
     ):
         """Initialise GNN Parser."""
@@ -76,7 +76,7 @@ class GNNParser:
                 [
                     sum(
                         [
-                            (self.env.scenario.demand_input[i, j][t])
+                            (self.env.scenario.demand_input2[i, j][t])
                             * (self.env.price[i, j][t])
                             * self.s
                             for j in self.env.region
