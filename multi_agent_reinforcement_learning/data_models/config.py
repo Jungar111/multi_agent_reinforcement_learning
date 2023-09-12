@@ -21,6 +21,10 @@ class Config(BaseModel):
     no_cuda: bool
     render: bool = True
     device: torch.device
+    grid_size_x: int = 4
+    grid_size_y: int = 4
+    tf: int = 60
+    ninit: int = 80
 
     gamma: float = 0.97
     log_interval: int = 10

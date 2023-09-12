@@ -52,7 +52,7 @@ class ActorCritic(nn.Module):
         self.critic = GNNCritic(self.input_size, self.hidden_size).to(
             self.config.device
         )
-        self.obs_parser = GNNParser(self.env)
+        self.obs_parser = GNNParser(self.env, self.config)
 
         self.optimizers = self.configure_optimizers()
 

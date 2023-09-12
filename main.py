@@ -26,14 +26,14 @@ def main(config: Config):
         config={**vars(config)},
     )
 
-    # Define AMoD Simulator Environment
-    scenario = Scenario(
-        json_file="data/scenario_nyc4x4.json",
-        sd=config.seed,
-        demand_ratio=config.demand_ratio,
-        json_hr=config.json_hr,
-        json_tstep=config.json_tsetp,
-    )
+    # # Define AMoD Simulator Environment
+    # scenario = Scenario(
+    #     json_file="data/scenario_nyc4x4.json",
+    #     sd=config.seed,
+    #     demand_ratio=config.demand_ratio,
+    #     json_hr=config.json_hr,
+    #     json_tstep=config.json_tsetp,
+    # )
 
     # Define AMoD Simulator Environment
     scenario = Scenario(
@@ -83,7 +83,7 @@ def main(config: Config):
             for step in range(T):
                 # take matching step (Step 1 in paper)
                 obs, paxreward, done, info, ext_reward, ext_done = env.pax_step(
-                    CPLEXPATH=args.cplexpath, PATH="scenario_nyc4"
+                    CPLEXPATH=config.cplex_path, PATH="scenario_nyc4"
                 )
                 train_log.reward += paxreward
                 # use GNN-RL policy (Step 2 in paper)
@@ -174,5 +174,9 @@ def main(config: Config):
 
 
 if __name__ == "__main__":
-    args = args_to_config()
-    main(args)
+    config = args_to_config()
+    config.grid_size_x = 2
+    config.grid_size_y = 3
+    config.tf = 10
+    config.ninit = 30
+    main(config)
