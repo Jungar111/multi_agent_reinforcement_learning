@@ -50,7 +50,7 @@ class GNNParser:
                 [
                     sum(
                         [
-                            (self.env.scenario.demand_input[i, j][t])
+                            (self.env.scenario.demand_input2[i, j][t])
                             * (self.env.price[i, j][t])
                             * self.s
                             for j in self.env.region
