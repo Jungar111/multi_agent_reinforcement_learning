@@ -366,7 +366,7 @@ class Scenario:
         ninit: int = 5,  # Initial number of vehicles in each region
         tripAttr=None,
         demand_input=None,
-        demand_ratio: T.Optional[float] = None,
+        demand_ratio: T.Optional[T.Union[float, T.Dict]] = None,
         trip_length_preference: float = 0.25,
         grid_travel_time: int = 1,
         fix_price: bool = True,

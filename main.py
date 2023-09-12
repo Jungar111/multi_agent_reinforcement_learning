@@ -102,9 +102,7 @@ def main(config: Config):
                 reb_action_uniform = solveRebFlow(
                     env, "scenario_nyc4", desired_acc_uniform, config.cplex_path
                 )
-                # @TODO this does not work. Transform desired_acc_uniform to be
-                # a list of 256 where index i*j is the number of vehicles from i
-                # to j.
+
                 _, reb_reward_uniform, _, info_uniform = env.reb_step(
                     reb_action_uniform, advance_time=False
                 )
