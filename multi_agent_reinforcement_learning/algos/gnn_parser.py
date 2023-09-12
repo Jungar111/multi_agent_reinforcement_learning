@@ -6,8 +6,7 @@ import torch
 from torch_geometric.data import Data
 from torch_geometric.utils import grid
 from multi_agent_reinforcement_learning.data_models.config import Config
-
-from multi_agent_reinforcement_learning.envs.amod_env import AMoD
+from multi_agent_reinforcement_learning.envs.amod import AMoD
 
 
 class GNNParser:

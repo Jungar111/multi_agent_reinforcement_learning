@@ -10,7 +10,8 @@ import wandb
 from multi_agent_reinforcement_learning.algos.actor_critic_gnn import ActorCritic
 from multi_agent_reinforcement_learning.algos.reb_flow_solver import solveRebFlow
 from multi_agent_reinforcement_learning.data_models.logs import ModelLog
-from multi_agent_reinforcement_learning.envs.amod_env import AMoD, Scenario
+from multi_agent_reinforcement_learning.envs.amod import AMoD
+from multi_agent_reinforcement_learning.envs.scenario import Scenario
 from multi_agent_reinforcement_learning.misc.utils import dictsum
 from multi_agent_reinforcement_learning.utils.setup_grid import setup_dummy_grid
 from multi_agent_reinforcement_learning.utils.argument_parser import args_to_config
@@ -20,6 +21,7 @@ from multi_agent_reinforcement_learning.data_models.config import Config
 def main(config: Config):
     """Run main training loop."""
     wandb.init(
+        mode=config.wandb_mode,
         project="master2023",
         name=f"test_log ({datetime.now().strftime('%Y-%m-%d %H:%M')})"
         if config.test
@@ -161,9 +163,10 @@ def main(config: Config):
 
 if __name__ == "__main__":
     config = args_to_config()
-    # config.json_file = None
-    # config.grid_size_x = 2
-    # config.grid_size_y = 3
-    # config.tf = 20
-    # config.ninit = 10
+    config.wandb_mode = "disabled"
+    config.json_file = None
+    config.grid_size_x = 2
+    config.grid_size_y = 3
+    config.tf = 20
+    config.ninit = 10
     main(config)
