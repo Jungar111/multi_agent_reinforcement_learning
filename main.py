@@ -1,71 +1,68 @@
 """Main file for project."""
 from __future__ import print_function
 
-import argparse
-import platform
+from datetime import datetime
 
 import numpy as np
-import torch
 from tqdm import trange
 
 import wandb
-from multi_agent_reinforcement_learning.algos.a2c_gnn import ActorCritic
+from multi_agent_reinforcement_learning.algos.actor_critic_gnn import ActorCritic
 from multi_agent_reinforcement_learning.algos.reb_flow_solver import solveRebFlow
-from multi_agent_reinforcement_learning.algos.uniform_actor import UniformActor
+from multi_agent_reinforcement_learning.data_models.logs import ModelLog
 from multi_agent_reinforcement_learning.envs.amod_env import AMoD, Scenario
 from multi_agent_reinforcement_learning.misc.utils import dictsum
+from multi_agent_reinforcement_learning.utils.argument_parser import args_to_config
+from multi_agent_reinforcement_learning.data_models.config import Config
+from multi_agent_reinforcement_learning.algos.uniform_actor import UniformActor
 
 
-def main(args):
+def main(config: Config):
     """Run main training loop."""
-    device = torch.device("cuda" if args.cuda else "cpu")
     wandb.init(
         project="master2023",
-        name="making_stuff_work" if args.test else "making_stuff_test",
-        config={**vars(args)},
+        name=f"test_log ({datetime.now().strftime('%Y-%m-%d %H:%M')})"
+        if config.test
+        else f"train_log ({datetime.now().strftime('%Y-%m-%d %H:%M')})",
+        config={**vars(config)},
     )
 
     # Define AMoD Simulator Environment
     scenario = Scenario(
         json_file="data/scenario_nyc4x4.json",
-        sd=args.seed,
-        demand_ratio=args.demand_ratio,
-        json_hr=args.json_hr,
-        json_tstep=args.json_tsetp,
+        sd=config.seed,
+        demand_ratio=config.demand_ratio,
+        json_hr=config.json_hr,
+        json_tstep=config.json_tsetp,
     )
-    env = AMoD(scenario, beta=args.beta)
-    # Initialize ActorCritic-GNN
-    model = ActorCritic(env=env, input_size=21, device=device).to(device)
+    env = AMoD(scenario, beta=config.beta)
+    # Initialize A2C-GNN
+    model = ActorCritic(env=env, input_size=21, config=config)
     uniform_actor = UniformActor(10)
 
-    if not args.test:
+    if not config.test:
         #######################################
         #############Training Loop#############
         #######################################
 
         # Initialize lists for logging
-        log = {"train_reward": [], "train_served_demand": [], "train_reb_cost": []}
-        train_episodes = args.max_episodes  # set max number of training episodes
-        t = args.max_steps  # set episode length
+        train_episodes = config.max_episodes  # set max number of training episodes
+        T = config.max_steps  # set episode length
         epochs = trange(train_episodes)  # epoch iterator
         best_reward = -np.inf  # set best reward
         model.train()  # set model in train mode
         n_actions = len(env.region)
 
         for i_episode in epochs:
+            rl_train_log = ModelLog()
+            uniform_train_log = ModelLog()
             obs = env.reset()  # initialize environment
-            episode_reward = 0
-            episode_served_demand = 0
-            episode_rebalancing_cost = 0
-            episode_reward_uniform = 0
-            episode_served_demand_uniform = 0
-            episode_rebalancing_cost_uniform = 0
-            for step in range(t):
+            for step in range(T):
                 # take matching step (Step 1 in paper)
                 obs, pax_reward, done, info = env.pax_step(
-                    CPLEXPATH=args.cplexpath, PATH="scenario_nyc4"
+                    CPLEXPATH=config.cplex_path, PATH="scenario_nyc4"
                 )
-                episode_reward += pax_reward
+                rl_train_log.reward += pax_reward
                 # use GNN-RL policy (Step 2 in paper)
                 action_rl = model.select_action(obs)
                 action_uniform = uniform_actor.select_action(n_actions=n_actions)
@@ -84,32 +81,32 @@ def main(args):
                 }
 
                 # solve minimum rebalancing distance problem (Step 3 in paper)
-                reb_action_uniform = solveRebFlow(
-                    env, "scenario_nyc4", desired_acc_uniform, args.cplexpath
-                )
 
                 reb_action = solveRebFlow(
-                    env, "scenario_nyc4", desired_acc, args.cplexpath
+                    env, "scenario_nyc4", desired_acc, config.cplex_path
                 )
 
+                reb_action_uniform = solveRebFlow(
+                    env, "scenario_nyc4", desired_acc_uniform, config.cplex_path
+                )
                 # @TODO this does not work. Transform desired_acc_uniform to be
                 # a list of 256 where index i*j is the number of vehicles from i
                 # to j.
                 _, reb_reward_uniform, _, info_uniform = env.reb_step(
                     reb_action_uniform, advance_time=False
                 )
-                episode_reward_uniform += reb_reward_uniform
 
                 # Take action in environment
                 _, reb_reward, done, info = env.reb_step(reb_action)
-                episode_reward += reb_reward
+                uniform_train_log.reward = reb_reward_uniform
+                rl_train_log.reward += reb_reward
                 # Store the transition in memory
                 model.rewards.append(pax_reward + reb_reward)
                 # track performance over episode
-                episode_served_demand += info["served_demand"]
-                episode_rebalancing_cost += info["rebalancing_cost"]
-                episode_served_demand_uniform += info_uniform["served_demand"]
-                episode_rebalancing_cost_uniform += info_uniform["rebalancing_cost"]
+                rl_train_log.served_demand += info["served_demand"]
+                rl_train_log.rebalancing_cost += info["rebalancing_cost"]
+                uniform_train_log.served_demand += info_uniform["served_demand"]
+                uniform_train_log.rebalancing_cost += info_uniform["rebalancing_cost"]
                 # stop episode if terminating conditions are met
                 if done:
                     break
@@ -118,51 +115,40 @@ def main(args):
 
             # Send current statistics to screen
             epochs.set_description(
-                f"Episode {i_episode+1} | Reward: {episode_reward:.2f} |"
-                f"ServedDemand: {episode_served_demand:.2f} | Reb. Cost: {episode_rebalancing_cost:.2f}"
+                f"Episode {i_episode+1} | Reward: {rl_train_log.reward:.2f} |"
+                f"ServedDemand: {rl_train_log.served_demand:.2f} | Reb. Cost: {rl_train_log.rebalancing_cost:.2f}"
             )
             # Checkpoint best performing model
-            if episode_reward >= best_reward:
+            if rl_train_log.reward >= best_reward:
                 model.save_checkpoint(
-                    path=f"./{args.directory}/ckpt/nyc4/a2c_gnn_test.pth"
+                    path=f"./{config.directory}/ckpt/nyc4/a2c_gnn_test.pth"
                 )
-                best_reward = episode_reward
-            # Log KPIs
-            log["train_reward"].append(episode_reward)
-            log["train_served_demand"].append(episode_served_demand)
-            log["train_reb_cost"].append(episode_rebalancing_cost)
-            model.log(log, path=f"./{args.directory}/rl_logs/nyc4/a2c_gnn_test.pth")
+                best_reward = rl_train_log.reward
+            # Log KPIs on weights and biases
             wandb.log(
                 {
-                    "test_reward": episode_reward,
-                    "test_served_demand": episode_served_demand,
-                    "test_reb_cost": episode_rebalancing_cost,
-                    "test_reward_uniform": episode_reward_uniform,
-                    "test_served_demand_uniform": episode_served_demand_uniform,
-                    "test_reb_cost_uniform": episode_rebalancing_cost_uniform,
+                    **rl_train_log.dict("reninforcement"),
+                    **uniform_train_log.dict("uniform"),
                 }
             )
     else:
         # Load pre-trained model
-        model.load_checkpoint(path=f"./{args.directory}/ckpt/nyc4/a2c_gnn.pth")
-        test_episodes = args.max_episodes  # set max number of training episodes
-        t = args.max_steps  # set episode length
+        model.load_checkpoint(path=f"./{config.directory}/ckpt/nyc4/a2c_gnn.pth")
+        test_episodes = config.max_episodes  # set max number of training episodes
+        T = config.max_steps  # set episode length
         epochs = trange(test_episodes)  # epoch iterator
         # Initialize lists for logging
-        log = {"test_reward": [], "test_served_demand": [], "test_reb_cost": []}
         for episode in epochs:
-            episode_reward = 0
-            episode_served_demand = 0
-            episode_rebalancing_cost = 0
+            test_log = ModelLog()
             obs = env.reset()
             done = False
             k = 0
             while not done:
                 # take matching step (Step 1 in paper)
-                obs, pax_reward, done, info = env.pax_step(
-                    CPLEXPATH=args.cplexpath, PATH="scenario_nyc4_test"
+                obs, paxreward, done, info = env.pax_step(
+                    CPLEXPATH=config.cplex_path, PATH="scenario_nyc4_test"
                 )
-                episode_reward += pax_reward
+                test_log.reward += paxreward
                 # use GNN-RL policy (Step 2 in paper)
                 action_rl = model.select_action(obs)
                 # transform sample from Dirichlet into actual vehicle counts (i.e. (x1*x2*..*xn)*num_vehicles)
@@ -172,110 +158,26 @@ def main(args):
                 }
                 # solve minimum rebalancing distance problem (Step 3 in paper)
                 reb_action = solveRebFlow(
-                    env, "scenario_nyc4_test", desired_acc, args.cplexpath
+                    env, "scenario_nyc4_test", desired_acc, config.cplex_path
                 )
                 # Take action in environment
-                new_obs, reb_reward, done, info = env.reb_step(reb_action)
-                episode_reward += reb_reward
+                _, rebreward, done, info = env.reb_step(reb_action)
+                test_log.reward += rebreward
                 # track performance over episode
-                episode_served_demand += info["served_demand"]
-                episode_rebalancing_cost += info["rebalancing_cost"]
+                test_log.served_demand += info["served_demand"]
+                test_log.rebalancing_cost += info["rebalancing_cost"]
                 k += 1
             # Send current statistics to screen
             epochs.set_description(
-                f"Episode {episode+1} | Reward: {episode_reward:.2f} | ServedDemand:"
-                f"{episode_served_demand:.2f} | Reb. Cost: {episode_rebalancing_cost}"
+                f"Episode {episode+1} | Reward: {test_log.reward:.2f} | ServedDemand:"
+                f"{test_log.served_demand:.2f} | Reb. Cost: {test_log.rebalancing_cost}"
             )
-
-            log["test_reward"].append(episode_reward)
-            log["test_served_demand"].append(episode_served_demand)
-            log["test_reb_cost"].append(episode_rebalancing_cost)
-            model.log(log, path=f"./{args.directory}/rl_logs/nyc4/a2c_gnn_test.pth")
+            # Log KPIs on weights and biases
+            wandb.log({**dict(test_log)})
             break
-
         wandb.finish()
 
 
 if __name__ == "__main__":
-    cplex_path = ""
-    if platform.system() == "Linux":
-        cplex_path = "/opt/ibm/ILOG/CPLEX_Studio2211/opl/bin/x86-64_linux/"
-    elif platform.system() == "Windows":
-        cplex_path = (
-            r"C:\Program Files\IBM\ILOG\CPLEX_Studio2211\\opl\\bin\\x64_win64\\"
-        )
-    else:
-        raise NotImplementedError()
-
-    parser = argparse.ArgumentParser(description="ActorCritic-GNN")
-
-    # Simulator parameters
-    parser.add_argument(
-        "--seed", type=int, default=10, metavar="S", help="random seed (default: 10)"
-    )
-    parser.add_argument(
-        "--demand_ratio",
-        type=int,
-        default=0.5,
-        metavar="S",
-        help="demand_ratio (default: 0.5)",
-    )
-    parser.add_argument(
-        "--json_hr", type=int, default=7, metavar="S", help="json_hr (default: 7)"
-    )
-    parser.add_argument(
-        "--json_tsetp",
-        type=int,
-        default=3,
-        metavar="S",
-        help="minutes per timestep (default: 3min)",
-    )
-    parser.add_argument(
-        "--beta",
-        type=int,
-        default=0.5,
-        metavar="S",
-        help="cost of rebalancing (default: 0.5)",
-    )
-
-    # Model parameters
-    parser.add_argument(
-        "--test",
-        type=bool,
-        default=False,
-        help="activates test mode for agent evaluation",
-    )
-    parser.add_argument(
-        "--cplexpath",
-        type=str,
-        default=cplex_path,
-        help="defines directory of the CPLEX installation",
-    )
-    parser.add_argument(
-        "--directory",
-        type=str,
-        default="saved_files",
-        help="defines directory where to save files",
-    )
-    parser.add_argument(
-        "--max_episodes",
-        type=int,
-        default=16000,
-        metavar="N",
-        help="number of episodes to train agent (default: 16k)",
-    )
-    parser.add_argument(
-        "--max_steps",
-        type=int,
-        default=60,
-        metavar="N",
-        help="number of steps per episode (default: T=60)",
-    )
-    parser.add_argument(
-        "--no-cuda", type=bool, default=False, help="disables CUDA training"
-    )
-
-    args = parser.parse_args()
-    args.cuda = not args.no_cuda and torch.cuda.is_available()
-
+    args = args_to_config()
     main(args)
