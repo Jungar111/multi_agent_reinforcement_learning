@@ -4,7 +4,7 @@ from collections import defaultdict
 import numpy as np
 import subprocess
 import os
-from multi_agent_reinforcement_learning.misc.utils import mat2str
+from multi_agent_reinforcement_learning.utils.minor_utils import mat2str
 from copy import deepcopy
 
 
