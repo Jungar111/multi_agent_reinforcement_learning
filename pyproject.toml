@@ -35,4 +35,7 @@ build-backend = "poetry.core.masonry.api"
 [tool.ruff]
 line-length = 120
 
-ignore = ["E711"]
+ignore = ["E711", "D401"]
+
+[tool.ruff.pydocstyle]
+convention = "pep257"
