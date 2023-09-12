@@ -5,6 +5,7 @@ import typing as T
 import torch
 from torch_geometric.data import Data
 from torch_geometric.utils import grid
+from multi_agent_reinforcement_learning.data_models.config import Config
 
 from multi_agent_reinforcement_learning.envs.amod_env import AMoD
 
@@ -15,9 +16,8 @@ class GNNParser:
     def __init__(
         self,
         env: AMoD,
+        config: Config,
         T: int = 10,
-        grid_h: int = 4,
-        grid_w: int = 4,
         scale_factor: float = 0.01,
     ):
         """Initialise GNN Parser."""
@@ -25,8 +25,11 @@ class GNNParser:
         self.env = env
         self.T = T
         self.s = scale_factor
-        self.grid_h = grid_h
-        self.grid_w = grid_w
+        self.grid_size_x = config.grid_size_x
+        self.grid_size_y = config.grid_size_y
+        self.demand_input = self.env.scenario.demand_input
+        if config.json_file is None:
+            self.demand_input = self.env.scenario.demand_input2
 
     def parse_obs(self, obs: T.Tuple[dict, int, dict, dict]):
         """Parse observations.
@@ -50,7 +53,7 @@ class GNNParser:
                 [
                     sum(
                         [
-                            (self.env.scenario.demand_input[i, j][t])
+                            (self.demand_input[i, j][t])
                             * (self.env.price[i, j][t])
                             * self.s
                             for j in self.env.region
@@ -75,6 +78,6 @@ class GNNParser:
             .T
         )
         # Define width and height of the grid.
-        edge_index, pos_coord = grid(height=self.grid_h, width=self.grid_w)
+        edge_index, pos_coord = grid(height=self.grid_size_x, width=self.grid_size_y)
         data = Data(x, edge_index)
         return data

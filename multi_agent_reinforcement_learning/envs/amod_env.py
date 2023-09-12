@@ -169,6 +169,7 @@ class AMoD:
         paxAction = [flow[i, j] if (i, j) in flow else 0 for i, j in self.edges]
         return paxAction
 
+    # pax step
     def pax_step(
         self,
         paxAction: T.Optional[list] = None,
@@ -183,16 +184,16 @@ class AMoD:
         """
         t = self.time
         self.reward = 0
+        self.ext_reward = np.zeros(self.nregion)
         for i in self.region:
             self.acc[i][t + 1] = self.acc[i][t]
         self.info["served_demand"] = 0  # initialize served demand
         self.info["operating_cost"] = 0  # initialize operating cost
         self.info["revenue"] = 0
         self.info["rebalancing_cost"] = 0
-        if (
-            paxAction is None
-        ):  # default matching algorithm used if isMatching is True, matching method will need the information of self.
-            # acc[t+1], therefore this part cannot be put forward
+        if paxAction is None:
+            # default matching algorithm used if isMatching is True, matching method will need the
+            # information of self.acc[t+1], therefore this part cannot be put forward
             paxAction = self.matching(CPLEXPATH=CPLEXPATH, PATH=PATH, platform=platform)
         self.paxAction = paxAction
         # serving passengers, if vehicle is in same section
@@ -205,28 +206,31 @@ class AMoD:
             ):
                 continue
             # I moved the min operator above, since we want paxFlow to be consistent with paxAction
-            assert paxAction[k] < self.acc[i][t + 1] + 1e-3
             self.paxAction[k] = min(self.acc[i][t + 1], paxAction[k])
-            self.servedDemand[i, j][t] = self.paxAction[
-                k
-            ]  # define servedDemand as the current passenger action
+            assert paxAction[k] < self.acc[i][t + 1] + 1e-3
+            # define servedDemand as the current passenger action
+            self.servedDemand[i, j][t] = self.paxAction[k]
             self.paxFlow[i, j][t + self.demandTime[i, j][t]] = self.paxAction[k]
             self.info["operating_cost"] += (
                 self.demandTime[i, j][t] * self.beta * self.paxAction[k]
             )  # define the cost of picking of the current passenger
             self.acc[i][t + 1] -= self.paxAction[k]
-            self.info["served_demand"] += self.servedDemand[i, j][
-                t
-            ]  # Add to served_demand
+            # Add to served_demand
+            self.info["served_demand"] += self.servedDemand[i, j][t]
             self.dacc[j][t + self.demandTime[i, j][t]] += self.paxFlow[i, j][
                 t + self.demandTime[i, j][t]
             ]
+            # add to reward
             self.reward += self.paxAction[k] * (
                 self.price[i, j][t] - self.demandTime[i, j][t] * self.beta
-            )  # add to reward
-            self.info["revenue"] += self.paxAction[k] * (
-                self.price[i, j][t]
-            )  # Add passenger action * price to revenue
+            )
+            # Add passenger action * price to revenue
+            self.ext_reward[i] += max(
+                0,
+                self.paxAction[k]
+                * (self.price[i, j][t] - self.demandTime[i, j][t] * self.beta),
+            )
+            self.info["revenue"] += self.paxAction[k] * (self.price[i, j][t])
 
         self.obs = (
             self.acc,
@@ -235,7 +239,8 @@ class AMoD:
             self.demand,
         )  # for acc, the time index would be t+1, but for demand, the time index would be t
         done = False  # if passenger matching is executed first
-        return self.obs, max(0, self.reward), done, self.info
+        ext_done = [done] * self.nregion
+        return self.obs, max(0, self.reward), done, self.info, self.ext_reward, ext_done
 
     def reb_step(self, rebAction: list, advance_time: bool = True):
         """Take on reb step, Adjusting costs, reward.
@@ -246,6 +251,7 @@ class AMoD:
         t = self.time
         self.reward = 0  # reward is calculated from before this to the next rebalancing, we may also have two rewards,
         # one for pax matching and one for rebalancing
+        self.ext_reward = np.zeros(self.nregion)
         self.rebAction = rebAction
         # rebalancing loop
         for k in range(len(self.edges)):
@@ -268,6 +274,7 @@ class AMoD:
                 self.rebTime[i, j][t] * self.beta * self.rebAction[k]
             )
             self.reward -= self.rebTime[i, j][t] * self.beta * self.rebAction[k]
+            self.ext_reward[i] -= self.rebTime[i, j][t] * self.beta * self.rebAction[k]
         # arrival for the next time step, executed in the last state of a time step
         # this makes the code slightly different from the previous version, where the following codes are executed
         # between matching and rebalancing
@@ -293,6 +300,7 @@ class AMoD:
         for i, j in self.G.edges:
             self.G.edges[i, j]["time"] = self.rebTime[i, j][self.time]
         done = self.tf == t + 1  # if the episode is completed
+        # ext_done = [done] * self.nregion
         return self.obs, self.reward, done, self.info
 
     def reset(self):
@@ -352,7 +360,7 @@ class Scenario:
     def __init__(
         self,
         N1: int = 2,  # grid size
-        N2: int = 4,  # grid size
+        N2: int = 3,  # grid size
         tf: int = 60,  # Timeframe
         sd=None,
         ninit: int = 5,  # Initial number of vehicles in each region
@@ -364,8 +372,8 @@ class Scenario:
         fix_price: bool = True,
         alpha: float = 0.2,
         json_file: T.Optional[str] = None,
-        json_hr: int = 9,
-        json_tstep: int = 2,
+        json_hr: int = 7,
+        json_tstep: int = 3,
         varying_time: bool = False,
         json_regions=None,
     ):
@@ -395,25 +403,30 @@ class Scenario:
             self.N2 = N2
             self.G = nx.complete_graph(N1 * N2)
             self.G = self.G.to_directed()
-            self.demandTime = dict()
-            self.rebTime = dict()
+            self.demandTime = defaultdict(dict)
+            self.rebTime = defaultdict(dict)
             self.edges = list(self.G.edges) + [(i, i) for i in self.G.nodes]
+            self.tstep = json_tstep
             for i, j in self.edges:
-                self.demandTime[i, j] = defaultdict(
-                    lambda: (abs(i // N1 - j // N1) + abs(i % N1 - j % N1))
-                    * grid_travel_time
-                )
-                self.rebTime[i, j] = defaultdict(
-                    lambda: (abs(i // N1 - j // N1) + abs(i % N1 - j % N1))
-                    * grid_travel_time
-                )
+                for t in range(0, tf * 2):
+                    self.demandTime[i, j][t] = (
+                        abs(i // N1 - j // N1) + abs(i % N1 - j % N1)
+                    ) * grid_travel_time
+
+                    self.rebTime[i, j][t] = (
+                        abs(i // N1 - j // N1) + abs(i % N1 - j % N1)
+                    ) * grid_travel_time
 
             for n in self.G.nodes:
                 self.G.nodes[n]["accInit"] = int(ninit)
             self.tf = tf
             self.demand_ratio = defaultdict(list)
 
-            if demand_ratio == None or isinstance(demand_ratio, list):
+            if (
+                demand_ratio == None
+                or isinstance(demand_ratio, list)
+                or isinstance(demand_ratio, dict)
+            ):
                 for i, j in self.edges:
                     if isinstance(demand_ratio, list):
                         self.demand_ratio[i, j] = (
@@ -425,6 +438,19 @@ class Scenario:
                                 )
                             )
                             + [demand_ratio[-1]] * tf
+                        )
+                    if type(demand_ratio) == dict:
+                        self.demand_ratio[i, j] = (
+                            list(
+                                np.interp(
+                                    range(0, tf),
+                                    np.arange(
+                                        0, tf + 1, tf / (len(demand_ratio[i]) - 1)
+                                    ),
+                                    demand_ratio[i],
+                                )
+                            )
+                            + [demand_ratio[i][-1]] * tf
                         )
                     else:
                         self.demand_ratio[i, j] = [1] * (tf + tf)
@@ -605,6 +631,7 @@ class Scenario:
                     self.region_demand = region_rand * np.array(self.demand_input)
                 for i in self.G.nodes:
                     J = [j for _, j in self.G.out_edges(i)]
+                    J.append(i)
                     prob = np.array(
                         [
                             np.math.exp(
@@ -635,9 +662,13 @@ class Scenario:
             # generating demand and prices
             if self.fix_price:
                 p = self.p
+            self.demand_input2 = defaultdict(dict)
             for t in range(0, self.tf * 2):
                 for i, j in self.edges:
                     demand[i, j][t] = np.random.poisson(
+                        self.static_demand[i, j] * self.demand_ratio[i, j][t]
+                    )
+                    self.demand_input2[i, j][t] = (
                         self.static_demand[i, j] * self.demand_ratio[i, j][t]
                     )
                     if self.fix_price:
@@ -650,45 +681,3 @@ class Scenario:
                     tripAttr.append((i, j, t, demand[i, j][t], price[i, j][t]))
 
         return tripAttr
-
-
-# TODO: Needed?
-class Star2Complete(Scenario):
-    """No clue honestly."""
-
-    def __init__(
-        self,
-        N1=4,
-        N2=4,
-        sd=10,
-        star_demand=20,
-        complete_demand=1,
-        star_center=[5, 6, 9, 10],
-        grid_travel_time=3,
-        ninit=50,
-        demand_ratio=[1, 1.5, 1.5, 1],
-        alpha=0.2,
-        fix_price=False,
-    ):
-        """Init for the class.
-
-        beta: Proportion of star network
-        alpha: parameter for uniform distribution of demand [1-alpha, 1+alpha]
-        """
-        super(Star2Complete, self).__init__(
-            N1=N1,
-            N2=N2,
-            sd=sd,
-            ninit=ninit,
-            grid_travel_time=grid_travel_time,
-            fix_price=fix_price,
-            alpha=alpha,
-            demand_ratio=demand_ratio,
-            demand_input={
-                (i, j): complete_demand
-                + (star_demand if i in star_center and j not in star_center else 0)
-                for i in range(0, N1 * N2)
-                for j in range(0, N1 * N2)
-                if i != j
-            },
-        )
