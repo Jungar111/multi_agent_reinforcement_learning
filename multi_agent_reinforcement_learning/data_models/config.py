@@ -27,7 +27,7 @@ class Config(BaseModel):
     grid_size_y: int = 4
     tf: int = 60
     ninit: int = 80
-
+    wandb_mode: str = "online"
     gamma: float = 0.97
     json_file: T.Optional[str] = Path("data", "scenario_nyc4x4.json")
     log_interval: int = 10
