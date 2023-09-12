@@ -161,9 +161,9 @@ def main(config: Config):
 
 if __name__ == "__main__":
     config = args_to_config()
-    config.json_file = None
-    config.grid_size_x = 2
-    config.grid_size_y = 3
-    config.tf = 20
-    config.ninit = 10
+    # config.json_file = None
+    # config.grid_size_x = 2
+    # config.grid_size_y = 3
+    # config.tf = 20
+    # config.ninit = 10
     main(config)

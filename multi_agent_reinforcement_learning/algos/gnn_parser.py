@@ -27,6 +27,9 @@ class GNNParser:
         self.s = scale_factor
         self.grid_size_x = config.grid_size_x
         self.grid_size_y = config.grid_size_y
+        self.demand_input = self.env.scenario.demand_input
+        if config.json_file is None:
+            self.demand_input = self.env.scenario.demand_input2
 
     def parse_obs(self, obs: T.Tuple[dict, int, dict, dict]):
         """Parse observations.
@@ -50,7 +53,7 @@ class GNNParser:
                 [
                     sum(
                         [
-                            (self.env.scenario.demand_input2[i, j][t])
+                            (self.demand_input[i, j][t])
                             * (self.env.price[i, j][t])
                             * self.s
                             for j in self.env.region
