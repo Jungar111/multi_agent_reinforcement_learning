@@ -11,6 +11,7 @@ from multi_agent_reinforcement_learning.envs.amod_env import Scenario, AMoD
 from multi_agent_reinforcement_learning.algos.a2c_gnn import A2C
 from multi_agent_reinforcement_learning.algos.reb_flow_solver import solveRebFlow
 from multi_agent_reinforcement_learning.misc.utils import dictsum
+from multi_agent_reinforcement_learning.plots.mapPlot import makeMapPlot
 
 
 def main(args):
@@ -79,6 +80,9 @@ def main(args):
                 # stop episode if terminating conditions are met
                 if done:
                     break
+                # plotting map
+                makeMapPlot(scenario.G, obs, rebAction, new_obs, step)
+
             # perform on-policy backprop
             model.training_step()
 
