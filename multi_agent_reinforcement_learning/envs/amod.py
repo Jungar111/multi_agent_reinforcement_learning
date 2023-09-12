@@ -230,7 +230,7 @@ class AMoD:
         ext_done = [done] * self.nregion
         return self.obs, max(0, self.reward), done, self.info, self.ext_reward, ext_done
 
-    def reb_step(self, rebAction: list):
+    def reb_step(self, rebAction: list, advance_time: bool = True):
         """Take on reb step, Adjusting costs, reward.
 
         rebAction: the action of rebalancing
@@ -276,7 +276,8 @@ class AMoD:
                 ]  # this means that after pax arrived, vehicles can only be rebalanced in the next time step, let me
                 # know if you have different opinion
 
-        self.time += 1  # Advance one time step
+        if advance_time:
+            self.time += 1  # Advance one time step
         self.obs = (
             self.acc,
             self.time,
