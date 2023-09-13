@@ -128,7 +128,7 @@ def main(config: Config):
             k = 0
             while not done:
                 # take matching step (Step 1 in paper)
-                obs, paxreward, done, info = env.pax_step(
+                obs, paxreward, done, info, ext_reward, ext_done = env.pax_step(
                     CPLEXPATH=config.cplex_path, PATH="scenario_nyc4_test"
                 )
                 test_log.reward += paxreward

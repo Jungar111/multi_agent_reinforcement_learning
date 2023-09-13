@@ -5,6 +5,7 @@ import numpy as np
 import networkx as nx
 from copy import deepcopy
 import json
+import typing as T
 
 
 class Scenario:
@@ -19,12 +20,12 @@ class Scenario:
         ninit: int = 5,  # Initial number of vehicles in each region
         tripAttr=None,
         demand_input=None,
-        demand_ratio: float = None,
+        demand_ratio: T.Optional[T.Union[float, dict]] = None,
         trip_length_preference: float = 0.25,
         grid_travel_time: int = 1,
         fix_price: bool = True,
         alpha: float = 0.2,
-        json_file: bool = None,
+        json_file: T.Optional[str] = None,
         json_hr: int = 7,
         json_tstep: int = 3,
         varying_time: bool = False,
@@ -77,11 +78,11 @@ class Scenario:
 
             if (
                 demand_ratio == None
-                or type(demand_ratio) == list
-                or type(demand_ratio) == dict
+                or isinstance(demand_ratio, list)
+                or isinstance(demand_ratio, dict)
             ):
                 for i, j in self.edges:
-                    if type(demand_ratio) == list:
+                    if isinstance(demand_ratio, list):
                         self.demand_ratio[i, j] = (
                             list(
                                 np.interp(
@@ -92,7 +93,7 @@ class Scenario:
                             )
                             + [demand_ratio[-1]] * tf
                         )
-                    if type(demand_ratio) == dict:
+                    if isinstance(demand_ratio, dict):
                         self.demand_ratio[i, j] = (
                             list(
                                 np.interp(
