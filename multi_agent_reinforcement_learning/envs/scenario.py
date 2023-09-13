@@ -288,9 +288,7 @@ class Scenario:
                     J.append(i)
                     prob = np.array(
                         [
-                            np.math.exp(
-                                -self.rebTime[i, j][0] * self.trip_length_preference
-                            )
+                            np.exp(-self.rebTime[i, j][0] * self.trip_length_preference)
                             for j in J
                         ]
                     )
