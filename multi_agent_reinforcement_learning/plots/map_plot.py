@@ -9,7 +9,7 @@ from glob2 import glob
 import wandb
 
 
-from multi_agent_reinforcement_learning.envs.amod_env import AMoD
+from multi_agent_reinforcement_learning.envs.amod import AMoD
 
 
 def make_map_plot(G: nx.Graph, obs: dict, t: int, timeEnd: int, env: AMoD):

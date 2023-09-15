@@ -10,15 +10,23 @@ import wandb
 from multi_agent_reinforcement_learning.algos.actor_critic_gnn import ActorCritic
 from multi_agent_reinforcement_learning.algos.reb_flow_solver import solveRebFlow
 from multi_agent_reinforcement_learning.data_models.logs import ModelLog
-from multi_agent_reinforcement_learning.envs.amod_env import AMoD, Scenario
+from multi_agent_reinforcement_learning.envs.amod import AMoD
+from multi_agent_reinforcement_learning.envs.scenario import Scenario
 from multi_agent_reinforcement_learning.misc.utils import dictsum
+from multi_agent_reinforcement_learning.utils.init_logger import init_logger
+from multi_agent_reinforcement_learning.utils.setup_grid import setup_dummy_grid
 from multi_agent_reinforcement_learning.utils.argument_parser import args_to_config
 from multi_agent_reinforcement_learning.data_models.config import Config
 
 
+logger = init_logger()
+
+
 def main(config: Config):
     """Run main training loop."""
+    logger.info("Running main loop.")
     wandb.init(
+        mode=config.wandb_mode,
         project="master2023",
         name=f"test_log ({datetime.now().strftime('%Y-%m-%d %H:%M')})"
         if config.test
@@ -27,13 +35,25 @@ def main(config: Config):
     )
 
     # Define AMoD Simulator Environment
-    scenario = Scenario(
-        json_file="data/scenario_nyc4x4.json",
-        sd=config.seed,
-        demand_ratio=config.demand_ratio,
-        json_hr=config.json_hr,
-        json_tstep=config.json_tsetp,
-    )
+    if config.json_file is None:
+        # Define variable for environment
+        tf, demand_ratio, demand_input, ninit = setup_dummy_grid(config)
+        scenario = Scenario(
+            json_file=config.json_file,
+            tf=tf,
+            demand_ratio=demand_ratio,
+            demand_input=demand_input,
+            ninit=ninit,
+        )
+    else:
+        scenario = Scenario(
+            json_file=config.json_file,
+            sd=config.seed,
+            demand_ratio=config.demand_ratio,
+            json_hr=config.json_hr,
+            json_tstep=config.json_tsetp,
+        )
+
     env = AMoD(scenario, beta=config.beta)
     # Initialize A2C-GNN
     model = ActorCritic(env=env, input_size=21, config=config)
@@ -55,7 +75,7 @@ def main(config: Config):
             obs = env.reset()  # initialize environment
             for step in range(T):
                 # take matching step (Step 1 in paper)
-                obs, paxreward, done, info = env.pax_step(
+                obs, paxreward, done, info, ext_reward, ext_done = env.pax_step(
                     CPLEXPATH=config.cplex_path, PATH="scenario_nyc4"
                 )
                 train_log.reward += paxreward
@@ -114,7 +134,7 @@ def main(config: Config):
             k = 0
             while not done:
                 # take matching step (Step 1 in paper)
-                obs, paxreward, done, info = env.pax_step(
+                obs, paxreward, done, info, ext_reward, ext_done = env.pax_step(
                     CPLEXPATH=config.cplex_path, PATH="scenario_nyc4_test"
                 )
                 test_log.reward += paxreward
@@ -148,5 +168,11 @@ def main(config: Config):
 
 
 if __name__ == "__main__":
-    args = args_to_config()
-    main(args)
+    config = args_to_config()
+    config.wandb_mode = "disabled"
+    config.json_file = None
+    config.grid_size_x = 2
+    config.grid_size_y = 3
+    config.tf = 20
+    config.ninit = 10
+    main(config)

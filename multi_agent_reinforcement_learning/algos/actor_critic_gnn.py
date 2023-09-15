@@ -12,7 +12,7 @@ import torch.nn.functional as F
 from torch import nn
 from torch.distributions import Dirichlet
 
-from multi_agent_reinforcement_learning.envs.amod_env import AMoD
+from multi_agent_reinforcement_learning.envs.amod import AMoD
 from multi_agent_reinforcement_learning.algos.gnn_actor import GNNActor
 from multi_agent_reinforcement_learning.algos.gnn_critic import GNNCritic
 from multi_agent_reinforcement_learning.algos.gnn_parser import GNNParser
@@ -52,7 +52,7 @@ class ActorCritic(nn.Module):
         self.critic = GNNCritic(self.input_size, self.hidden_size).to(
             self.config.device
         )
-        self.obs_parser = GNNParser(self.env)
+        self.obs_parser = GNNParser(self.env, self.config)
 
         self.optimizers = self.configure_optimizers()
 
