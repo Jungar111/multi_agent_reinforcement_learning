@@ -13,14 +13,19 @@ from multi_agent_reinforcement_learning.data_models.logs import ModelLog
 from multi_agent_reinforcement_learning.utils.minor_utils import dictsum
 from multi_agent_reinforcement_learning.envs.amod import AMoD
 from multi_agent_reinforcement_learning.envs.scenario import Scenario
+from multi_agent_reinforcement_learning.utils.init_logger import init_logger
 from multi_agent_reinforcement_learning.utils.setup_grid import setup_dummy_grid
 from multi_agent_reinforcement_learning.utils.argument_parser import args_to_config
 from multi_agent_reinforcement_learning.data_models.config import Config
 from multi_agent_reinforcement_learning.algos.uniform_actor import UniformActor
 
 
+logger = init_logger()
+
+
 def main(config: Config):
     """Run main training loop."""
+    logger.info("Running main loop.")
     wandb.init(
         mode=config.wandb_mode,
         project="master2023",
