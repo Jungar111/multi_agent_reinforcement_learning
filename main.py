@@ -14,7 +14,6 @@ from multi_agent_reinforcement_learning.envs.amod_env import AMoD, Scenario
 from multi_agent_reinforcement_learning.misc.utils import dictsum
 from multi_agent_reinforcement_learning.utils.argument_parser import args_to_config
 from multi_agent_reinforcement_learning.data_models.config import Config
-from multi_agent_reinforcement_learning.plots.mapPlot import makeMapPlot
 
 
 def main(config: Config):
@@ -84,8 +83,6 @@ def main(config: Config):
                 # stop episode if terminating conditions are met
                 if done:
                     break
-                # plotting map
-                makeMapPlot(scenario.G, obs, rebAction, new_obs, step)
 
             # perform on-policy backprop
             model.training_step()
