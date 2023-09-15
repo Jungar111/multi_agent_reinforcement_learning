@@ -53,7 +53,7 @@ def main(config: Config):
     env = AMoD(scenario, beta=config.beta)
     # Initialize A2C-GNN
     model = ActorCritic(env=env, input_size=21, config=config)
-    uniform_actor = UniformActor(10)
+    uniform_actor = UniformActor(n_cars=10)
 
     if not config.test:
         #######################################
@@ -80,7 +80,9 @@ def main(config: Config):
                 rl_train_log.reward += pax_reward
                 # use GNN-RL policy (Step 2 in paper)
                 action_rl = model.select_action(obs)
-                action_uniform = uniform_actor.select_action(n_actions=n_actions)
+                action_uniform = uniform_actor.select_action(
+                    n_regions=config.grid_size_x * config.grid_size_y
+                )
 
                 # transform sample from Dirichlet into actual vehicle counts (i.e. (x1*x2*..*xn)*num_vehicles)
                 n_vehicles = dictsum(env.acc, env.time + 1)
@@ -199,4 +201,5 @@ if __name__ == "__main__":
     config.grid_size_y = 3
     config.tf = 20
     config.ninit = 10
+    print(config.n_regions)
     main(config)

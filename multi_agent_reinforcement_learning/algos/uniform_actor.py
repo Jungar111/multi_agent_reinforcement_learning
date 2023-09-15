@@ -1,7 +1,5 @@
 """Uniform actor."""
-
 import torch
-from torch.distributions import Uniform
 
 
 class UniformActor:
@@ -20,14 +18,10 @@ class UniformActor:
         self.saved_actions = []
         self.device = device
 
-    def select_action(self, n_actions: int):
-        """Select a random action based on the uniform distribution.
+    def select_action(self, n_regions: int):
+        """Select a random action based on the uniform distribution."""
+        action = torch.Tensor([1 / n_regions for _ in range(n_regions)])
 
-        @TODO 1/regions for the dirichlet, for actions.
-        """
-        m = Uniform(0, 0.05)
-        action = m.sample(sample_shape=torch.Size([n_actions]))
-
-        self.saved_actions.append(m.log_prob(action))
+        self.saved_actions.append(action.log())
 
         return list(action.cpu().numpy())
