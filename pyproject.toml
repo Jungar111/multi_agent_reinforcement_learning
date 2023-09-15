@@ -21,6 +21,7 @@ tomli = "^2.0.1"
 torch-geometric = "^2.3.1"
 torch = ">=2.0.0, !=2.0.1"
 pydantic = "^2.3.0"
+colorlog = "^6.7.0"
 
 
 [[tool.poetry.source]]
