@@ -1,32 +1,40 @@
 """This is the Autonomous Mobility On Demand (AMoD) environment."""
 
-from collections import defaultdict
-import numpy as np
-import subprocess
 import os
-from multi_agent_reinforcement_learning.utils.minor_utils import mat2str
+import subprocess
+import typing as T
+from collections import defaultdict
 from copy import deepcopy
+
+import numpy as np
+from multi_agent_reinforcement_learning.data_models.actor_data import ActorData
+from multi_agent_reinforcement_learning.envs.scenario import Scenario
+
+from multi_agent_reinforcement_learning.utils.minor_utils import mat2str
 
 
 class AMoD:
     """Class for the Autonomous Mobility On Demand."""
 
     # initialization
-    def __init__(self, scenario, beta: float = 0.2):
+    def __init__(
+        self, actor_data: T.List[ActorData], scenario: Scenario, beta: float = 0.2
+    ):
         """Initialise env.
 
         scenario: The current scenario
         beta: cost of rebalancing
         """
         # updated to take scenario and beta (cost for rebalancing) as input
+        self.actor_data = actor_data
         self.scenario = deepcopy(
             scenario
         )  # I changed it to deep copy so that the scenario input is not modified by env
         self.G = (
             scenario.G
         )  # Road Graph: node - region, edge - connection of regions, node attr: 'accInit', edge attr: 'time'
-        self.demandTime = self.scenario.demandTime
-        self.rebTime = self.scenario.rebTime
+        self.demand_time = self.scenario.demand_time
+        self.reb_time = self.scenario.reb_time
         self.time = 0  # current time
         self.tf = scenario.tf  # final time
         self.demand = defaultdict(dict)  # demand
@@ -50,7 +58,7 @@ class AMoD:
             self.demand[i, j][t] = d
             self.price[i, j][t] = p
             self.depDemand[i][t] += d
-            self.arrDemand[i][t + self.demandTime[i, j][t]] += d
+            self.arrDemand[i][t + self.demand_time[i, j][t]] += d
         self.acc = defaultdict(
             dict
         )  # number of vehicles within each region, key: i - region, t - time
@@ -74,7 +82,7 @@ class AMoD:
             len(self.G.out_edges(n)) + 1 for n in self.region
         ]  # number of edges leaving each region
         for i, j in self.G.edges:
-            self.G.edges[i, j]["time"] = self.rebTime[i, j][
+            self.G.edges[i, j]["time"] = self.reb_time[i, j][
                 self.time
             ]  # Append the time it takes to rebalance to all edges
             self.rebFlow[i, j] = defaultdict(float)
@@ -85,30 +93,25 @@ class AMoD:
             self.dacc[n] = defaultdict(float)
         self.beta = beta * scenario.tstep  # Rebalancing cost
         t = self.time
-        self.servedDemand = defaultdict(dict)
-        for i, j in self.demand:
-            self.servedDemand[i, j] = defaultdict(float)
 
         self.N = len(self.region)  # total number of cells
 
-        # add the initialization of info here
-        self.info = dict.fromkeys(
-            ["revenue", "served_demand", "rebalancing_cost", "operating_cost"], 0
-        )
-        self.reward = 0
-        # observation: current vehicle distribution, time, future arrivals, demand
-        self.obs = (self.acc, self.time, self.dacc, self.demand)
-
-    def matching(self, CPLEXPATH: str = None, PATH: str = "", platform: str = "linux"):
+    def matching(
+        self,
+        demand: defaultdict,
+        CPLEXPATH: T.Optional[str] = None,
+        PATH: str = "",
+        platform: str = "linux",
+    ) -> T.List[int]:
         """Match in the class Matches passengers with vehicles.
 
         return: paxAction
         """
         t = self.time
         demandAttr = [
-            (i, j, self.demand[i, j][t], self.price[i, j][t])
-            for i, j in self.demand
-            if t in self.demand[i, j] and self.demand[i, j][t] > 1e-3
+            (i, j, demand[i, j][t], self.price[i, j][t])
+            for i, j in demand
+            if t in demand[i, j] and demand[i, j][t] > 1e-3
         ]  # Setup demand and price at time t.
         accTuple = [(n, self.acc[n][t + 1]) for n in self.acc]
         modPath = (
@@ -160,183 +163,216 @@ class AMoD:
     # pax step
     def pax_step(
         self,
-        paxAction: list = None,
-        CPLEXPATH: str = None,
-        PATH: str = "",
+        pax_action: T.Optional[list] = None,
+        cplex_path: T.Optional[str] = None,
+        path: str = "",
         platform: str = "linux",
-    ):
+    ) -> T.Tuple[T.List[ActorData], bool, T.List[bool]]:
         """Take one pax step.
 
         paxAction: Passenger actions for timestep
         returns: self.obs, max(0, self.reward), done, self.info
         """
         t = self.time
-        self.reward = 0
+
+        for (origin, dest), area_demand in self.demand.items():
+            allocated_customers = 0
+            no_customers = area_demand[t]
+            total_cars_in_area = sum([data.acc[origin][t] for data in self.actor_data])
+
+            for data in self.actor_data:
+                actor_specific_demand_ratio = data.acc[origin][t] / total_cars_in_area
+                customers = int(no_customers * actor_specific_demand_ratio)
+                data.demand[origin, dest][t] = customers
+
+                allocated_customers += customers
+
+            if allocated_customers != no_customers:
+                random_actor = np.random.choice(self.actor_data)
+                random_actor.demand[origin, dest][t] += (
+                    no_customers - allocated_customers
+                )
+
         self.ext_reward = np.zeros(self.nregion)
         for i in self.region:
-            self.acc[i][t + 1] = self.acc[i][t]
-        self.info["served_demand"] = 0  # initialize served demand
-        self.info["operating_cost"] = 0  # initialize operating cost
-        self.info["revenue"] = 0
-        self.info["rebalancing_cost"] = 0
-        if paxAction is None:
+            for actor in self.actor_data:
+                actor.acc[i][t + 1] = actor.acc[i][t]
+
+        if pax_action is None:
             # default matching algorithm used if isMatching is True, matching method will need the
             # information of self.acc[t+1], therefore this part cannot be put forward
-            paxAction = self.matching(CPLEXPATH=CPLEXPATH, PATH=PATH, platform=platform)
-        self.paxAction = paxAction
-        # serving passengers, if vehicle is in same section
-        for k in range(len(self.edges)):
-            i, j = self.edges[k]
-            if (
-                (i, j) not in self.demand
-                or t not in self.demand[i, j]
-                or self.paxAction[k] < 1e-3
-            ):
-                continue
-            # I moved the min operator above, since we want paxFlow to be consistent with paxAction
-            self.paxAction[k] = min(self.acc[i][t + 1], paxAction[k])
-            assert paxAction[k] < self.acc[i][t + 1] + 1e-3
-            # define servedDemand as the current passenger action
-            self.servedDemand[i, j][t] = self.paxAction[k]
-            self.paxFlow[i, j][t + self.demandTime[i, j][t]] = self.paxAction[k]
-            self.info["operating_cost"] += (
-                self.demandTime[i, j][t] * self.beta * self.paxAction[k]
-            )  # define the cost of picking of the current passenger
-            self.acc[i][t + 1] -= self.paxAction[k]
-            # Add to served_demand
-            self.info["served_demand"] += self.servedDemand[i, j][t]
-            self.dacc[j][t + self.demandTime[i, j][t]] += self.paxFlow[i, j][
-                t + self.demandTime[i, j][t]
-            ]
-            # add to reward
-            self.reward += self.paxAction[k] * (
-                self.price[i, j][t] - self.demandTime[i, j][t] * self.beta
-            )
-            # Add passenger action * price to revenue
-            self.ext_reward[i] += max(
-                0,
-                self.paxAction[k]
-                * (self.price[i, j][t] - self.demandTime[i, j][t] * self.beta),
-            )
-            self.info["revenue"] += self.paxAction[k] * (self.price[i, j][t])
+            for actor in self.actor_data:
+                actor.pax_action = self.matching(
+                    CPLEXPATH=cplex_path,
+                    PATH=path,
+                    platform=platform,
+                    demand=actor.demand,
+                )
 
-        self.obs = (
-            self.acc,
-            self.time,
-            self.dacc,
-            self.demand,
-        )  # for acc, the time index would be t+1, but for demand, the time index would be t
-        done = False  # if passenger matching is executed first
+        for actor in self.actor_data:
+            # serving passengers, if vehicle is in same section
+            for k in range(len(self.edges)):
+                i, j = self.edges[k]
+                if (
+                    (i, j) not in actor.demand
+                    or t not in actor.demand[i, j]
+                    or actor.pax_action[k] < 1e-3
+                ):
+                    continue
+                # I moved the min operator above, since we want paxFlow to be consistent with paxAction
+                actor.pax_action[k] = min(actor.acc[i][t + 1], actor.pax_action[k])
+                assert actor.pax_action[k] < actor.acc[i][t + 1] + 1e-3
+                # define servedDemand as the current passenger action
+                actor.served_demand[i, j][t] = actor.pax_action[k]
+                actor.pax_flow[i, j][t + self.demand_time[i, j][t]] = actor.pax_action[
+                    k
+                ]
+                actor.info.operating_cost += (
+                    self.demand_time[i, j][t] * self.beta * actor.pax_action[k]
+                )  # define the cost of picking of the current passenger
+                actor.acc[i][t + 1] -= actor.pax_action[k]
+                # Add to served_demand
+                actor.info.served_demand += actor.served_demand[i, j][t]
+                actor.dacc[j][t + self.demand_time[i, j][t]] += actor.pax_flow[i, j][
+                    t + self.demand_time[i, j][t]
+                ]
+                # add to reward
+                actor.reward += actor.pax_action[k] * (
+                    self.price[i, j][t] - self.demand_time[i, j][t] * self.beta
+                )
+                # Add passenger action * price to revenue
+                actor.ext_reward[i] += max(
+                    0,
+                    actor.pax_action[k]
+                    * (self.price[i, j][t] - self.demand_time[i, j][t] * self.beta),
+                )
+                actor.info.revenue += actor.pax_action[k] * (self.price[i, j][t])
+
+            # for acc, the time index would be t+1, but for demand, the time index would be t
+            actor.obs = (
+                actor.acc,
+                self.time,
+                actor.dacc,
+                actor.demand,
+            )
+
+            actor.reward = max(0, actor.reward)
+
+        # if passenger is executed first
+        done = False
         ext_done = [done] * self.nregion
-        return self.obs, max(0, self.reward), done, self.info, self.ext_reward, ext_done
+        return self.actor_data, done, ext_done
 
-    def reb_step(self, rebAction: list, advance_time: bool = True):
+    def reb_step(
+        self, reb_action: list, advance_time: bool = True
+    ) -> T.Tuple[T.List[ActorData], bool]:
         """Take on reb step, Adjusting costs, reward.
 
         rebAction: the action of rebalancing
         returns: self.obs, self.reward, done, self.info
         """
         t = self.time
-        self.reward = 0  # reward is calculated from before this to the next rebalancing, we may also have two rewards,
-        # one for pax matching and one for rebalancing
-        self.ext_reward = np.zeros(self.nregion)
-        self.rebAction = rebAction
+        for actor in self.actor_data:
+            # reward is calculated from before this to the
+            # next rebalancing, we may also have two rewards,
+            # one for pax matching and one for rebalancing
+            actor.reward = 0
+            actor.ext_reward = np.zeros(self.nregion)
+            actor.reb_action = reb_action
         # rebalancing loop
-        for k in range(len(self.edges)):
-            i, j = self.edges[k]
-            if (i, j) not in self.G.edges:
-                continue
-            # TODO: add check for actions respecting constraints? e.g. sum of all action[k] starting in "i" <=
-            # self.acc[i][t+1] (in addition to our agent action method)
-            # update the number of vehicles
-            self.rebAction[k] = min(self.acc[i][t + 1], rebAction[k])
-            self.rebFlow[i, j][t + self.rebTime[i, j][t]] = self.rebAction[k]
-            self.acc[i][t + 1] -= self.rebAction[k]
-            self.dacc[j][t + self.rebTime[i, j][t]] += self.rebFlow[i, j][
-                t + self.rebTime[i, j][t]
-            ]
-            self.info["rebalancing_cost"] += (
-                self.rebTime[i, j][t] * self.beta * self.rebAction[k]
-            )
-            self.info["operating_cost"] += (
-                self.rebTime[i, j][t] * self.beta * self.rebAction[k]
-            )
-            self.reward -= self.rebTime[i, j][t] * self.beta * self.rebAction[k]
-            self.ext_reward[i] -= self.rebTime[i, j][t] * self.beta * self.rebAction[k]
+        for actor in self.actor_data:
+            for k in range(len(self.edges)):
+                i, j = self.edges[k]
+                if (i, j) not in self.G.edges:
+                    continue
+                # TODO: add check for actions respecting constraints? e.g. sum of all action[k] starting in "i" <=
+                # self.acc[i][t+1] (in addition to our agent action method)
+                # update the number of vehicles
+                actor.reb_action[k] = min(self.acc[i][t + 1], reb_action[k])
+                actor.reb_flow[i, j][t + self.reb_time[i, j][t]] = actor.reb_action[k]
+                self.acc[i][t + 1] -= actor.reb_action[k]
+                self.dacc[j][t + self.reb_time[i, j][t]] += actor.reb_flow[i, j][
+                    t + self.reb_time[i, j][t]
+                ]
+                actor.info.rebalancing_cost += (
+                    self.reb_time[i, j][t] * self.beta * actor.reb_action[k]
+                )
+                actor.info.operating_cost += (
+                    self.reb_time[i, j][t] * self.beta * actor.reb_action[k]
+                )
+                actor.reward -= self.reb_time[i, j][t] * self.beta * actor.reb_action[k]
+                self.ext_reward[i] -= (
+                    self.reb_time[i, j][t] * self.beta * actor.reb_action[k]
+                )
         # arrival for the next time step, executed in the last state of a time step
         # this makes the code slightly different from the previous version, where the following codes are executed
         # between matching and rebalancing
-        for k in range(len(self.edges)):
-            i, j = self.edges[k]
-            if (i, j) in self.rebFlow and t in self.rebFlow[i, j]:
-                self.acc[j][t + 1] += self.rebFlow[i, j][t]
-            if (i, j) in self.paxFlow and t in self.paxFlow[i, j]:
-                self.acc[j][t + 1] += self.paxFlow[i, j][
-                    t
-                ]  # this means that after pax arrived, vehicles can only be rebalanced in the next time step, let me
+        for actor in self.actor_data:
+            for k in range(len(self.edges)):
+                # this means that after pax arrived, vehicles can only be rebalanced in the next time step, let me
                 # know if you have different opinion
+                i, j = self.edges[k]
+                if (i, j) in actor.reb_flow and t in actor.reb_flow[i, j]:
+                    actor.acc[j][t + 1] += actor.reb_flow[i, j][t]
+                if (i, j) in actor.pax_flow and t in actor.pax_flow[i, j]:
+                    actor.acc[j][t + 1] += actor.pax_flow[i, j][t]
 
-        if advance_time:
-            self.time += 1  # Advance one time step
-        self.obs = (
-            self.acc,
-            self.time,
-            self.dacc,
-            self.demand,
-        )  # use self.time to index the next time step
+        self.time += 1
+
+        for actor in self.actor_data:
+            actor.obs = (
+                actor.acc,
+                self.time,
+                actor.dacc,
+                actor.demand,
+            )
 
         for i, j in self.G.edges:
-            self.G.edges[i, j]["time"] = self.rebTime[i, j][self.time]
+            self.G.edges[i, j]["time"] = self.reb_time[i, j][self.time]
         done = self.tf == t + 1  # if the episode is completed
         # ext_done = [done] * self.nregion
-        return self.obs, self.reward, done, self.info
+        return self.actor_data, done
 
-    def reset(self):
-        """Reset the episode.
+    def reset(self) -> T.List[ActorData]:
+        """Reset the episode."""
+        for actor in self.actor_data:
+            actor.reward = 0
+            actor.acc = defaultdict(dict)
+            actor.dacc = defaultdict(dict)
+            actor.reb_flow = defaultdict(dict)
+            actor.pax_flow = defaultdict(dict)
+            actor.demand = defaultdict(dict)  # demand
+            for i, j in self.demand:
+                actor.served_demand[i, j] = defaultdict(float)
 
-        return: selv.obs
-        """
-        self.acc = defaultdict(dict)
-        self.dacc = defaultdict(dict)
-        self.rebFlow = defaultdict(dict)
-        self.paxFlow = defaultdict(dict)
+            for i, j in self.G.edges:
+                actor.reb_flow[i, j] = defaultdict(float)
+                actor.pax_flow[i, j] = defaultdict(float)
+
+            for n in self.G:
+                actor.acc[n][0] = self.G.nodes[n]["accInit"]
+                actor.dacc[n] = defaultdict(float)
+
+            tripAttr = self.scenario.get_random_demand(reset=True)
+            # trip attribute (origin, destination, time of request, demand, price)
+            for (
+                i,
+                j,
+                t,
+                d,
+                p,
+            ) in tripAttr:
+                actor.demand[i, j][t] = d
+                self.price[i, j][t] = p
+
         self.edges = []
         for i in self.G:
             self.edges.append((i, i))
             for e in self.G.out_edges(i):
                 self.edges.append(e)
         self.edges = list(set(self.edges))
-        self.demand = defaultdict(dict)  # demand
         self.price = defaultdict(dict)  # price
-        tripAttr = self.scenario.get_random_demand(reset=True)
-        self.regionDemand = defaultdict(dict)
-        for (
-            i,
-            j,
-            t,
-            d,
-            p,
-        ) in (
-            tripAttr
-        ):  # trip attribute (origin, destination, time of request, demand, price)
-            self.demand[i, j][t] = d
-            self.price[i, j][t] = p
-            if t not in self.regionDemand[i]:
-                self.regionDemand[i][t] = 0
-            else:
-                self.regionDemand[i][t] += d
 
         self.time = 0
-        for i, j in self.G.edges:
-            self.rebFlow[i, j] = defaultdict(float)
-            self.paxFlow[i, j] = defaultdict(float)
-        for n in self.G:
-            self.acc[n][0] = self.G.nodes[n]["accInit"]
-            self.dacc[n] = defaultdict(float)
         t = self.time
-        for i, j in self.demand:
-            self.servedDemand[i, j] = defaultdict(float)
-        # TODO: define states here
-        self.obs = (self.acc, self.time, self.dacc, self.demand)
-        self.reward = 0
-        return self.obs
+        return self.actor_data

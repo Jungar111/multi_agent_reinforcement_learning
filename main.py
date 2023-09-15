@@ -1,5 +1,6 @@
 """Main file for project."""
 from __future__ import print_function
+from multi_agent_reinforcement_learning.data_models.actor_data import ActorData
 
 from datetime import datetime
 
@@ -55,7 +56,10 @@ def main(config: Config):
             json_tstep=config.json_tsetp,
         )
 
-    env = AMoD(scenario, beta=config.beta)
+    # First is RL, second is uniform
+    actor_data = [ActorData(), ActorData()]
+
+    env = AMoD(scenario=scenario, beta=config.beta, actor_data=actor_data)
     # Initialize A2C-GNN
     model = ActorCritic(env=env, input_size=21, config=config)
     uniform_actor = UniformActor(n_cars=10)
@@ -79,12 +83,13 @@ def main(config: Config):
             obs = env.reset()  # initialize environment
             for step in range(T):
                 # take matching step (Step 1 in paper)
-                obs, pax_reward, done, info, ext_reward, ext_done = env.pax_step(
-                    CPLEXPATH=config.cplex_path, PATH="scenario_nyc4"
+                actor_data, done, ext_done = env.pax_step(
+                    cplex_path=config.cplex_path, path="scenario_nyc4"
                 )
-                rl_train_log.reward += pax_reward
+                rl_train_log.reward += actor_data[0].reward
+                uniform_train_log.reward += actor_data[1].reward
                 # use GNN-RL policy (Step 2 in paper)
-                action_rl = model.select_action(obs)
+                action_rl = model.select_action(actor_data[0].obs)
                 action_uniform = uniform_actor.select_action(
                     n_regions=config.grid_size_x * config.grid_size_y
                 )
@@ -104,6 +109,7 @@ def main(config: Config):
 
                 # solve minimum rebalancing distance problem (Step 3 in paper)
 
+                # @TODO Fortsæt herfra drenge!
                 reb_action = solveRebFlow(
                     env, "scenario_nyc4", desired_acc, config.cplex_path
                 )
@@ -121,6 +127,9 @@ def main(config: Config):
                 uniform_train_log.reward = reb_reward_uniform
                 rl_train_log.reward += reb_reward
                 # Store the transition in memory
+                # @TODO REMOVE THIS, THIS IS A QUICK FIX.
+                pax_reward = 0
+
                 model.rewards.append(pax_reward + reb_reward)
                 # track performance over episode
                 rl_train_log.served_demand += info["served_demand"]
@@ -166,7 +175,7 @@ def main(config: Config):
             while not done:
                 # take matching step (Step 1 in paper)
                 obs, pax_reward, done, info, ext_reward, ext_done = env.pax_step(
-                    CPLEXPATH=config.cplex_path, PATH="scenario_nyc4_test"
+                    cplex_path=config.cplex_path, path="scenario_nyc4_test"
                 )
                 test_log.reward += pax_reward
                 # use GNN-RL policy (Step 2 in paper)
