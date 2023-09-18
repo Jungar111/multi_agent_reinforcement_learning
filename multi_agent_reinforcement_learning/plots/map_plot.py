@@ -10,9 +10,12 @@ import wandb
 
 
 from multi_agent_reinforcement_learning.envs.amod import AMoD
+from multi_agent_reinforcement_learning.data_models.config import Config
 
 
-def make_map_plot(G: nx.Graph, obs: dict, t: int, timeEnd: int, env: AMoD):
+def make_map_plot(
+    G: nx.Graph, obs: dict, t: int, timeEnd: int, env: AMoD, config: Config
+):
     """Make a mapplot to visualize the distribution of cars over time.
 
     G: Graph
@@ -26,29 +29,15 @@ def make_map_plot(G: nx.Graph, obs: dict, t: int, timeEnd: int, env: AMoD):
     edgeList = []
     edgeLabels = {}
     # inVehicles = obs[2][0][t]
-    for i in range(15):
-        for j in range(15):
+    n_nodes = config.grid_size_x * config.grid_size_y
+    for i in range(n_nodes):
+        for j in range(n_nodes):
             if (i != j) and (env.rebFlow[i, j][t] > 0):
                 edgeList.append((i, j))
                 edgeLabels[i, j] = env.rebFlow[i, j][t]
-    pos = {
-        0: [-1, 1],
-        1: [0, 1],
-        2: [1, 1],
-        3: [-1, -1],
-        4: [0, -1],
-        5: [1, -1],
-        6: [-2, 2],
-        7: [0, 2],
-        8: [2, 2],
-        9: [-2, -2],
-        10: [0, -2],
-        11: [2, -2],
-        12: [-3, 3],
-        13: [0, 3],
-        14: [3, 3],
-        15: [-3, -3],
-    }
+    pos = {}
+    for i in range(n_nodes):
+        pos[i] = [-(i // 4 + 1), i % 4 + 1]
     # pos = nx.spiral_layout(G)
     plt.figure(figsize=(10, 10))
     nx.draw(
