@@ -1,6 +1,5 @@
 """Main file for project."""
 from __future__ import print_function
-from multi_agent_reinforcement_learning.data_models.actor_data import ActorData
 
 from datetime import datetime
 
@@ -10,16 +9,16 @@ from tqdm import trange
 import wandb
 from multi_agent_reinforcement_learning.algos.actor_critic_gnn import ActorCritic
 from multi_agent_reinforcement_learning.algos.reb_flow_solver import solveRebFlow
+from multi_agent_reinforcement_learning.algos.uniform_actor import UniformActor
+from multi_agent_reinforcement_learning.data_models.actor_data import ActorData
+from multi_agent_reinforcement_learning.data_models.config import Config
 from multi_agent_reinforcement_learning.data_models.logs import ModelLog
-from multi_agent_reinforcement_learning.utils.minor_utils import dictsum
 from multi_agent_reinforcement_learning.envs.amod import AMoD
 from multi_agent_reinforcement_learning.envs.scenario import Scenario
-from multi_agent_reinforcement_learning.utils.init_logger import init_logger
-from multi_agent_reinforcement_learning.utils.setup_grid import setup_dummy_grid
 from multi_agent_reinforcement_learning.utils.argument_parser import args_to_config
-from multi_agent_reinforcement_learning.data_models.config import Config
-from multi_agent_reinforcement_learning.algos.uniform_actor import UniformActor
-
+from multi_agent_reinforcement_learning.utils.init_logger import init_logger
+from multi_agent_reinforcement_learning.utils.minor_utils import dictsum
+from multi_agent_reinforcement_learning.utils.setup_grid import setup_dummy_grid
 
 logger = init_logger()
 
@@ -57,7 +56,7 @@ def main(config: Config):
         )
 
     # First is RL, second is uniform
-    actor_data = [ActorData(), ActorData()]
+    actor_data = [ActorData(name="RL"), ActorData(name="Uniform")]
 
     env = AMoD(scenario=scenario, beta=config.beta, actor_data=actor_data)
     # Initialize A2C-GNN
@@ -80,14 +79,14 @@ def main(config: Config):
         for i_episode in epochs:
             rl_train_log = ModelLog()
             uniform_train_log = ModelLog()
-            obs = env.reset()  # initialize environment
+            env.reset()  # initialize environment
             for step in range(T):
                 # take matching step (Step 1 in paper)
                 actor_data, done, ext_done = env.pax_step(
                     cplex_path=config.cplex_path, path="scenario_nyc4"
                 )
-                rl_train_log.reward += actor_data[0].reward
-                uniform_train_log.reward += actor_data[1].reward
+                rl_train_log.reward += actor_data[0].pax_reward
+                uniform_train_log.reward += actor_data[1].pax_reward
                 # use GNN-RL policy (Step 2 in paper)
                 action_rl = model.select_action(actor_data[0].obs)
                 action_uniform = uniform_actor.select_action(
@@ -97,45 +96,36 @@ def main(config: Config):
                 # transform sample from Dirichlet into actual vehicle counts (i.e. (x1*x2*..*xn)*num_vehicles)
                 n_vehicles = dictsum(env.acc, env.time + 1)
 
-                desired_acc = {
+                actor_data[0].desired_acc = {
                     env.region[i]: int(action_rl[i] * n_vehicles)
                     for i in range(n_actions)
                 }
 
-                desired_acc_uniform = {
+                actor_data[1].desired_acc = {
                     env.region[i]: int(action_uniform[i] * n_vehicles)
                     for i in range(n_actions)
                 }
 
                 # solve minimum rebalancing distance problem (Step 3 in paper)
 
-                # @TODO Fortsæt herfra drenge!
-                reb_action = solveRebFlow(
-                    env, "scenario_nyc4", desired_acc, config.cplex_path
-                )
+                solveRebFlow(env, "scenario_nyc4", config.cplex_path)
 
-                reb_action_uniform = solveRebFlow(
-                    env, "scenario_nyc4", desired_acc_uniform, config.cplex_path
-                )
-
-                _, reb_reward_uniform, _, info_uniform = env.reb_step(
-                    reb_action_uniform, advance_time=False
-                )
+                actor_data, done = env.reb_step()
 
                 # Take action in environment
-                _, reb_reward, done, info = env.reb_step(reb_action)
-                uniform_train_log.reward = reb_reward_uniform
-                rl_train_log.reward += reb_reward
-                # Store the transition in memory
-                # @TODO REMOVE THIS, THIS IS A QUICK FIX.
-                pax_reward = 0
+                rl_train_log.reward += actor_data[0].reb_reward
+                uniform_train_log.reward = actor_data[1].reb_reward
 
-                model.rewards.append(pax_reward + reb_reward)
+                model.rewards.append(
+                    actor_data[0].pax_reward + actor_data[0].reb_reward
+                )
                 # track performance over episode
-                rl_train_log.served_demand += info["served_demand"]
-                rl_train_log.rebalancing_cost += info["rebalancing_cost"]
-                uniform_train_log.served_demand += info_uniform["served_demand"]
-                uniform_train_log.rebalancing_cost += info_uniform["rebalancing_cost"]
+                rl_train_log.served_demand += actor_data[0].info.served_demand
+                rl_train_log.rebalancing_cost += actor_data[0].info.rebalancing_cost
+                uniform_train_log.served_demand += actor_data[1].info.served_demand
+                uniform_train_log.rebalancing_cost += actor_data[
+                    1
+                ].info.rebalancing_cost
                 # stop episode if terminating conditions are met
                 if done:
                     break
@@ -174,23 +164,23 @@ def main(config: Config):
             k = 0
             while not done:
                 # take matching step (Step 1 in paper)
-                obs, pax_reward, done, info, ext_reward, ext_done = env.pax_step(
+                actor_data, done, ext_done = env.pax_step(
                     cplex_path=config.cplex_path, path="scenario_nyc4_test"
                 )
-                test_log.reward += pax_reward
+                test_log.reward += actor_data[0].pax_reward
                 # use GNN-RL policy (Step 2 in paper)
                 action_rl = model.select_action(obs)
                 # transform sample from Dirichlet into actual vehicle counts (i.e. (x1*x2*..*xn)*num_vehicles)
-                desired_acc = {
+                desired_acc_rl = {
                     env.region[i]: int(action_rl[i] * dictsum(env.acc, env.time + 1))
                     for i in range(len(env.region))
                 }
                 # solve minimum rebalancing distance problem (Step 3 in paper)
-                reb_action = solveRebFlow(
-                    env, "scenario_nyc4_test", desired_acc, config.cplex_path
+                solveRebFlow(
+                    env, "scenario_nyc4_test", desired_acc_rl, config.cplex_path
                 )
                 # Take action in environment
-                _, rebreward, done, info = env.reb_step(reb_action)
+                _, rebreward, done, info = env.reb_step()
                 test_log.reward += rebreward
                 # track performance over episode
                 test_log.served_demand += info["served_demand"]
@@ -210,6 +200,7 @@ def main(config: Config):
 if __name__ == "__main__":
     config = args_to_config()
     config.wandb_mode = "disabled"
+    config.test = False
     config.json_file = None
     config.grid_size_x = 2
     config.grid_size_y = 3

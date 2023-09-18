@@ -7,7 +7,10 @@ from collections import defaultdict
 from copy import deepcopy
 
 import numpy as np
-from multi_agent_reinforcement_learning.data_models.actor_data import ActorData
+from multi_agent_reinforcement_learning.data_models.actor_data import (
+    ActorData,
+    PaxStepInfo,
+)
 from multi_agent_reinforcement_learning.envs.scenario import Scenario
 
 from multi_agent_reinforcement_learning.utils.minor_utils import mat2str
@@ -46,15 +49,8 @@ class AMoD:
             self.arrDemand[i] = defaultdict(float)
 
         self.price = defaultdict(dict)  # price
-        for (
-            i,
-            j,
-            t,
-            d,
-            p,
-        ) in (
-            scenario.tripAttr
-        ):  # trip attribute (origin, destination, time of request, demand, price)
+        for i, j, t, d, p in scenario.tripAttr:
+            # trip attribute (origin, destination, time of request, demand, price)
             self.demand[i, j][t] = d
             self.price[i, j][t] = p
             self.depDemand[i][t] += d
@@ -99,6 +95,8 @@ class AMoD:
     def matching(
         self,
         demand: defaultdict,
+        acc: defaultdict,
+        name: str,
         CPLEXPATH: T.Optional[str] = None,
         PATH: str = "",
         platform: str = "linux",
@@ -113,7 +111,7 @@ class AMoD:
             for i, j in demand
             if t in demand[i, j] and demand[i, j][t] > 1e-3
         ]  # Setup demand and price at time t.
-        accTuple = [(n, self.acc[n][t + 1]) for n in self.acc]
+        accTuple = [(n, acc[n][t + 1]) for n in acc]
         modPath = (
             os.getcwd().replace("\\", "/")
             + "/multi_agent_reinforcement_learning/cplex_mod/"
@@ -126,8 +124,8 @@ class AMoD:
         )
         if not os.path.exists(matchingPath):
             os.makedirs(matchingPath)
-        datafile = matchingPath + "data_{}.dat".format(t)
-        resfile = matchingPath + "res_{}.dat".format(t)
+        datafile = matchingPath + f"data_{name}_{t}.dat"
+        resfile = matchingPath + f"res_{name}_{t}.dat"
         with open(datafile, "w") as file:
             file.write('path="' + resfile + '";\r\n')
             file.write("demandAttr=" + mat2str(demandAttr) + ";\r\n")
@@ -140,7 +138,7 @@ class AMoD:
             my_env["DYLD_LIBRARY_PATH"] = CPLEXPATH
         else:
             my_env["LD_LIBRARY_PATH"] = CPLEXPATH
-        out_file = matchingPath + "out_{}.dat".format(t)
+        out_file = matchingPath + f"out_{name}_{t}.dat"
         with open(out_file, "w") as output_f:
             subprocess.check_call(
                 [CPLEXPATH + "oplrun", modfile, datafile], stdout=output_f, env=my_env
@@ -181,7 +179,12 @@ class AMoD:
             total_cars_in_area = sum([data.acc[origin][t] for data in self.actor_data])
 
             for data in self.actor_data:
-                actor_specific_demand_ratio = data.acc[origin][t] / total_cars_in_area
+                if total_cars_in_area == 0:
+                    actor_specific_demand_ratio = 1 / len(self.actor_data)
+                else:
+                    actor_specific_demand_ratio = (
+                        data.acc[origin][t] / total_cars_in_area
+                    )
                 customers = int(no_customers * actor_specific_demand_ratio)
                 data.demand[origin, dest][t] = customers
 
@@ -207,6 +210,8 @@ class AMoD:
                     PATH=path,
                     platform=platform,
                     demand=actor.demand,
+                    acc=actor.acc,
+                    name=actor.name,
                 )
 
         for actor in self.actor_data:
@@ -237,15 +242,15 @@ class AMoD:
                     t + self.demand_time[i, j][t]
                 ]
                 # add to reward
-                actor.reward += actor.pax_action[k] * (
+                actor.pax_reward += actor.pax_action[k] * (
                     self.price[i, j][t] - self.demand_time[i, j][t] * self.beta
                 )
                 # Add passenger action * price to revenue
-                actor.ext_reward[i] += max(
-                    0,
-                    actor.pax_action[k]
-                    * (self.price[i, j][t] - self.demand_time[i, j][t] * self.beta),
-                )
+                # actor.ext_reward[i] += max(
+                #     0,
+                #     actor.pax_action[k]
+                #     * (self.price[i, j][t] - self.demand_time[i, j][t] * self.beta),
+                # )
                 actor.info.revenue += actor.pax_action[k] * (self.price[i, j][t])
 
             # for acc, the time index would be t+1, but for demand, the time index would be t
@@ -256,16 +261,14 @@ class AMoD:
                 actor.demand,
             )
 
-            actor.reward = max(0, actor.reward)
+            actor.reb_reward = max(0, actor.reb_reward)
 
         # if passenger is executed first
         done = False
         ext_done = [done] * self.nregion
         return self.actor_data, done, ext_done
 
-    def reb_step(
-        self, reb_action: list, advance_time: bool = True
-    ) -> T.Tuple[T.List[ActorData], bool]:
+    def reb_step(self) -> T.Tuple[T.List[ActorData], bool]:
         """Take on reb step, Adjusting costs, reward.
 
         rebAction: the action of rebalancing
@@ -276,9 +279,8 @@ class AMoD:
             # reward is calculated from before this to the
             # next rebalancing, we may also have two rewards,
             # one for pax matching and one for rebalancing
-            actor.reward = 0
+            actor.reb_reward = 0
             actor.ext_reward = np.zeros(self.nregion)
-            actor.reb_action = reb_action
         # rebalancing loop
         for actor in self.actor_data:
             for k in range(len(self.edges)):
@@ -288,10 +290,10 @@ class AMoD:
                 # TODO: add check for actions respecting constraints? e.g. sum of all action[k] starting in "i" <=
                 # self.acc[i][t+1] (in addition to our agent action method)
                 # update the number of vehicles
-                actor.reb_action[k] = min(self.acc[i][t + 1], reb_action[k])
+                actor.reb_action[k] = min(actor.acc[i][t + 1], actor.reb_action[k])
                 actor.reb_flow[i, j][t + self.reb_time[i, j][t]] = actor.reb_action[k]
-                self.acc[i][t + 1] -= actor.reb_action[k]
-                self.dacc[j][t + self.reb_time[i, j][t]] += actor.reb_flow[i, j][
+                actor.acc[i][t + 1] -= actor.reb_action[k]
+                actor.dacc[j][t + self.reb_time[i, j][t]] += actor.reb_flow[i, j][
                     t + self.reb_time[i, j][t]
                 ]
                 actor.info.rebalancing_cost += (
@@ -300,7 +302,9 @@ class AMoD:
                 actor.info.operating_cost += (
                     self.reb_time[i, j][t] * self.beta * actor.reb_action[k]
                 )
-                actor.reward -= self.reb_time[i, j][t] * self.beta * actor.reb_action[k]
+                actor.reb_reward -= (
+                    self.reb_time[i, j][t] * self.beta * actor.reb_action[k]
+                )
                 self.ext_reward[i] -= (
                     self.reb_time[i, j][t] * self.beta * actor.reb_action[k]
                 )
@@ -336,7 +340,9 @@ class AMoD:
     def reset(self) -> T.List[ActorData]:
         """Reset the episode."""
         for actor in self.actor_data:
-            actor.reward = 0
+            actor.info = PaxStepInfo()
+            actor.reb_reward = 0
+            actor.pax_reward = 0
             actor.acc = defaultdict(dict)
             actor.dacc = defaultdict(dict)
             actor.reb_flow = defaultdict(dict)
@@ -355,15 +361,11 @@ class AMoD:
 
             tripAttr = self.scenario.get_random_demand(reset=True)
             # trip attribute (origin, destination, time of request, demand, price)
-            for (
-                i,
-                j,
-                t,
-                d,
-                p,
-            ) in tripAttr:
-                actor.demand[i, j][t] = d
+            for i, j, t, d, p in tripAttr:
+                self.demand[i, j][t] = d
                 self.price[i, j][t] = p
+
+            actor.demand = defaultdict(dict)
 
         self.edges = []
         for i in self.G:
@@ -371,8 +373,5 @@ class AMoD:
             for e in self.G.out_edges(i):
                 self.edges.append(e)
         self.edges = list(set(self.edges))
-        self.price = defaultdict(dict)  # price
 
         self.time = 0
-        t = self.time
-        return self.actor_data
