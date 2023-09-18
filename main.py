@@ -17,7 +17,10 @@ from multi_agent_reinforcement_learning.utils.init_logger import init_logger
 from multi_agent_reinforcement_learning.utils.setup_grid import setup_dummy_grid
 from multi_agent_reinforcement_learning.utils.argument_parser import args_to_config
 from multi_agent_reinforcement_learning.data_models.config import Config
-
+from multi_agent_reinforcement_learning.plots.map_plot import (
+    make_map_plot,
+    images_to_gif,
+)
 
 logger = init_logger()
 
@@ -103,6 +106,15 @@ def main(config: Config):
                 # stop episode if terminating conditions are met
                 if done:
                     break
+                # Create map if at last episode
+                if i_episode == epochs.iterable[-1]:
+                    if step == 0:
+                        logger.info("Making map plot.")
+                    make_map_plot(env.G, obs, step, T, env, config)
+            # Make images to gif, and cleanup
+            if i_episode == epochs.iterable[-1]:
+                images_to_gif()
+
             # perform on-policy backprop
             model.training_step()
 
@@ -168,7 +180,7 @@ def main(config: Config):
 
 if __name__ == "__main__":
     config = args_to_config()
-    config.wandb_mode = "disabled"
+    # config.wandb_mode = "disabled"
     config.json_file = None
     config.grid_size_x = 2
     config.grid_size_y = 3
