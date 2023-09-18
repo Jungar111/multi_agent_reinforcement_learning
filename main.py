@@ -108,6 +108,7 @@ def main(config: Config):
                     break
                 # Create map if at last episode
                 if i_episode == epochs.iterable[-1]:
+                    logger.info("Making map plot.")
                     make_map_plot(env.G, obs, step, T, env, config)
             # Make images to gif, and cleanup
             if i_episode == epochs.iterable[-1]:
