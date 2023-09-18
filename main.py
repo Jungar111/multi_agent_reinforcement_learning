@@ -108,7 +108,8 @@ def main(config: Config):
                     break
                 # Create map if at last episode
                 if i_episode == epochs.iterable[-1]:
-                    logger.info("Making map plot.")
+                    if step == 0:
+                        logger.info("Making map plot.")
                     make_map_plot(env.G, obs, step, T, env, config)
             # Make images to gif, and cleanup
             if i_episode == epochs.iterable[-1]:
@@ -179,7 +180,7 @@ def main(config: Config):
 
 if __name__ == "__main__":
     config = args_to_config()
-    config.wandb_mode = "disabled"
+    # config.wandb_mode = "disabled"
     config.json_file = None
     config.grid_size_x = 2
     config.grid_size_y = 3
