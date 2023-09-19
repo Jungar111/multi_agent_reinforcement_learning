@@ -40,16 +40,15 @@ def main(config: Config):
     # Define AMoD Simulator Environment
     if config.json_file is None:
         # Define variable for environment
-        tf, demand_ratio, demand_input, ninit = setup_dummy_grid(config)
+        demand_ratio, demand_input = setup_dummy_grid(config, determ=True)
         scenario = Scenario(
-            json_file=config.json_file,
-            tf=tf,
+            config=config,
             demand_ratio=demand_ratio,
             demand_input=demand_input,
-            ninit=ninit,
         )
     else:
         scenario = Scenario(
+            config=config,
             json_file=config.json_file,
             sd=config.seed,
             demand_ratio=config.demand_ratio,
@@ -180,10 +179,10 @@ def main(config: Config):
 
 if __name__ == "__main__":
     config = args_to_config()
-    # config.wandb_mode = "disabled"
+    config.wandb_mode = "disabled"
     config.json_file = None
     config.grid_size_x = 2
     config.grid_size_y = 3
     config.tf = 20
-    config.ninit = 10
+    config.ninit = 80
     main(config)
