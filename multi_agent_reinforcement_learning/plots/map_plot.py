@@ -70,12 +70,13 @@ def images_to_gif():
     image_fnames.sort(key=lambda x: int(x.split("/")[-1].split(".")[0]))  # sort by step
     frames = [Image.open(image) for image in image_fnames]
     frame_one = frames[0]
+    # Duration is in miliseconds.
     frame_one.save(
         "multi_agent_reinforcement_learning/plots/temp_plots/map_gif.gif",
         format="GIF",
         append_images=frames,
         save_all=True,
-        duration=len(image_fnames),
+        duration=1000,
         loop=0,
     )
     # gif = Image.open("multi_agent_reinforcement_learning/plots/temp_plots/map_gif.gif")
@@ -91,4 +92,4 @@ def images_to_gif():
 
 
 if __name__ == "__main__":
-    make_map_plot()
+    pass
