@@ -12,6 +12,7 @@ plt.style.use(str(style_path))
 
 if __name__ == "__main__":
     """For viewing test plot."""
+    print(list(plt.rcParams["axes.prop_cycle"])[0]["color"])
     import numpy as np
 
     x = np.linspace(0, 3, 1000)

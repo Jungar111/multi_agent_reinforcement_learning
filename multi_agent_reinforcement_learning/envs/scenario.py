@@ -76,7 +76,10 @@ class Scenario:
 
             for actor in actor_data:
                 for n in self.G.nodes:
-                    self.G.nodes[n][f"acc_init_{actor.name}"] = int(ninit)
+                    self.G.nodes[n][f"acc_init_{actor.name}"] = int(
+                        actor.no_cars // len(self.G.nodes)
+                    )
+
                 self.tf = tf
                 self.demand_ratio = defaultdict(list)
 

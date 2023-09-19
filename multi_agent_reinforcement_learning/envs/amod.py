@@ -174,6 +174,10 @@ class AMoD:
         """
         t = self.time
 
+        for data in self.actor_data:
+            data.info = PaxStepInfo()
+            data.pax_reward = 0
+
         for (origin, dest), area_demand in self.demand.items():
             allocated_customers = 0
             no_customers = area_demand[t]
@@ -283,6 +287,7 @@ class AMoD:
             # one for pax matching and one for rebalancing
             actor.reb_reward = 0
             actor.ext_reward = np.zeros(self.nregion)
+
         # rebalancing loop
         for actor in self.actor_data:
             for k in range(len(self.edges)):

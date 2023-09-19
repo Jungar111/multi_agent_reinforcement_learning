@@ -20,6 +20,6 @@ class UniformActor:
         """Select a random action based on the uniform distribution."""
         action = torch.Tensor([1 / n_regions for _ in range(n_regions)])
 
-        self.saved_actions.append(action.log())
+        self.saved_actions.append(action)
 
         return list(action.cpu().numpy())
