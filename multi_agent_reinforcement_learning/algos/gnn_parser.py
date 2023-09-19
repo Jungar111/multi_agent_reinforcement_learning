@@ -5,6 +5,7 @@ import typing as T
 import torch
 from torch_geometric.data import Data
 from torch_geometric.utils import grid
+from multi_agent_reinforcement_learning.data_models.actor_data import ActorData
 from multi_agent_reinforcement_learning.data_models.config import Config
 from multi_agent_reinforcement_learning.envs.amod import AMoD
 
@@ -30,7 +31,7 @@ class GNNParser:
         if config.json_file is None:
             self.demand_input = self.env.scenario.demand_input2
 
-    def parse_obs(self, obs: T.Tuple[dict, int, dict, dict]):
+    def parse_obs(self, actor_data: ActorData, obs: T.Tuple[dict, int, dict, dict]):
         """Parse observations.
 
         Return the data object called 'data' which is used in the Actors and critc forward pass.
@@ -41,7 +42,7 @@ class GNNParser:
         second_t = torch.tensor(
             [
                 [
-                    (obs[0][n][self.env.time + 1] + self.env.dacc[n][t]) * self.s
+                    (obs[0][n][self.env.time + 1] + actor_data.dacc[n][t]) * self.s
                     for n in self.env.region
                 ]
                 for t in range(self.env.time + 1, self.env.time + self.T + 1)
