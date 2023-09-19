@@ -30,14 +30,6 @@ logger = init_logger()
 def main(config: Config):
     """Run main training loop."""
     logger.info("Running main loop.")
-    wandb.init(
-        mode=config.wandb_mode,
-        project="master2023",
-        name=f"test_log ({datetime.now().strftime('%Y-%m-%d %H:%M')})"
-        if config.test
-        else f"train_log ({datetime.now().strftime('%Y-%m-%d %H:%M')})",
-        config={**vars(config)},
-    )
 
     uniform_number_of_cars = int(1408 / 3)
 
@@ -45,6 +37,19 @@ def main(config: Config):
         ActorData(name="RL", no_cars=1408 - uniform_number_of_cars),
         ActorData(name="Uniform", no_cars=uniform_number_of_cars),
     ]
+
+    wandb_config_log = {**vars(config)}
+    for actor in actor_data:
+        wandb_config_log[f"no_cars_{actor.name}"] = actor.no_cars
+
+    wandb.init(
+        mode=config.wandb_mode,
+        project="master2023",
+        name=f"test_log ({datetime.now().strftime('%Y-%m-%d %H:%M')})"
+        if config.test
+        else f"train_log ({datetime.now().strftime('%Y-%m-%d %H:%M')})",
+        config=wandb_config_log,
+    )
 
     # Define AMoD Simulator Environment
     if config.json_file is None:
@@ -167,7 +172,7 @@ def main(config: Config):
             wandb.log(
                 {
                     **rl_train_log.dict("reninforcement"),
-                    # **uniform_train_log.dict("uniform"),
+                    **uniform_train_log.dict("uniform"),
                 }
             )
     else:
