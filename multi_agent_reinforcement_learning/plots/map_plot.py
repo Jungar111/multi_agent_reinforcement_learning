@@ -2,7 +2,6 @@
 import networkx as nx
 import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib import cm
 from PIL import Image
 import os
 from glob2 import glob
@@ -11,6 +10,7 @@ import wandb
 
 from multi_agent_reinforcement_learning.envs.amod import AMoD
 from multi_agent_reinforcement_learning.data_models.config import Config
+import multi_agent_reinforcement_learning  # noqa: F401
 
 
 def make_map_plot(
@@ -23,12 +23,14 @@ def make_map_plot(
     rebAction: The rebalancing actions at time t
     t: time t
     """
+    node_color = list(plt.rcParams["axes.prop_cycle"])[0]["color"]
+    edge_color = list(plt.rcParams["axes.prop_cycle"])[1]["color"]
     t = t + 1
     nrVehicleAtTimeT = {x: int(i[t]) for x, i in obs[0].items()}
 
     edgeList = []
     edgeLabels = {}
-    # inVehicles = obs[2][0][t]
+
     n_nodes = config.grid_size_x * config.grid_size_y
     for i in range(n_nodes):
         for j in range(n_nodes):
@@ -38,23 +40,24 @@ def make_map_plot(
     pos = {}
     for i in range(n_nodes):
         pos[i] = [-(i // 4 + 1), i % 4 + 1]
-    # pos = nx.spiral_layout(G)
+
     plt.figure(figsize=(10, 10))
     nx.draw(
         G,
         pos,
         labels=nrVehicleAtTimeT,
-        cmap=cm.get_cmap("viridis"),
-        node_color=list(pos.keys()),
+        node_color=node_color,
         node_size=np.array(list(nrVehicleAtTimeT.values())) * 10,
         edgelist=edgeList,
+        edge_color=edge_color,
         width=np.array(list(edgeLabels.values())) / 10,
         with_labels=True,
         font_weight="bold",
+        font_color="whitesmoke",
     )
     nx.draw_networkx_edge_labels(G, pos, edge_labels=edgeLabels)
     plt.savefig(f"multi_agent_reinforcement_learning/plots/temp_plots/{t}.jpg")
-    plt.clf()
+    plt.close()
 
 
 def delete_temp_plots():
@@ -76,7 +79,7 @@ def images_to_gif():
         format="GIF",
         append_images=frames,
         save_all=True,
-        duration=1000,
+        duration=2000,
         loop=0,
     )
     # gif = Image.open("multi_agent_reinforcement_learning/plots/temp_plots/map_gif.gif")
