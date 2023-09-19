@@ -17,16 +17,16 @@ tuple accTuple{
 string path = ...;
 
 {edgeAttrTuple} edgeAttr = ...;
-{accTuple} accInitTuple = ...;
-{accTuple} accRLTuple = ...;
+{accTuple} acc_init_tuple = ...;
+{accTuple} acc_actor_tuple = ...;
 
 {Edge} edge = {<i,j>|<i,j,t> in edgeAttr};
-{int} region = {i|<i,v> in accInitTuple};
+{int} region = {i|<i,v> in acc_init_tuple};
 
 float time[edge] = [<i,j>:t|<i,j,t> in edgeAttr]; // TODO: distance --> we have no distance (replace with time?)
-float desiredVehicles[region] = [i:v|<i,v> in accRLTuple]; // TODO: desiredVehicles
+float desiredVehicles[region] = [i:v|<i,v> in acc_actor_tuple]; // TODO: desiredVehicles
 //float accInit[region] = [i:v|<i,v> in accInitTuple];
-float vehicles[region] = [i:v|<i,v> in accInitTuple]; // TODO: vehicles
+float vehicles[region] = [i:v|<i,v> in acc_init_tuple]; // TODO: vehicles
 
 dvar int+ demandFlow[edge];
 dvar int+ rebFlow[edge];

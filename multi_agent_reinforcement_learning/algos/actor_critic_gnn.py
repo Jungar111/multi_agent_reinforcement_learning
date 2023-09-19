@@ -45,6 +45,9 @@ class ActorCritic(nn.Module):
         self.hidden_size = input_size
         self.config = config
 
+        # @TODO Make this smart.
+        self.actor_data = self.env.actor_data[0]
+
         self.actor = GNNActor(
             self.input_size, self.hidden_size, device=self.config.device
         ).to(self.config.device)
@@ -86,7 +89,7 @@ class ActorCritic(nn.Module):
         state: current state of the enviorenment
         returns: state
         """
-        state = self.obs_parser.parse_obs(obs)
+        state = self.obs_parser.parse_obs(obs=obs, actor_data=self.actor_data)
         return state
 
     def select_action(self, obs: T.Tuple[dict, int, dict, dict]):

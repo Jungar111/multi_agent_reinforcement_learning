@@ -25,11 +25,12 @@ class Config(BaseModel):
     device: torch.device
     grid_size_x: int = 4
     grid_size_y: int = 4
+    n_regions: int = 4 * 4
     tf: int = 60
     ninit: int = 80
     wandb_mode: str = "online"
     gamma: float = 0.97
-    json_file: T.Optional[str] = Path("data", "scenario_nyc4x4.json")
+    json_file: T.Optional[Path] = Path("data", "scenario_nyc4x4.json")
     log_interval: int = 10
 
     @validator("tf", pre=True)
@@ -37,4 +38,9 @@ class Config(BaseModel):
     def check_tf(cls, value):
         if value <= 10:
             raise ValueError("tf must be at least 11.")
+        return value
+
+    @validator("n_regions")
+    def update_n_regions(cls, value, values):
+        value = values.grid_size_x * values.grid_size_y
         return value
