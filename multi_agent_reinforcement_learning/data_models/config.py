@@ -36,8 +36,8 @@ class Config(BaseModel):
     @validator("tf", pre=True)
     @classmethod
     def check_tf(cls, value):
-        if value <= 10:
-            raise ValueError("tf must be at least 11.")
+        if value < 10:
+            raise ValueError("tf must be at least 10. WE THINK! Depends on grid size.")
         return value
 
     @validator("n_regions")

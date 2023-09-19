@@ -1,6 +1,7 @@
 """This is the environment for the scenario."""
 
 from collections import defaultdict
+from multi_agent_reinforcement_learning.data_models.config import Config
 import numpy as np
 import networkx as nx
 from copy import deepcopy
@@ -15,12 +16,9 @@ class Scenario:
 
     def __init__(
         self,
+        config: Config,
         actor_data: T.List[ActorData],
-        N1: int = 2,  # grid size
-        N2: int = 3,  # grid size
-        tf: int = 60,  # Timeframe
         sd=None,
-        ninit: int = 5,  # Initial number of vehicles in each region
         tripAttr=None,
         demand_input=None,
         demand_ratio: T.Optional[T.Union[float, dict]] = None,
@@ -46,9 +44,11 @@ class Scenario:
         alpha: parameter for uniform distribution of demand levels - [1-alpha, 1+alpha] * demand_input
         """
         self.sd = sd
+        self.actor_data = actor_data
         if sd != None:
             np.random.seed(self.sd)
-        if json_file == None:  # simulate enviorienment when json is none.
+        # simulate enviorienment when json is none.
+        if json_file == None:
             self.varying_time = varying_time
             self.is_json = False
             self.alpha = alpha
@@ -56,31 +56,35 @@ class Scenario:
             self.grid_travel_time = grid_travel_time
             self.demand_input = demand_input
             self.fix_price = fix_price
-            self.N1 = N1
-            self.N2 = N2
-            self.G = nx.complete_graph(N1 * N2)
+            self.N1 = config.grid_size_x
+            self.N2 = config.grid_size_y
+            self.G = nx.complete_graph(self.N1 * self.N2)
             self.G = self.G.to_directed()
             self.demand_time = defaultdict(dict)
             self.reb_time = defaultdict(dict)
             self.edges = list(self.G.edges) + [(i, i) for i in self.G.nodes]
             self.tstep = json_tstep
+            self.tf = config.tf
+            self.demand_ratio = defaultdict(list)
             for i, j in self.edges:
-                for t in range(0, tf * 2):
+                for t in range(0, self.tf * 2):
                     self.demand_time[i, j][t] = (
-                        abs(i // N1 - j // N1) + abs(i % N1 - j % N1)
+                        abs(i // self.N1 - j // self.N1)
+                        + abs(i % self.N1 - j % self.N1)
                     ) * grid_travel_time
 
                     self.reb_time[i, j][t] = (
-                        abs(i // N1 - j // N1) + abs(i % N1 - j % N1)
+                        abs(i // self.N1 - j // self.N1)
+                        + abs(i % self.N1 - j % self.N1)
                     ) * grid_travel_time
 
-            for actor in actor_data:
+            for actor in self.actor_data:
                 for n in self.G.nodes:
                     self.G.nodes[n][f"acc_init_{actor.name}"] = int(
                         actor.no_cars // len(self.G.nodes)
                     )
 
-                self.tf = tf
+                self.tf = config.tf
                 self.demand_ratio = defaultdict(list)
 
             if (
@@ -93,57 +97,65 @@ class Scenario:
                         self.demand_ratio[i, j] = (
                             list(
                                 np.interp(
-                                    range(0, tf),
-                                    np.arange(0, tf + 1, tf / (len(demand_ratio) - 1)),
+                                    range(0, self.tf),
+                                    np.arange(
+                                        0,
+                                        self.tf + 1,
+                                        self.tf / (len(demand_ratio) - 1),
+                                    ),
                                     demand_ratio,
                                 )
                             )
-                            + [demand_ratio[-1]] * tf
+                            + [demand_ratio[-1]] * self.tf
                         )
                     if isinstance(demand_ratio, dict):
                         self.demand_ratio[i, j] = (
                             list(
                                 np.interp(
-                                    range(0, tf),
+                                    range(0, self.tf),
                                     np.arange(
-                                        0, tf + 1, tf / (len(demand_ratio[i]) - 1)
+                                        0,
+                                        self.tf + 1,
+                                        self.tf / (len(demand_ratio[i]) - 1),
                                     ),
                                     demand_ratio[i],
                                 )
                             )
-                            + [demand_ratio[i][-1]] * tf
+                            + [demand_ratio[i][-1]] * self.tf
                         )
                     else:
-                        self.demand_ratio[i, j] = [1] * (tf + tf)
+                        self.demand_ratio[i, j] = [1] * (self.tf + self.tf)
             else:
                 for i, j in self.edges:
                     if (i, j) in demand_ratio:
                         self.demand_ratio[i, j] = (
                             list(
                                 np.interp(
-                                    range(0, tf),
+                                    range(0, self.tf),
                                     np.arange(
-                                        0, tf + 1, tf / (len(demand_ratio[i, j]) - 1)
+                                        0,
+                                        self.tf + 1,
+                                        self.tf / (len(demand_ratio[i, j]) - 1),
                                     ),
                                     demand_ratio[i, j],
                                 )
                             )
-                            + [1] * tf
+                            + [1] * self.tf
                         )
                     else:
                         self.demand_ratio[i, j] = (
                             list(
                                 np.interp(
-                                    range(0, tf),
+                                    range(0, self.tf),
                                     np.arange(
                                         0,
-                                        tf + 1,
-                                        tf / (len(demand_ratio["default"]) - 1),
+                                        self.tf + 1,
+                                        self.tf / (len(demand_ratio["default"]) - 1),
                                     ),
                                     demand_ratio["default"],
                                 )
                             )
-                            + [1] * tf
+                            + [1] * self.tf
                         )
             if self.fix_price:  # fix price
                 self.p = defaultdict(dict)
@@ -179,7 +191,7 @@ class Scenario:
             self.demand_time = defaultdict(dict)
             self.reb_time = defaultdict(dict)
             self.json_start = json_hr * 60
-            self.tf = tf
+            self.tf = config.tf
             self.edges = list(self.G.edges) + [(i, i) for i in self.G.nodes]
 
             for i, j in self.demand_input:
@@ -217,7 +229,7 @@ class Scenario:
                 )
 
             for o, d in self.edges:
-                for t in range(0, tf * 2):
+                for t in range(0, self.tf * 2):
                     if t in self.demand_input[o, d]:
                         self.p[o, d][t] /= self.demand_input[o, d][t]
                         self.demand_time[o, d][t] /= self.demand_input[o, d][t]
@@ -247,16 +259,16 @@ class Scenario:
                         self.reb_time[o, d][t] = max(int(round(rt / json_tstep)), 1)
                 else:
                     if hr == json_hr:
-                        for t in range(0, tf + 1):
+                        for t in range(0, self.tf + 1):
                             self.reb_time[o, d][t] = max(int(round(rt / json_tstep)), 1)
 
-            for actor in actor_data:
+            for actor in self.actor_data:
                 for item in data["totalAcc"]:
                     hr = item["hour"]
-                    if hr == json_hr + int(round(json_tstep / 2 * tf / 60)):
+                    if hr == json_hr + int(round(json_tstep / 2 * self.tf / 60)):
                         for n in self.G.nodes:
                             self.G.nodes[n][f"acc_init_{actor.name}"] = int(
-                                actor.no_cars / len(self.G)
+                                actor.no_cars // len(self.G)
                             )
                 self.tripAttr = self.get_random_demand()
 
