@@ -38,5 +38,9 @@ line-length = 120
 
 ignore = ["E711", "D401"]
 
+
+[tool.ruff.isort]
+required-imports = ["import multi_agent_reinforcment_learning"]
+
 [tool.ruff.pydocstyle]
 convention = "pep257"
