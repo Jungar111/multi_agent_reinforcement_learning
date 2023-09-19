@@ -10,11 +10,9 @@ class UniformActor:
 
     def __init__(
         self,
-        n_cars: int,
         device: torch.device = torch.device("cuda:0"),
     ):
         """Init method for the uniform actor."""
-        self.n_cars = n_cars
         self.saved_actions = []
         self.device = device
 

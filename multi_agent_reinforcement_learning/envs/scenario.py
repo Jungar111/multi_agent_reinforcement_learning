@@ -7,12 +7,15 @@ from copy import deepcopy
 import json
 import typing as T
 
+from multi_agent_reinforcement_learning.data_models.actor_data import ActorData
+
 
 class Scenario:
     """Class for defining a scenario."""
 
     def __init__(
         self,
+        actor_data: T.List[ActorData],
         N1: int = 2,  # grid size
         N2: int = 3,  # grid size
         tf: int = 60,  # Timeframe
@@ -71,10 +74,11 @@ class Scenario:
                         abs(i // N1 - j // N1) + abs(i % N1 - j % N1)
                     ) * grid_travel_time
 
-            for n in self.G.nodes:
-                self.G.nodes[n]["accInit"] = int(ninit)
-            self.tf = tf
-            self.demand_ratio = defaultdict(list)
+            for actor in actor_data:
+                for n in self.G.nodes:
+                    self.G.nodes[n][f"acc_init_{actor.name}"] = int(ninit)
+                self.tf = tf
+                self.demand_ratio = defaultdict(list)
 
             if (
                 demand_ratio == None
@@ -243,12 +247,15 @@ class Scenario:
                         for t in range(0, tf + 1):
                             self.reb_time[o, d][t] = max(int(round(rt / json_tstep)), 1)
 
-            for item in data["totalAcc"]:
-                hr, acc = item["hour"], item["acc"]
-                if hr == json_hr + int(round(json_tstep / 2 * tf / 60)):
-                    for n in self.G.nodes:
-                        self.G.nodes[n]["accInit"] = int(acc / len(self.G))
-            self.tripAttr = self.get_random_demand()
+            for actor in actor_data:
+                for item in data["totalAcc"]:
+                    hr = item["hour"]
+                    if hr == json_hr + int(round(json_tstep / 2 * tf / 60)):
+                        for n in self.G.nodes:
+                            self.G.nodes[n][f"acc_init_{actor.name}"] = int(
+                                actor.no_cars / len(self.G)
+                            )
+                self.tripAttr = self.get_random_demand()
 
     def get_random_demand(self, reset: bool = False):
         """Generate demand and price.

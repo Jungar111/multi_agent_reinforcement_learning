@@ -84,9 +84,10 @@ class AMoD:
             self.rebFlow[i, j] = defaultdict(float)
         for i, j in self.demand:
             self.paxFlow[i, j] = defaultdict(float)
-        for n in self.region:
-            self.acc[n][0] = self.G.nodes[n]["accInit"]
-            self.dacc[n] = defaultdict(float)
+        for actor in actor_data:
+            for n in self.region:
+                actor.acc[n][0] = self.G.nodes[n][f"acc_init_{actor.name}"]
+                actor.dacc[n] = defaultdict(float)
         self.beta = beta * scenario.tstep  # Rebalancing cost
         t = self.time
 
@@ -185,6 +186,7 @@ class AMoD:
                     actor_specific_demand_ratio = (
                         data.acc[origin][t] / total_cars_in_area
                     )
+
                 customers = int(no_customers * actor_specific_demand_ratio)
                 data.demand[origin, dest][t] = customers
 
@@ -261,7 +263,7 @@ class AMoD:
                 actor.demand,
             )
 
-            actor.reb_reward = max(0, actor.reb_reward)
+            actor.pax_reward = max(0, actor.pax_reward)
 
         # if passenger is executed first
         done = False
@@ -296,18 +298,14 @@ class AMoD:
                 actor.dacc[j][t + self.reb_time[i, j][t]] += actor.reb_flow[i, j][
                     t + self.reb_time[i, j][t]
                 ]
-                actor.info.rebalancing_cost += (
-                    self.reb_time[i, j][t] * self.beta * actor.reb_action[k]
-                )
-                actor.info.operating_cost += (
-                    self.reb_time[i, j][t] * self.beta * actor.reb_action[k]
-                )
-                actor.reb_reward -= (
-                    self.reb_time[i, j][t] * self.beta * actor.reb_action[k]
-                )
-                self.ext_reward[i] -= (
-                    self.reb_time[i, j][t] * self.beta * actor.reb_action[k]
-                )
+
+                reb_cost = self.reb_time[i, j][t] * self.beta * actor.reb_action[k]
+
+                actor.info.rebalancing_cost += reb_cost
+                actor.info.operating_cost += reb_cost
+                actor.reb_reward -= reb_cost
+                self.ext_reward[i] -= reb_cost
+
         # arrival for the next time step, executed in the last state of a time step
         # this makes the code slightly different from the previous version, where the following codes are executed
         # between matching and rebalancing
@@ -356,7 +354,7 @@ class AMoD:
                 actor.pax_flow[i, j] = defaultdict(float)
 
             for n in self.G:
-                actor.acc[n][0] = self.G.nodes[n]["accInit"]
+                actor.acc[n][0] = self.G.nodes[n][f"acc_init_{actor.name}"]
                 actor.dacc[n] = defaultdict(float)
 
             tripAttr = self.scenario.get_random_demand(reset=True)

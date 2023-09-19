@@ -15,12 +15,13 @@ class PaxStepInfo:
 @dataclass
 class ActorData:
     name: str
+    no_cars: int
     reb_action: T.Optional[T.List[float]] = None
     pax_action: T.Optional[T.List[int]] = None
     ext_reward: T.Optional[np.ndarray] = None
     obs: T.Optional[T.Tuple[defaultdict, int, defaultdict, defaultdict]] = None
-    pax_reward: int = 0
-    reb_reward: int = 0
+    pax_reward: float = 0
+    reb_reward: float = 0
     demand: defaultdict[dict] = field(default_factory=lambda: defaultdict(dict))
     acc: defaultdict[dict] = field(default_factory=lambda: defaultdict(dict))
     dacc: defaultdict[dict] = field(default_factory=lambda: defaultdict(dict))

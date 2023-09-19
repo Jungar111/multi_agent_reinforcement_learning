@@ -21,7 +21,7 @@ class GNNActor(nn.Module):
         self.conv1 = GCNConv(in_channels, in_channels)
         self.lin1 = nn.Linear(in_channels, 32)
         self.lin2 = nn.Linear(32, 32)
-        self.lin3 = nn.Linear(32, out_channels)
+        self.lin3 = nn.Linear(32, 1)
         self.device = device
 
     def forward(self, data: Data):
