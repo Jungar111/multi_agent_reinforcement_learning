@@ -169,19 +169,20 @@ def main(config: Config):
             wandb.log(
                 {
                     **rl_train_log.dict("reninforcement"),
-                    **uniform_train_log.dict("uniform"),
+                    # **uniform_train_log.dict("uniform"),
                 }
             )
     else:
         # Load pre-trained model
         model.load_checkpoint(path=f"./{config.directory}/ckpt/nyc4/a2c_gnn.pth")
+        model_data = actor_data[0]
         test_episodes = config.max_episodes  # set max number of training episodes
         T = config.max_steps  # set episode length
         epochs = trange(test_episodes)  # epoch iterator
         # Initialize lists for logging
         for episode in epochs:
             test_log = ModelLog()
-            obs = env.reset()
+            env.reset()
             done = False
             k = 0
             while not done:
@@ -189,12 +190,14 @@ def main(config: Config):
                 actor_data, done, ext_done = env.pax_step(
                     cplex_path=config.cplex_path, path="scenario_nyc4_test"
                 )
-                test_log.reward += actor_data[0].pax_reward
+                test_log.reward += model_data.pax_reward
                 # use GNN-RL policy (Step 2 in paper)
-                action_rl = model.select_action(obs)
+                action_rl = model.select_action(model_data.obs)
                 # transform sample from Dirichlet into actual vehicle counts (i.e. (x1*x2*..*xn)*num_vehicles)
                 desired_acc_rl = {
-                    env.region[i]: int(action_rl[i] * dictsum(env.acc, env.time + 1))
+                    env.region[i]: int(
+                        action_rl[i] * dictsum(model_data.acc, env.time + 1)
+                    )
                     for i in range(len(env.region))
                 }
                 # solve minimum rebalancing distance problem (Step 3 in paper)
@@ -202,11 +205,11 @@ def main(config: Config):
                     env, "scenario_nyc4_test", desired_acc_rl, config.cplex_path
                 )
                 # Take action in environment
-                _, rebreward, done, info = env.reb_step()
-                test_log.reward += rebreward
+                actor_data, done = env.reb_step()
+                test_log.reward += model_data.reb_reward
                 # track performance over episode
-                test_log.served_demand += info["served_demand"]
-                test_log.rebalancing_cost += info["rebalancing_cost"]
+                test_log.served_demand += model_data.info.served_demand
+                test_log.rebalancing_cost += model_data.info.rebalancing_cost
                 k += 1
             # Send current statistics to screen
             epochs.set_description(
@@ -221,7 +224,7 @@ def main(config: Config):
 
 if __name__ == "__main__":
     config = args_to_config()
-    # config.wandb_mode = "disabled"
+    config.wandb_mode = "disabled"
     config.test = False
     # config.json_file = None
     # config.grid_size_x = 2

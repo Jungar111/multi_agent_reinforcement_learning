@@ -55,18 +55,6 @@ class AMoD:
             self.price[i, j][t] = p
             self.depDemand[i][t] += d
             self.arrDemand[i][t + self.demand_time[i, j][t]] += d
-        self.acc = defaultdict(
-            dict
-        )  # number of vehicles within each region, key: i - region, t - time
-        self.dacc = defaultdict(
-            dict
-        )  # number of vehicles arriving at each region, key: i - region, t - time
-        self.rebFlow = defaultdict(
-            dict
-        )  # number of rebalancing vehicles, key: (i,j) - (origin, destination), t - time
-        self.paxFlow = defaultdict(
-            dict
-        )  # number of vehicles with passengers, key: (i,j) - (origin, destination), t - time
         self.edges = []  # set of rebalancing edges
         self.nregion = len(scenario.G)  # number of regions
         for i in self.G:  # Append all nodes to itself so staying is a possibility
@@ -81,9 +69,6 @@ class AMoD:
             self.G.edges[i, j]["time"] = self.reb_time[i, j][
                 self.time
             ]  # Append the time it takes to rebalance to all edges
-            self.rebFlow[i, j] = defaultdict(float)
-        for i, j in self.demand:
-            self.paxFlow[i, j] = defaultdict(float)
         for actor in actor_data:
             for n in self.region:
                 actor.acc[n][0] = self.G.nodes[n][f"acc_init_{actor.name}"]
