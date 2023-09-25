@@ -8,13 +8,13 @@ from glob2 import glob
 import wandb
 
 
-from multi_agent_reinforcement_learning.envs.amod import AMoD
 from multi_agent_reinforcement_learning.data_models.config import Config
 import multi_agent_reinforcement_learning  # noqa: F401
+from multi_agent_reinforcement_learning.data_models.actor_data import ActorData
 
 
 def make_map_plot(
-    G: nx.Graph, obs: dict, t: int, timeEnd: int, env: AMoD, config: Config
+    G: nx.Graph, actor_data: ActorData, t: int, timeEnd: int, config: Config
 ):
     """Make a mapplot to visualize the distribution of cars over time.
 
@@ -25,8 +25,8 @@ def make_map_plot(
     """
     node_color = list(plt.rcParams["axes.prop_cycle"])[0]["color"]
     edge_color = list(plt.rcParams["axes.prop_cycle"])[1]["color"]
-    t = t + 1
-    nrVehicleAtTimeT = {x: int(i[t]) for x, i in obs[0].items()}
+
+    nrVehicleAtTimeT = {x: int(i[t]) for x, i in actor_data.obs[0].items()}
 
     edgeList = []
     edgeLabels = {}
@@ -34,9 +34,9 @@ def make_map_plot(
     n_nodes = config.grid_size_x * config.grid_size_y
     for i in range(n_nodes):
         for j in range(n_nodes):
-            if (i != j) and (env.rebFlow[i, j][t] > 0):
+            if (i != j) and (actor_data.reb_flow[i, j][t] > 0):
                 edgeList.append((i, j))
-                edgeLabels[i, j] = env.rebFlow[i, j][t]
+                edgeLabels[i, j] = actor_data.reb_flow[i, j][t]
     pos = {}
     for i in range(n_nodes):
         pos[i] = [-(i // 4 + 1), i % 4 + 1]
@@ -82,7 +82,7 @@ def images_to_gif():
         duration=2000,
         loop=0,
     )
-    # gif = Image.open("multi_agent_reinforcement_learning/plots/temp_plots/map_gif.gif")
+
     wandb.log(
         {
             "Map Plot Animation": wandb.Video(
