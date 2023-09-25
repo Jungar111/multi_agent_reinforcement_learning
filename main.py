@@ -145,14 +145,6 @@ def main(config: Config):
                 # stop episode if terminating conditions are met
                 if done:
                     break
-                # Create map if at last episode
-                if i_episode == epochs.iterable[-1]:
-                    if step == 0:
-                        logger.info("Making map plot.")
-                    make_map_plot(env.G, actor_data[0].obs, step, T, env, config)
-            # Make images to gif, and cleanup
-            if i_episode == epochs.iterable[-1]:
-                images_to_gif()
 
             # perform on-policy backprop
             for model in models:
@@ -183,12 +175,15 @@ def main(config: Config):
         test_episodes = config.max_episodes  # set max number of training episodes
         T = config.max_steps  # set episode length
         epochs = trange(test_episodes)  # epoch iterator
+        n_actions = len(env.region)
         # Initialize lists for logging
         for episode in epochs:
             test_log = ModelLog()
             env.reset()
             done = False
             k = 0
+            rl_train_log = ModelLog()
+            uniform_train_log = ModelLog()
             while not done:
                 # take matching step (Step 1 in paper)
                 actor_data, done, ext_done = env.pax_step(
@@ -198,27 +193,46 @@ def main(config: Config):
                 # use GNN-RL policy (Step 2 in paper)
                 action_rl = rl1_actor.select_action(model_data.obs)
                 # transform sample from Dirichlet into actual vehicle counts (i.e. (x1*x2*..*xn)*num_vehicles)
-                desired_acc_rl = {
+                actor_data[0].desired_acc = {
                     env.region[i]: int(
-                        action_rl[i] * dictsum(model_data.acc, env.time + 1)
+                        action_rl[i] * dictsum(actor_data[0].acc, env.time + 1)
                     )
-                    for i in range(len(env.region))
+                    for i in range(n_actions)
                 }
+
                 # solve minimum rebalancing distance problem (Step 3 in paper)
-                solveRebFlow(
-                    env, "scenario_nyc4_test", desired_acc_rl, config.cplex_path
-                )
+                solveRebFlow(env, "scenario_nyc4_test", config.cplex_path)
                 # Take action in environment
                 actor_data, done = env.reb_step()
-                test_log.reward += model_data.reb_reward
+                # Take action in environment
+                rl_train_log.reward += actor_data[0].reb_reward
+                uniform_train_log.reward = actor_data[1].reb_reward
+
+                rl1_actor.rewards.append(
+                    actor_data[0].pax_reward + actor_data[0].reb_reward
+                )
                 # track performance over episode
-                test_log.served_demand += model_data.info.served_demand
-                test_log.rebalancing_cost += model_data.info.rebalancing_cost
+                rl_train_log.served_demand += actor_data[0].info.served_demand
+                rl_train_log.rebalancing_cost += actor_data[0].info.rebalancing_cost
+                uniform_train_log.served_demand += actor_data[1].info.served_demand
+                uniform_train_log.rebalancing_cost += actor_data[
+                    1
+                ].info.rebalancing_cost
+
                 k += 1
+                # Create map if at last episode
+                if episode == epochs.iterable[0]:
+                    if k == 1:
+                        logger.info("Making map plot.")
+                    make_map_plot(env.G, actor_data[0], k, T, config)
+            # Make images to gif, and cleanup
+            if episode == epochs.iterable[0]:
+                images_to_gif()
+
             # Send current statistics to screen
             epochs.set_description(
-                f"Episode {episode+1} | Reward: {test_log.reward:.2f} | ServedDemand:"
-                f"{test_log.served_demand:.2f} | Reb. Cost: {test_log.rebalancing_cost}"
+                f"Episode {episode+1} | Reward: {rl_train_log.reward:.2f} |"
+                f"ServedDemand: {rl_train_log.served_demand:.2f} | Reb. Cost: {rl_train_log.rebalancing_cost:.2f}"
             )
             # Log KPIs on weights and biases
             wandb.log({**dict(test_log)})
