@@ -23,6 +23,7 @@ torch = ">=2.0.0, !=2.0.1"
 pydantic = "^2.3.0"
 glob2 = "^0.7"
 colorlog = "^6.7.0"
+statsmodels = "^0.14.0"
 
 
 [[tool.poetry.source]]
