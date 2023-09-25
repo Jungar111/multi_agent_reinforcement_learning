@@ -129,7 +129,7 @@ def main(config: Config):
 
                 # Take action in environment
                 rl1_train_log.reward += actor_data[0].reb_reward
-                rl2_train_log.reward = actor_data[1].reb_reward
+                rl2_train_log.reward += actor_data[1].reb_reward
 
                 rl1_actor.rewards.append(
                     actor_data[0].pax_reward + actor_data[0].reb_reward
@@ -243,10 +243,10 @@ def main(config: Config):
 if __name__ == "__main__":
     config = args_to_config()
     config.wandb_mode = "disabled"
-    config.max_episodes = 5
-    config.json_file = None
-    config.grid_size_x = 2
-    config.grid_size_y = 3
-    config.tf = 20
-    config.ninit = 80
+    config.max_episodes = 4
+    # config.json_file = None
+    # config.grid_size_x = 2
+    # config.grid_size_y = 3
+    # config.tf = 20
+    # config.ninit = 80
     main(config)
