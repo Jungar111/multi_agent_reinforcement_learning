@@ -30,11 +30,13 @@ def main(config: Config):
     """Run main training loop."""
     logger.info("Running main loop.")
 
-    advesary_number_of_cars = int(1408 / 2)
+    advesary_number_of_cars = int(config.total_number_of_cars / 2)
 
     actor_data = [
-        ActorData(name="RL", no_cars=1408 - advesary_number_of_cars),
-        ActorData(name="Uniform", no_cars=advesary_number_of_cars),
+        ActorData(
+            name="RL_1", no_cars=config.total_number_of_cars - advesary_number_of_cars
+        ),
+        ActorData(name="RL_2", no_cars=advesary_number_of_cars),
     ]
 
     wandb_config_log = {**vars(config)}
@@ -91,7 +93,8 @@ def main(config: Config):
         train_episodes = config.max_episodes  # set max number of training episodes
         T = config.max_steps  # set episode length
         epochs = trange(train_episodes)  # epoch iterator
-        best_reward = -np.inf  # set best reward
+        best_reward_rl1 = -np.inf  # set best reward
+        best_reward_rl2 = -np.inf  # set best reward
         for model in models:
             model.train()
         n_actions = len(env.region)
@@ -155,12 +158,18 @@ def main(config: Config):
                 f"Episode {i_episode+1} | Reward: {rl1_train_log.reward:.2f} |"
                 f"ServedDemand: {rl1_train_log.served_demand:.2f} | Reb. Cost: {rl1_train_log.rebalancing_cost:.2f}"
             )
+
             # Checkpoint best performing model
-            if rl1_train_log.reward >= best_reward:
+            if rl1_train_log.reward >= best_reward_rl1:
                 rl1_actor.save_checkpoint(
-                    path=f"./{config.directory}/ckpt/nyc4/a2c_gnn_test.pth"
+                    path=f"./{config.directory}/ckpt/nyc4/a2c_gnn_rl1.pth"
                 )
-                best_reward = rl1_train_log.reward
+                best_reward_rl1 = rl1_train_log.reward
+            if rl2_train_log.reward >= best_reward_rl2:
+                rl2_actor.save_checkpoint(
+                    path=f"./{config.directory}/ckpt/nyc4/a2c_gnn_rl2.pth"
+                )
+                best_reward_rl2 = rl2_train_log.reward
             # Log KPIs on weights and biases
             wandb.log(
                 {
@@ -242,11 +251,10 @@ def main(config: Config):
 
 if __name__ == "__main__":
     config = args_to_config()
-    # config.wandb_mode = "disabled"
-    # config.max_episodes = 4
-    # config.json_file = None
-    # config.grid_size_x = 2
-    # config.grid_size_y = 3
-    # config.tf = 20
-    # config.ninit = 80
+    config.wandb_mode = "disabled"
+    config.max_episodes = 1000
+    config.json_file = None
+    config.grid_size_x = 2
+    config.grid_size_y = 3
+    config.tf = 20
     main(config)
