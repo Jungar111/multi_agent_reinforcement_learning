@@ -2,6 +2,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 import numpy as np
 import typing as T
+from multi_agent_reinforcement_learning.data_models.logs import ModelLog
 
 
 @dataclass
@@ -16,6 +17,8 @@ class PaxStepInfo:
 class ActorData:
     name: str
     no_cars: int
+    model_log: ModelLog = ModelLog()
+    best_reward: float = -np.inf
     reb_action: T.Optional[T.List[float]] = None
     pax_action: T.Optional[T.List[int]] = None
     ext_reward: T.Optional[np.ndarray] = None
