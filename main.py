@@ -9,7 +9,6 @@ from tqdm import trange
 import wandb
 from multi_agent_reinforcement_learning.algos.actor_critic_gnn import ActorCritic
 from multi_agent_reinforcement_learning.algos.reb_flow_solver import solveRebFlow
-from multi_agent_reinforcement_learning.algos.uniform_actor import UniformActor
 from multi_agent_reinforcement_learning.data_models.actor_data import ActorData
 from multi_agent_reinforcement_learning.data_models.config import Config
 from multi_agent_reinforcement_learning.data_models.logs import ModelLog
@@ -31,11 +30,11 @@ def main(config: Config):
     """Run main training loop."""
     logger.info("Running main loop.")
 
-    uniform_number_of_cars = int(1408 / 3)
+    advesary_number_of_cars = int(1408 / 2)
 
     actor_data = [
-        ActorData(name="RL", no_cars=1408 - uniform_number_of_cars),
-        ActorData(name="Uniform", no_cars=uniform_number_of_cars),
+        ActorData(name="RL", no_cars=1408 - advesary_number_of_cars),
+        ActorData(name="Uniform", no_cars=advesary_number_of_cars),
     ]
 
     wandb_config_log = {**vars(config)}
@@ -74,8 +73,14 @@ def main(config: Config):
 
     env = AMoD(scenario=scenario, beta=config.beta, actor_data=actor_data)
     # Initialize A2C-GNN
-    model = ActorCritic(env=env, input_size=21, config=config)
-    uniform_actor = UniformActor()
+    rl1_actor = ActorCritic(
+        env=env, input_size=21, config=config, actor_data=actor_data[0]
+    )
+    rl2_actor = ActorCritic(
+        env=env, input_size=21, config=config, actor_data=actor_data[1]
+    )
+
+    models = [rl1_actor, rl2_actor]
 
     if not config.test:
         #######################################
@@ -87,40 +92,34 @@ def main(config: Config):
         T = config.max_steps  # set episode length
         epochs = trange(train_episodes)  # epoch iterator
         best_reward = -np.inf  # set best reward
-        model.train()  # set model in train mode
+        for model in models:
+            model.train()
         n_actions = len(env.region)
 
         for i_episode in epochs:
-            rl_train_log = ModelLog()
-            uniform_train_log = ModelLog()
+            rl1_train_log = ModelLog()
+            rl2_train_log = ModelLog()
             env.reset()  # initialize environment
             for step in range(T):
                 # take matching step (Step 1 in paper)
                 actor_data, done, ext_done = env.pax_step(
                     cplex_path=config.cplex_path, path="scenario_nyc4"
                 )
-                rl_train_log.reward += actor_data[0].pax_reward
-                uniform_train_log.reward += actor_data[1].pax_reward
+                rl1_train_log.reward += actor_data[0].pax_reward
+                rl2_train_log.reward += actor_data[1].pax_reward
                 # use GNN-RL policy (Step 2 in paper)
-                action_rl = model.select_action(actor_data[0].obs)
-                action_uniform = uniform_actor.select_action(
-                    n_regions=config.grid_size_x * config.grid_size_y
-                )
+                actions = []
+                for idx, model in enumerate(models):
+                    actions.append(model.select_action(actor_data[idx].obs))
 
-                # transform sample from Dirichlet into actual vehicle counts (i.e. (x1*x2*..*xn)*num_vehicles)
-                actor_data[0].desired_acc = {
-                    env.region[i]: int(
-                        action_rl[i] * dictsum(actor_data[0].acc, env.time + 1)
-                    )
-                    for i in range(n_actions)
-                }
-
-                actor_data[1].desired_acc = {
-                    env.region[i]: int(
-                        action_uniform[i] * dictsum(actor_data[1].acc, env.time + 1)
-                    )
-                    for i in range(n_actions)
-                }
+                for idx, action in enumerate(actions):
+                    # transform sample from Dirichlet into actual vehicle counts (i.e. (x1*x2*..*xn)*num_vehicles)
+                    actor_data[idx].desired_acc = {
+                        env.region[i]: int(
+                            action[i] * dictsum(actor_data[idx].acc, env.time + 1)
+                        )
+                        for i in range(n_actions)
+                    }
 
                 # solve minimum rebalancing distance problem (Step 3 in paper)
 
@@ -129,47 +128,49 @@ def main(config: Config):
                 actor_data, done = env.reb_step()
 
                 # Take action in environment
-                rl_train_log.reward += actor_data[0].reb_reward
-                uniform_train_log.reward = actor_data[1].reb_reward
+                rl1_train_log.reward += actor_data[0].reb_reward
+                rl2_train_log.reward += actor_data[1].reb_reward
 
-                model.rewards.append(
+                rl1_actor.rewards.append(
                     actor_data[0].pax_reward + actor_data[0].reb_reward
                 )
+                rl2_actor.rewards.append(
+                    actor_data[1].pax_reward + actor_data[1].reb_reward
+                )
                 # track performance over episode
-                rl_train_log.served_demand += actor_data[0].info.served_demand
-                rl_train_log.rebalancing_cost += actor_data[0].info.rebalancing_cost
-                uniform_train_log.served_demand += actor_data[1].info.served_demand
-                uniform_train_log.rebalancing_cost += actor_data[
-                    1
-                ].info.rebalancing_cost
+                rl1_train_log.served_demand += actor_data[0].info.served_demand
+                rl1_train_log.rebalancing_cost += actor_data[0].info.rebalancing_cost
+                rl2_train_log.served_demand += actor_data[1].info.served_demand
+                rl2_train_log.rebalancing_cost += actor_data[1].info.rebalancing_cost
                 # stop episode if terminating conditions are met
                 if done:
                     break
 
             # perform on-policy backprop
-            model.training_step()
+            for model in models:
+                model.training_step()
 
             # Send current statistics to screen
             epochs.set_description(
-                f"Episode {i_episode+1} | Reward: {rl_train_log.reward:.2f} |"
-                f"ServedDemand: {rl_train_log.served_demand:.2f} | Reb. Cost: {rl_train_log.rebalancing_cost:.2f}"
+                f"Episode {i_episode+1} | Reward: {rl1_train_log.reward:.2f} |"
+                f"ServedDemand: {rl1_train_log.served_demand:.2f} | Reb. Cost: {rl1_train_log.rebalancing_cost:.2f}"
             )
             # Checkpoint best performing model
-            if rl_train_log.reward >= best_reward:
-                model.save_checkpoint(
+            if rl1_train_log.reward >= best_reward:
+                rl1_actor.save_checkpoint(
                     path=f"./{config.directory}/ckpt/nyc4/a2c_gnn_test.pth"
                 )
-                best_reward = rl_train_log.reward
+                best_reward = rl1_train_log.reward
             # Log KPIs on weights and biases
             wandb.log(
                 {
-                    **rl_train_log.dict("reninforcement"),
-                    **uniform_train_log.dict("uniform"),
+                    **rl1_train_log.dict("reinforcement"),
+                    **rl2_train_log.dict("reinforcement_2"),
                 }
             )
     else:
         # Load pre-trained model
-        model.load_checkpoint(path=f"./{config.directory}/ckpt/nyc4/a2c_gnn_test.pth")
+        rl1_actor.load_checkpoint(path=f"./{config.directory}/ckpt/nyc4/a2c_gnn.pth")
         model_data = actor_data[0]
         test_episodes = config.max_episodes  # set max number of training episodes
         T = config.max_steps  # set episode length
@@ -190,11 +191,7 @@ def main(config: Config):
                 )
                 test_log.reward += model_data.pax_reward
                 # use GNN-RL policy (Step 2 in paper)
-                action_rl = model.select_action(model_data.obs)
-                action_uniform = uniform_actor.select_action(
-                    n_regions=config.grid_size_x * config.grid_size_y
-                )
-
+                action_rl = rl1_actor.select_action(model_data.obs)
                 # transform sample from Dirichlet into actual vehicle counts (i.e. (x1*x2*..*xn)*num_vehicles)
                 actor_data[0].desired_acc = {
                     env.region[i]: int(
@@ -203,12 +200,6 @@ def main(config: Config):
                     for i in range(n_actions)
                 }
 
-                actor_data[1].desired_acc = {
-                    env.region[i]: int(
-                        action_uniform[i] * dictsum(actor_data[1].acc, env.time + 1)
-                    )
-                    for i in range(n_actions)
-                }
                 # solve minimum rebalancing distance problem (Step 3 in paper)
                 solveRebFlow(env, "scenario_nyc4_test", config.cplex_path)
                 # Take action in environment
@@ -217,7 +208,7 @@ def main(config: Config):
                 rl_train_log.reward += actor_data[0].reb_reward
                 uniform_train_log.reward = actor_data[1].reb_reward
 
-                model.rewards.append(
+                rl1_actor.rewards.append(
                     actor_data[0].pax_reward + actor_data[0].reb_reward
                 )
                 # track performance over episode
@@ -251,8 +242,8 @@ def main(config: Config):
 
 if __name__ == "__main__":
     config = args_to_config()
-    config.test = True
-    config.wandb_mode = "disabled"
+    # config.wandb_mode = "disabled"
+    # config.max_episodes = 4
     # config.json_file = None
     # config.grid_size_x = 2
     # config.grid_size_y = 3
