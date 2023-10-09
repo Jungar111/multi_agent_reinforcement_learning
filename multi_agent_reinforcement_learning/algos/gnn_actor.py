@@ -13,24 +13,40 @@ class GNNActor(nn.Module):
         self,
         in_channels: int,
         out_channels: int,
+        change_network_of_actors: bool,
         device: torch.device = torch.device("cuda:0"),
     ):
         """Init method for an GNNActor. Defining the model architecture."""
         super().__init__()
-
-        self.conv1 = GCNConv(in_channels, in_channels)
-        self.lin1 = nn.Linear(in_channels, 32)
-        self.lin2 = nn.Linear(32, 32)
-        self.lin3 = nn.Linear(32, 1)
-        self.device = device
+        self.change_network_of_actors = change_network_of_actors
+        if change_network_of_actors:
+            self.conv1 = GCNConv(in_channels, in_channels)
+            self.lin1 = nn.Linear(in_channels, 32)
+            self.lin3 = nn.Linear(32, 1)
+            self.device = device
+        else:
+            self.conv1 = GCNConv(in_channels, in_channels)
+            self.lin1 = nn.Linear(in_channels, 32)
+            self.lin2 = nn.Linear(32, 32)
+            self.lin3 = nn.Linear(32, 1)
+            self.device = device
 
     def forward(self, data: Data):
         """Take one forward pass in the model defined in init and return x."""
-        out = F.relu(
-            self.conv1(data.x.to(self.device), data.edge_index.to(self.device))
-        ).to(self.device)
-        x = out + data.x.to(self.device)
-        x = F.relu(self.lin1(x))
-        x = F.relu(self.lin2(x))
-        x = self.lin3(x)
+        if self.change_network_of_actors:
+            out = F.relu(
+                self.conv1(data.x.to(self.device), data.edge_index.to(self.device))
+            ).to(self.device)
+            x = out + data.x.to(self.device)
+            x = F.relu(self.lin1(x))
+            x = self.lin3(x)
+        else:
+            out = F.relu(
+                self.conv1(data.x.to(self.device), data.edge_index.to(self.device))
+            ).to(self.device)
+            x = out + data.x.to(self.device)
+            x = F.relu(self.lin1(x))
+            x = F.relu(self.lin2(x))
+            x = self.lin3(x)
+
         return x

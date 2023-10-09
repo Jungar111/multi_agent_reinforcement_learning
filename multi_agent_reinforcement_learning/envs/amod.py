@@ -12,8 +12,8 @@ from multi_agent_reinforcement_learning.data_models.actor_data import (
     PaxStepInfo,
 )
 from multi_agent_reinforcement_learning.envs.scenario import Scenario
-
 from multi_agent_reinforcement_learning.utils.minor_utils import mat2str
+from multi_agent_reinforcement_learning.data_models.config import Config
 
 
 class AMoD:
@@ -21,7 +21,11 @@ class AMoD:
 
     # initialization
     def __init__(
-        self, actor_data: T.List[ActorData], scenario: Scenario, beta: float = 0.2
+        self,
+        actor_data: T.List[ActorData],
+        scenario: Scenario,
+        config: Config,
+        beta: float = 0.2,
     ):
         """Initialise env.
 
@@ -29,6 +33,7 @@ class AMoD:
         beta: cost of rebalancing
         """
         # updated to take scenario and beta (cost for rebalancing) as input
+        self.config = config
         self.actor_data = actor_data
         self.scenario = deepcopy(
             scenario
@@ -163,29 +168,26 @@ class AMoD:
             data.info = PaxStepInfo()
             data.pax_reward = 0
 
+        # Distributing customers stochastic given presence in area.
         for (origin, dest), area_demand in self.demand.items():
-            allocated_customers = 0
             no_customers = area_demand[t]
-            total_cars_in_area = sum([data.acc[origin][t] for data in self.actor_data])
+            cars_in_area_for_each_company = [
+                int(data.acc[origin][t]) for data in self.actor_data
+            ]
 
-            for data in self.actor_data:
-                if total_cars_in_area == 0:
-                    actor_specific_demand_ratio = 1 / len(self.actor_data)
-                else:
-                    actor_specific_demand_ratio = (
-                        data.acc[origin][t] / total_cars_in_area
-                    )
-
-                customers = int(no_customers * actor_specific_demand_ratio)
-                data.demand[origin, dest][t] = customers
-
-                allocated_customers += customers
-
-            if allocated_customers != no_customers:
-                random_actor = np.random.choice(self.actor_data)
-                random_actor.demand[origin, dest][t] += (
-                    no_customers - allocated_customers
+            if sum(cars_in_area_for_each_company) < no_customers:
+                for idx, data in enumerate(self.actor_data):
+                    data.demand[origin, dest][t] = cars_in_area_for_each_company[idx]
+            else:
+                # PCG64 produces a random integer stream that the generator needs
+                # will always procuce same stream given seed
+                demand_distribution_to_actors = np.random.Generator(
+                    np.random.PCG64(self.config.seed)
+                ).multivariate_hypergeometric(
+                    cars_in_area_for_each_company, no_customers
                 )
+                for idx, demand in enumerate(demand_distribution_to_actors):
+                    self.actor_data[idx].demand[origin, dest][t] = demand
 
         self.ext_reward = np.zeros(self.nregion)
         for i in self.region:

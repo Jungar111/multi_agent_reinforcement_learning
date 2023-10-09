@@ -71,13 +71,23 @@ def main(config: Config):
             actor_data=actor_data,
         )
 
-    env = AMoD(scenario=scenario, beta=config.beta, actor_data=actor_data)
+    env = AMoD(
+        scenario=scenario, beta=config.beta, config=config, actor_data=actor_data
+    )
     # Initialize A2C-GNN
     rl1_actor = ActorCritic(
-        env=env, input_size=21, config=config, actor_data=actor_data[0]
+        env=env,
+        input_size=21,
+        config=config,
+        actor_data=actor_data[0],
+        change_network_of_actors=False,
     )
     rl2_actor = ActorCritic(
-        env=env, input_size=21, config=config, actor_data=actor_data[1]
+        env=env,
+        input_size=21,
+        config=config,
+        actor_data=actor_data[1],
+        change_network_of_actors=True,
     )
 
     models = [rl1_actor, rl2_actor]
@@ -242,11 +252,11 @@ def main(config: Config):
 
 if __name__ == "__main__":
     config = args_to_config()
-    # config.wandb_mode = "disabled"
-    # config.max_episodes = 4
-    # config.json_file = None
-    # config.grid_size_x = 2
-    # config.grid_size_y = 3
-    # config.tf = 20
-    # config.ninit = 80
+    config.wandb_mode = "disabled"
+    config.max_episodes = 1000
+    config.json_file = None
+    config.grid_size_x = 2
+    config.grid_size_y = 3
+    config.tf = 20
+    config.ninit = 88
     main(config)

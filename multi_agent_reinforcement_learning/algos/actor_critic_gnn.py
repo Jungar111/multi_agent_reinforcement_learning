@@ -30,6 +30,7 @@ class ActorCritic(nn.Module):
         env: AMoD,
         actor_data: ActorData,
         input_size: int,
+        change_network_of_actors: bool,
         config: Config,
         eps: float = np.finfo(np.float32).eps.item(),
     ):
@@ -50,7 +51,10 @@ class ActorCritic(nn.Module):
         self.actor_data = actor_data
 
         self.actor = GNNActor(
-            self.input_size, self.hidden_size, device=self.config.device
+            self.input_size,
+            self.hidden_size,
+            device=self.config.device,
+            change_network_of_actors=change_network_of_actors,
         ).to(self.config.device)
 
         self.critic = GNNCritic(self.input_size, self.hidden_size).to(
