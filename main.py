@@ -3,7 +3,6 @@ from __future__ import print_function
 
 from datetime import datetime
 
-import numpy as np
 from tqdm import trange
 
 import wandb
@@ -30,11 +29,13 @@ def main(config: Config):
     """Run main training loop."""
     logger.info("Running main loop.")
 
-    advesary_number_of_cars = int(1408 / 2)
+    advesary_number_of_cars = int(config.total_number_of_cars / 2)
 
     actor_data = [
-        ActorData(name="RL", no_cars=1408 - advesary_number_of_cars),
-        ActorData(name="Uniform", no_cars=advesary_number_of_cars),
+        ActorData(
+            name="RL_1", no_cars=config.total_number_of_cars - advesary_number_of_cars
+        ),
+        ActorData(name="RL_2", no_cars=advesary_number_of_cars),
     ]
 
     wandb_config_log = {**vars(config)}
@@ -91,22 +92,21 @@ def main(config: Config):
         train_episodes = config.max_episodes  # set max number of training episodes
         T = config.max_steps  # set episode length
         epochs = trange(train_episodes)  # epoch iterator
-        best_reward = -np.inf  # set best reward
         for model in models:
             model.train()
         n_actions = len(env.region)
 
         for i_episode in epochs:
-            rl1_train_log = ModelLog()
-            rl2_train_log = ModelLog()
+            for actor in actor_data:
+                actor.model_log = ModelLog()
             env.reset()  # initialize environment
             for step in range(T):
                 # take matching step (Step 1 in paper)
                 actor_data, done, ext_done = env.pax_step(
                     cplex_path=config.cplex_path, path="scenario_nyc4"
                 )
-                rl1_train_log.reward += actor_data[0].pax_reward
-                rl2_train_log.reward += actor_data[1].pax_reward
+                for actor in actor_data:
+                    actor.model_log.reward += actor.pax_reward
                 # use GNN-RL policy (Step 2 in paper)
                 actions = []
                 for idx, model in enumerate(models):
@@ -127,21 +127,19 @@ def main(config: Config):
 
                 actor_data, done = env.reb_step()
 
-                # Take action in environment
-                rl1_train_log.reward += actor_data[0].reb_reward
-                rl2_train_log.reward += actor_data[1].reb_reward
-
-                rl1_actor.rewards.append(
-                    actor_data[0].pax_reward + actor_data[0].reb_reward
-                )
-                rl2_actor.rewards.append(
-                    actor_data[1].pax_reward + actor_data[1].reb_reward
-                )
                 # track performance over episode
-                rl1_train_log.served_demand += actor_data[0].info.served_demand
-                rl1_train_log.rebalancing_cost += actor_data[0].info.rebalancing_cost
-                rl2_train_log.served_demand += actor_data[1].info.served_demand
-                rl2_train_log.rebalancing_cost += actor_data[1].info.rebalancing_cost
+                for model in models:
+                    model.actor_data.model_log.reward += model.actor_data.reb_reward
+                    model.actor_data.model_log.served_demand += (
+                        model.actor_data.info.served_demand
+                    )
+                    model.actor_data.model_log.rebalancing_cost += (
+                        model.actor_data.info.rebalancing_cost
+                    )
+                    model.rewards.append(
+                        model.actor_data.pax_reward + model.actor_data.reb_reward
+                    )
+
                 # stop episode if terminating conditions are met
                 if done:
                     break
@@ -152,20 +150,28 @@ def main(config: Config):
 
             # Send current statistics to screen
             epochs.set_description(
-                f"Episode {i_episode+1} | Reward: {rl1_train_log.reward:.2f} |"
-                f"ServedDemand: {rl1_train_log.served_demand:.2f} | Reb. Cost: {rl1_train_log.rebalancing_cost:.2f}"
+                f"Episode {i_episode+1} | Reward: {actor_data[0].model_log.reward:.2f} |"
+                f"ServedDemand: {actor_data[0].model_log.served_demand:.2f} "
+                f"| Reb. Cost: {actor_data[0].model_log.rebalancing_cost:.2f}"
             )
+
             # Checkpoint best performing model
-            if rl1_train_log.reward >= best_reward:
-                rl1_actor.save_checkpoint(
-                    path=f"./{config.directory}/ckpt/nyc4/a2c_gnn_test.pth"
-                )
-                best_reward = rl1_train_log.reward
+            for model in models:
+                if model.actor_data.model_log.reward >= model.actor_data.best_reward:
+                    model.save_checkpoint(
+                        path=f"./{config.directory}/ckpt/nyc4/a2c_gnn_{model.actor_data.name}.pth"
+                    )
+                    model.actor_data.best_reward = model.actor_data.model_log.reward
+                    wandb.log(
+                        {
+                            f"Best Reward {model.actor_data.name}": model.actor_data.best_reward
+                        }
+                    )
             # Log KPIs on weights and biases
             wandb.log(
                 {
-                    **rl1_train_log.dict("reinforcement"),
-                    **rl2_train_log.dict("reinforcement_2"),
+                    **actor_data[0].model_log.dict("reinforcement"),
+                    **actor_data[1].model_log.dict("reinforcement_2"),
                 }
             )
     else:
@@ -237,16 +243,15 @@ def main(config: Config):
             # Log KPIs on weights and biases
             wandb.log({**dict(test_log)})
             break
-        wandb.finish()
+    wandb.finish()
 
 
 if __name__ == "__main__":
     config = args_to_config()
     # config.wandb_mode = "disabled"
-    # config.max_episodes = 4
-    # config.json_file = None
-    # config.grid_size_x = 2
-    # config.grid_size_y = 3
-    # config.tf = 20
-    # config.ninit = 80
+    config.max_episodes = 300
+    config.json_file = None
+    config.grid_size_x = 2
+    config.grid_size_y = 3
+    config.tf = 20
     main(config)

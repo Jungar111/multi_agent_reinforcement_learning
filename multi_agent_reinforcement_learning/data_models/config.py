@@ -27,7 +27,7 @@ class Config(BaseModel):
     grid_size_y: int = 4
     n_regions: int = 4 * 4
     tf: int = 60
-    ninit: int = 80
+    total_number_of_cars: int = 1408
     wandb_mode: str = "online"
     gamma: float = 0.97
     json_file: T.Optional[Path] = Path("data", "scenario_nyc4x4.json")
