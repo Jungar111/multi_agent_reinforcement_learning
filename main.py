@@ -22,8 +22,15 @@ from multi_agent_reinforcement_learning.plots.map_plot import (
     make_map_plot,
     images_to_gif,
 )
+from multi_agent_reinforcement_learning.evaluation.actor_evaluation import (
+    ActorEvaluator,
+)
 
 logger = init_logger()
+
+
+def _train_loop():
+    pass
 
 
 def main(config: Config):
@@ -105,12 +112,11 @@ def main(config: Config):
                 actor_data, done, ext_done = env.pax_step(
                     cplex_path=config.cplex_path, path="scenario_nyc4"
                 )
-                rl1_train_log.reward += actor_data[0].pax_reward
-                rl2_train_log.reward += actor_data[1].pax_reward
                 # use GNN-RL policy (Step 2 in paper)
                 actions = []
-                for idx, model in enumerate(models):
-                    actions.append(model.select_action(actor_data[idx].obs))
+                for model in models:
+                    model.train_log.reward += model.actor_data.pax_reward
+                    actions.append(model.select_action(model.actor_data.obs))
 
                 for idx, action in enumerate(actions):
                     # transform sample from Dirichlet into actual vehicle counts (i.e. (x1*x2*..*xn)*num_vehicles)
@@ -127,21 +133,17 @@ def main(config: Config):
 
                 actor_data, done = env.reb_step()
 
-                # Take action in environment
-                rl1_train_log.reward += actor_data[0].reb_reward
-                rl2_train_log.reward += actor_data[1].reb_reward
+                for model in models:
+                    model.train_log.reward += model.actor_data.reb_reward
+                    model.rewards.append(
+                        model.actor_data.pax_reward + model.actor_data.reb_reward
+                    )
 
-                rl1_actor.rewards.append(
-                    actor_data[0].pax_reward + actor_data[0].reb_reward
-                )
-                rl2_actor.rewards.append(
-                    actor_data[1].pax_reward + actor_data[1].reb_reward
-                )
-                # track performance over episode
-                rl1_train_log.served_demand += actor_data[0].info.served_demand
-                rl1_train_log.rebalancing_cost += actor_data[0].info.rebalancing_cost
-                rl2_train_log.served_demand += actor_data[1].info.served_demand
-                rl2_train_log.rebalancing_cost += actor_data[1].info.rebalancing_cost
+                    model.train_log.served_demand += model.actor_data.info.served_demand
+                    model.train_log.rebalancing_cost += (
+                        model.actor_data.info.rebalancing_cost
+                    )
+
                 # stop episode if terminating conditions are met
                 if done:
                     break
@@ -170,7 +172,12 @@ def main(config: Config):
             )
     else:
         # Load pre-trained model
-        rl1_actor.load_checkpoint(path=f"./{config.directory}/ckpt/nyc4/a2c_gnn.pth")
+        rl1_actor.load_checkpoint(
+            path=f"./{config.directory}/ckpt/nyc4/a2c_gnn_test.pth"
+        )
+        rl2_actor.load_checkpoint(
+            path=f"./{config.directory}/ckpt/nyc4/a2c_gnn_test.pth"
+        )
         model_data = actor_data[0]
         test_episodes = config.max_episodes  # set max number of training episodes
         T = config.max_steps  # set episode length
@@ -234,6 +241,8 @@ def main(config: Config):
                 f"Episode {episode+1} | Reward: {rl_train_log.reward:.2f} |"
                 f"ServedDemand: {rl_train_log.served_demand:.2f} | Reb. Cost: {rl_train_log.rebalancing_cost:.2f}"
             )
+            actor_evaluator = ActorEvaluator(actor_data=actor_data)
+            actor_evaluator.plot_average_distribution()
             # Log KPIs on weights and biases
             wandb.log({**dict(test_log)})
             break
@@ -242,7 +251,8 @@ def main(config: Config):
 
 if __name__ == "__main__":
     config = args_to_config()
-    # config.wandb_mode = "disabled"
+    config.wandb_mode = "disabled"
+    config.test = True
     # config.max_episodes = 4
     # config.json_file = None
     # config.grid_size_x = 2
