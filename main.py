@@ -172,7 +172,9 @@ def main(config: Config):
             actor_data=actor_data,
         )
 
-    env = AMoD(scenario=scenario, beta=config.beta, actor_data=actor_data)
+    env = AMoD(
+        scenario=scenario, beta=config.beta, actor_data=actor_data, config=config
+    )
     # Initialize A2C-GNN
     rl1_actor = ActorCritic(
         env=env, input_size=21, config=config, actor_data=actor_data[0]
@@ -223,9 +225,8 @@ def main(config: Config):
 
 if __name__ == "__main__":
     config = args_to_config()
-    # config.wandb_mode = "disabled"
+    config.wandb_mode = "disabled"
     config.max_episodes = 300
-    config.test = True
     config.json_file = None
     config.grid_size_x = 2
     config.grid_size_y = 3
