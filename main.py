@@ -43,6 +43,7 @@ def _train_loop(
         for model in models:
             model.actor_data.model_log = ModelLog()
         env.reset()  # initialize environment
+
         for step in range(T):
             # take matching step (Step 1 in paper)
             actor_data, done, ext_done = env.pax_step(
@@ -215,7 +216,7 @@ def main(config: Config):
             test_episodes, actor_data, env, models, n_actions, T, backprop=False
         )
 
-        actor_evaluator = ActorEvaluator(actor_data=actor_data)
+        actor_evaluator = ActorEvaluator()
         actor_evaluator.plot_average_distribution()
 
     wandb.finish()

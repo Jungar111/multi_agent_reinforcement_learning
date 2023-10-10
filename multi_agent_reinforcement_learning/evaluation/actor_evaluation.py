@@ -1,21 +1,21 @@
 """Module for testing and evaluating actor performance."""
 import matplotlib.pyplot as plt
-from multi_agent_reinforcement_learning.data_models.actor_data import ActorData
 import typing as T
+import numpy as np
 
 
 class ActorEvaluator:
     """Evaluate actor actions."""
 
-    def __init__(self, actor_data: T.List[ActorData]) -> None:
+    def __init__(self) -> None:
         """Initialise the class."""
-        self.actor_data = actor_data
+        pass
 
-    def plot_average_distribution(self):
+    def plot_average_distribution(self, actions: np.ndarray, names: T.List[str]):
         """Plot average distribution for the actors."""
-        fig, ax = plt.subplots(1, len(self.actor_data))
-        for idx, actor in enumerate(self.actor_data):
-            ax[idx].hist(actor.reb_action)
-            ax[idx].set_title(f"Actor: {actor.name}")
+        fig, ax = plt.subplots(1, len(actions))
+        for idx, reb_action in enumerate(actions):
+            ax[idx].hist(reb_action.mean(axis=0))
+            ax[idx].set_title(f"Actor: {names[idx]}")
 
         plt.show()
