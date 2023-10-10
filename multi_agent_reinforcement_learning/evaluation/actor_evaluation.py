@@ -7,6 +7,7 @@ class ActorEvaluator:
     """Evaluate actor actions."""
 
     def __init__(self, actor_data: T.List[ActorData]) -> None:
+        """Initialise the class."""
         self.actor_data = actor_data
 
     def plot_average_distribution(self):
