@@ -12,6 +12,7 @@ import torch.nn.functional as F
 from torch import nn
 from torch.distributions import Dirichlet
 from multi_agent_reinforcement_learning.data_models.actor_data import ActorData
+from multi_agent_reinforcement_learning.data_models.logs import ModelLog
 
 from multi_agent_reinforcement_learning.envs.amod import AMoD
 from multi_agent_reinforcement_learning.algos.gnn_actor import GNNActor
@@ -48,6 +49,7 @@ class ActorCritic(nn.Module):
         self.config = config
 
         self.actor_data = actor_data
+        self.train_log = ModelLog()
 
         self.actor = GNNActor(
             self.input_size, self.hidden_size, device=self.config.device

@@ -37,7 +37,7 @@ build-backend = "poetry.core.masonry.api"
 [tool.ruff]
 line-length = 120
 
-ignore = ["E711", "D401"]
+ignore = ["E711"]
 
 
 [tool.ruff.isort]
