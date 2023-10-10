@@ -32,7 +32,7 @@ def _train_loop(
     models: T.List[ActorCritic],
     n_actions: int,
     T: int,
-    backprop: bool = True,
+    training: bool = True,
 ):
     """General train loop.
 
@@ -55,7 +55,9 @@ def _train_loop(
             actions = []
             for model in models:
                 model.train_log.reward += model.actor_data.pax_reward
-                actions.append(model.select_action(model.actor_data.obs))
+                actions.append(
+                    model.select_action(model.actor_data.obs, probabilistic=training)
+                )
 
             for idx, action in enumerate(actions):
                 # transform sample from Dirichlet into actual vehicle counts (i.e. (x1*x2*..*xn)*num_vehicles)
@@ -95,7 +97,7 @@ def _train_loop(
             if done:
                 break
 
-        if backprop:
+        if training:
             # perform on-policy backprop
             for model in models:
                 model.training_step()
@@ -195,7 +197,7 @@ def main(config: Config):
             model.train()
 
         _train_loop(
-            train_episodes, actor_data, env, models, n_actions, T, backprop=True
+            train_episodes, actor_data, env, models, n_actions, T, training=True
         )
 
     else:
@@ -212,7 +214,7 @@ def main(config: Config):
         # Initialize lists for logging
 
         _train_loop(
-            test_episodes, actor_data, env, models, n_actions, T, backprop=False
+            test_episodes, actor_data, env, models, n_actions, T, training=False
         )
 
         actor_evaluator = ActorEvaluator(actor_data=actor_data)

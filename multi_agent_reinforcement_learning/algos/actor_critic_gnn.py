@@ -95,7 +95,7 @@ class ActorCritic(nn.Module):
         state = self.obs_parser.parse_obs(obs=obs, actor_data=self.actor_data)
         return state
 
-    def select_action(self, obs: T.Tuple[dict, int, dict, dict]):
+    def select_action(self, obs: T.Tuple[dict, int, dict, dict], probabilistic: bool):
         """Select an action based on the distribution of the vehicles with Dirichlet.
 
         Saves the log of the new action along with the value computed by the critic
@@ -104,10 +104,15 @@ class ActorCritic(nn.Module):
         """
         concentration, value = self.forward(obs)
 
-        m = Dirichlet(concentration)
-
-        action = m.sample()
-        self.saved_actions.append(SavedAction(log_prob=m.log_prob(action), value=value))
+        if probabilistic:
+            m = Dirichlet(concentration)
+            action = m.sample()
+            self.saved_actions.append(
+                SavedAction(log_prob=m.log_prob(action), value=value)
+            )
+        else:
+            action = (concentration) / (concentration.sum() + 1e-20)
+            action = action.detach()
         return list(action.cpu().numpy())
 
     def training_step(self):
