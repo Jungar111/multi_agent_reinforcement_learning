@@ -11,6 +11,6 @@ class ActorEvaluator:
         fig, ax = plt.subplots(1, len(self.actor_data))
         for idx, actor in enumerate(self.actor_data):
             ax[idx].hist(actor.reb_action)
-            ax.set_title(f"Actor: {actor.name}")
+            ax[idx].set_title(f"Actor: {actor.name}")
 
         plt.show()

@@ -209,6 +209,7 @@ if __name__ == "__main__":
     config = args_to_config()
     # config.wandb_mode = "disabled"
     config.max_episodes = 300
+    config.test = True
     config.json_file = None
     config.grid_size_x = 2
     config.grid_size_y = 3
