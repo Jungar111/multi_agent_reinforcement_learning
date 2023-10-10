@@ -2,6 +2,7 @@
 from __future__ import print_function
 
 from datetime import datetime
+import typing as T
 
 from tqdm import trange
 
@@ -24,12 +25,20 @@ from multi_agent_reinforcement_learning.evaluation.actor_evaluation import (
 logger = init_logger()
 
 
-def _train_loop(epochs, actor_data, env, models, n_actions, T, backprop=True):
+def _train_loop(
+    epochs: int,
+    actor_data: T.List[ActorData],
+    env: AMoD,
+    models: T.List[ActorCritic],
+    n_actions: int,
+    T: int,
+    backprop: bool = True,
+):
     """General train loop.
 
     Used both for testing and training, by setting backprop.
     """
-    for i_episode in epochs:
+    for i_episode in trange(epochs):
         for model in models:
             model.actor_data.model_log = ModelLog()
         env.reset()  # initialize environment
@@ -181,11 +190,12 @@ def main(config: Config):
         #######################################
         # Initialize lists for logging
         train_episodes = config.max_episodes  # set max number of training episodes
-        epochs = trange(train_episodes)  # epoch iterator
         for model in models:
             model.train()
 
-        _train_loop(epochs, actor_data, env, models, n_actions, T, backprop=True)
+        _train_loop(
+            train_episodes, actor_data, env, models, n_actions, T, backprop=True
+        )
 
     else:
         # Load pre-trained model
@@ -198,10 +208,11 @@ def main(config: Config):
 
         test_episodes = 1  # set max number of training episodes
         T = config.max_steps  # set episode length
-        epochs = trange(test_episodes)  # epoch iterator
         # Initialize lists for logging
 
-        _train_loop(epochs, actor_data, env, models, n_actions, T, backprop=False)
+        _train_loop(
+            test_episodes, actor_data, env, models, n_actions, T, backprop=False
+        )
 
         actor_evaluator = ActorEvaluator(actor_data=actor_data)
         actor_evaluator.plot_average_distribution()
