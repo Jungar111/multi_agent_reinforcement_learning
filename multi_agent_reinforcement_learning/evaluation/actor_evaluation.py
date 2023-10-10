@@ -4,6 +4,8 @@ import typing as T
 
 
 class ActorEvaluator:
+    """Evaluate actor actions."""
+
     def __init__(self, actor_data: T.List[ActorData]) -> None:
         self.actor_data = actor_data
 
