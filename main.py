@@ -25,7 +25,10 @@ logger = init_logger()
 
 
 def _train_loop(epochs, actor_data, env, models, n_actions, T, backprop=True):
-    """Test."""
+    """General train loop.
+
+    Used both for testing and training, by setting backprop.
+    """
     for i_episode in epochs:
         for model in models:
             model.actor_data.model_log = ModelLog()
