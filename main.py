@@ -26,7 +26,7 @@ logger = init_logger()
 
 
 def _train_loop(
-    epochs: int,
+    n_episodes: int,
     actor_data: T.List[ActorData],
     env: AMoD,
     models: T.List[ActorCritic],
@@ -38,7 +38,8 @@ def _train_loop(
 
     Used both for testing and training, by setting backprop.
     """
-    for i_episode in trange(epochs):
+    epochs = trange(n_episodes)
+    for i_episode in epochs:
         for model in models:
             model.actor_data.model_log = ModelLog()
         env.reset()  # initialize environment
