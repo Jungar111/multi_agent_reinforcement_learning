@@ -32,7 +32,7 @@ def _train_loop(
     models: T.List[ActorCritic],
     n_actions: int,
     T: int,
-    backprop: bool = True,
+    training: bool = True,
 ):
     """General train loop.
 
@@ -56,7 +56,9 @@ def _train_loop(
             actions = []
             for model in models:
                 model.train_log.reward += model.actor_data.pax_reward
-                actions.append(model.select_action(model.actor_data.obs))
+                actions.append(
+                    model.select_action(model.actor_data.obs, probabilistic=training)
+                )
 
             for idx, action in enumerate(actions):
                 # transform sample from Dirichlet into actual vehicle counts (i.e. (x1*x2*..*xn)*num_vehicles)
@@ -96,7 +98,7 @@ def _train_loop(
             if done:
                 break
 
-        if backprop:
+        if training:
             # perform on-policy backprop
             for model in models:
                 model.training_step()
@@ -173,7 +175,9 @@ def main(config: Config):
             actor_data=actor_data,
         )
 
-    env = AMoD(scenario=scenario, beta=config.beta, actor_data=actor_data)
+    env = AMoD(
+        scenario=scenario, beta=config.beta, actor_data=actor_data, config=config
+    )
     # Initialize A2C-GNN
     rl1_actor = ActorCritic(
         env=env, input_size=21, config=config, actor_data=actor_data[0]
@@ -196,7 +200,7 @@ def main(config: Config):
             model.train()
 
         _train_loop(
-            train_episodes, actor_data, env, models, n_actions, T, backprop=True
+            train_episodes, actor_data, env, models, n_actions, T, training=True
         )
 
     else:
@@ -213,7 +217,7 @@ def main(config: Config):
         # Initialize lists for logging
 
         _train_loop(
-            test_episodes, actor_data, env, models, n_actions, T, backprop=False
+            test_episodes, actor_data, env, models, n_actions, T, training=False
         )
 
         actor_evaluator = ActorEvaluator()
@@ -224,9 +228,8 @@ def main(config: Config):
 
 if __name__ == "__main__":
     config = args_to_config()
-    # config.wandb_mode = "disabled"
+    config.wandb_mode = "disabled"
     config.max_episodes = 300
-    config.test = True
     config.json_file = None
     config.grid_size_x = 2
     config.grid_size_y = 3
