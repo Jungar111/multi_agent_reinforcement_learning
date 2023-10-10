@@ -3,6 +3,7 @@ from __future__ import print_function
 
 from datetime import datetime
 import typing as T
+import numpy as np
 
 from tqdm import trange
 
@@ -44,6 +45,10 @@ def _train_loop(
             model.actor_data.model_log = ModelLog()
         env.reset()  # initialize environment
 
+        all_actions = np.zeros(
+            (len(models), T, config.grid_size_x * config.grid_size_y)
+        )
+
         for step in range(T):
             # take matching step (Step 1 in paper)
             actor_data, done, ext_done = env.pax_step(
@@ -68,6 +73,10 @@ def _train_loop(
                     )
                     for i in range(n_actions)
                 }
+
+                all_actions[idx, step, :] = list(
+                    models[idx].actor_data.desired_acc.values()
+                )
 
             # solve minimum rebalancing distance problem (Step 3 in paper)
 
@@ -126,6 +135,11 @@ def _train_loop(
 
         for model in models:
             wandb.log({**model.actor_data.model_log.dict(model.actor_data.name)})
+
+        if not training:
+            return all_actions
+
+        return
 
 
 def main(config: Config):
@@ -216,12 +230,16 @@ def main(config: Config):
         T = config.max_steps  # set episode length
         # Initialize lists for logging
 
-        _train_loop(
+        all_actions = _train_loop(
             test_episodes, actor_data, env, models, n_actions, T, training=False
         )
 
         actor_evaluator = ActorEvaluator()
-        actor_evaluator.plot_average_distribution()
+        actor_evaluator.plot_average_distribution(
+            actions=np.array(all_actions),
+            T=T,
+            models=models,
+        )
 
     wandb.finish()
 
@@ -229,9 +247,10 @@ def main(config: Config):
 if __name__ == "__main__":
     config = args_to_config()
     config.wandb_mode = "disabled"
-    config.max_episodes = 300
-    config.json_file = None
-    config.grid_size_x = 2
-    config.grid_size_y = 3
-    config.tf = 20
+    config.test = True
+    # config.max_episodes = 300
+    # config.json_file = None
+    # config.grid_size_x = 2
+    # config.grid_size_y = 3
+    # config.tf = 20
     main(config)
