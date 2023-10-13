@@ -54,8 +54,8 @@ def _train_loop(
             actor_data, done, ext_done = env.pax_step(
                 cplex_path=config.cplex_path, path="scenario_nyc4"
             )
-            for model in models:
-                model.actor_data.model_log.reward += model.actor_data.pax_reward
+            for actor in models:
+                actor.actor_data.model_log.reward += actor.actor_data.pax_reward
             # use GNN-RL policy (Step 2 in paper)
 
             actions = []
@@ -120,17 +120,18 @@ def _train_loop(
         )
 
         # Checkpoint best performing model
-        for model in models:
-            if model.actor_data.model_log.reward >= model.actor_data.best_reward:
-                model.save_checkpoint(
-                    path=f"./{config.directory}/ckpt/nyc4/a2c_gnn_{model.actor_data.name}.pth"
-                )
-                model.actor_data.best_reward = model.actor_data.model_log.reward
-                wandb.log(
-                    {
-                        f"Best Reward {model.actor_data.name}": model.actor_data.best_reward
-                    }
-                )
+        if training:
+            for model in models:
+                if model.actor_data.model_log.reward >= model.actor_data.best_reward:
+                    model.save_checkpoint(
+                        path=f"./{config.directory}/ckpt/nyc4/a2c_gnn_{model.actor_data.name}.pth"
+                    )
+                    model.actor_data.best_reward = model.actor_data.model_log.reward
+                    wandb.log(
+                        {
+                            f"Best Reward {model.actor_data.name}": model.actor_data.best_reward
+                        }
+                    )
         # Log KPIs on weights and biases
 
         for model in models:
@@ -138,8 +139,6 @@ def _train_loop(
 
         if not training:
             return all_actions
-
-        return
 
 
 def main(config: Config):
@@ -220,10 +219,10 @@ def main(config: Config):
     else:
         # Load pre-trained model
         rl1_actor.load_checkpoint(
-            path=f"./{config.directory}/ckpt/nyc4/a2c_gnn_test.pth"
+            path=f"./{config.directory}/ckpt/nyc4/a2c_gnn_RL_1.pth"
         )
         rl2_actor.load_checkpoint(
-            path=f"./{config.directory}/ckpt/nyc4/a2c_gnn_test.pth"
+            path=f"./{config.directory}/ckpt/nyc4/a2c_gnn_RL_2.pth"
         )
 
         test_episodes = 1  # set max number of training episodes
@@ -247,7 +246,7 @@ def main(config: Config):
 if __name__ == "__main__":
     config = args_to_config()
     config.wandb_mode = "disabled"
-    config.test = True
+    # config.test = True
     # config.max_episodes = 300
     # config.json_file = None
     # config.grid_size_x = 2
