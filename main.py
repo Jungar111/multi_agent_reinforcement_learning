@@ -32,12 +32,12 @@ def _train_loop(
     env: AMoD,
     models: T.List[ActorCritic],
     n_actions: int,
-    T: int,
+    episode_length: int,
     training: bool = True,
 ):
     """General train loop.
 
-    Used both for testing and training, by setting backprop.
+    Used both for testing and training, by setting training.
     """
     epochs = trange(n_episodes)
     for i_episode in epochs:
@@ -46,10 +46,10 @@ def _train_loop(
         env.reset()  # initialize environment
 
         all_actions = np.zeros(
-            (len(models), T, config.grid_size_x * config.grid_size_y)
+            (len(models), episode_length, config.grid_size_x * config.grid_size_y)
         )
 
-        for step in range(T):
+        for step in range(episode_length):
             # take matching step (Step 1 in paper)
             actor_data, done, ext_done = env.pax_step(
                 cplex_path=config.cplex_path, path="scenario_nyc4"
@@ -200,20 +200,22 @@ def main(config: Config):
     )
 
     models = [rl1_actor, rl2_actor]
-    T = config.max_steps  # set episode length
+    episode_length = config.max_steps  # set episode length
     n_actions = len(env.region)
 
     if not config.test:
-        #######################################
-        #############Training Loop#############
-        #######################################
-        # Initialize lists for logging
         train_episodes = config.max_episodes  # set max number of training episodes
         for model in models:
             model.train()
 
         _train_loop(
-            train_episodes, actor_data, env, models, n_actions, T, training=True
+            train_episodes,
+            actor_data,
+            env,
+            models,
+            n_actions,
+            episode_length,
+            training=True,
         )
 
     else:
@@ -225,18 +227,23 @@ def main(config: Config):
             path=f"./{config.directory}/ckpt/nyc4/a2c_gnn_RL_2.pth"
         )
 
-        test_episodes = 1  # set max number of training episodes
-        T = config.max_steps  # set episode length
-        # Initialize lists for logging
+        test_episodes = 1
+        episode_length = config.max_steps
 
         all_actions = _train_loop(
-            test_episodes, actor_data, env, models, n_actions, T, training=False
+            test_episodes,
+            actor_data,
+            env,
+            models,
+            n_actions,
+            episode_length,
+            training=False,
         )
 
         actor_evaluator = ActorEvaluator()
         actor_evaluator.plot_average_distribution(
             actions=np.array(all_actions),
-            T=T,
+            T=episode_length,
             models=models,
         )
 
