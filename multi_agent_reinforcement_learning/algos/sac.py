@@ -5,7 +5,7 @@ import torch.nn.functional as F
 from torch.distributions import Dirichlet
 from torch_geometric.data import Data, Batch
 from torch_geometric.nn import GCNConv
-from multi_agent_reinforcement_learning.algos.reb_flow_solver import solveRebFlow
+from multi_agent_reinforcement_learning.algos.sac_reb_flow_solver import solveRebFlow
 from multi_agent_reinforcement_learning.utils.minor_utils import dictsum
 import random
 

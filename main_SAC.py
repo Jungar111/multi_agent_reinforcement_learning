@@ -3,13 +3,14 @@ import argparse
 from tqdm import trange
 import numpy as np
 import torch
-from multi_agent_reinforcement_learning.envs import scenario, amod
-from multi_agent_reinforcement_learning.algos import sac
-from multi_agent_reinforcement_learning.algos.reb_flow_solver import solveRebFlow
+from multi_agent_reinforcement_learning.envs.sac_amod_env import Scenario, AMoD
+from multi_agent_reinforcement_learning.algos.sac import SAC
+from multi_agent_reinforcement_learning.algos.sac_reb_flow_solver import solveRebFlow
 from multi_agent_reinforcement_learning.utils.minor_utils import dictsum
 import json
 from torch_geometric.data import Data
 import copy
+import platform
 
 
 class GNNParser:
@@ -122,6 +123,14 @@ beta = {
 
 test_tstep = {"san_francisco": 3, "nyc_brooklyn": 4, "shenzhen_downtown_west": 3}
 
+cplex_path = ""
+if platform.system() == "Linux":
+    cplex_path = "/opt/ibm/ILOG/CPLEX_Studio2211/opl/bin/x86-64_linux/"
+elif platform.system() == "Windows":
+    cplex_path = r"C:\Program Files\IBM\ILOG\CPLEX_Studio2211\\opl\\bin\\x64_win64\\"
+else:
+    raise NotImplementedError()
+
 parser = argparse.ArgumentParser(description="SAC-GNN")
 
 # Simulator parameters
@@ -160,7 +169,7 @@ parser.add_argument(
 parser.add_argument(
     "--cplexpath",
     type=str,
-    default="/opt/opl/bin/x86-64_linux/",
+    default=cplex_path,
     help="defines directory of the CPLEX installation",
 )
 parser.add_argument(
@@ -229,7 +238,7 @@ parser.add_argument(
 parser.add_argument(
     "--city",
     type=str,
-    default="shenzhen_downtown_west",
+    default="nyc_brooklyn",
     help="city to train on",
 )
 parser.add_argument(
@@ -251,7 +260,7 @@ city = args.city
 
 
 if not args.test:
-    scenario = scenario(
+    scenario = Scenario(
         json_file=f"data/scenario_{city}.json",
         demand_ratio=demand_ratio[city],
         json_hr=json_hr[city],
@@ -260,13 +269,13 @@ if not args.test:
         tf=args.max_steps,
     )
 
-    env = amod(scenario, beta=beta[city])
+    env = AMoD(scenario, beta=beta[city])
 
     parser = GNNParser(
         env, T=6, json_file=f"data/scenario_{city}.json"
     )  # Timehorizon T=6 (K in paper)
 
-    model = sac(
+    model = SAC(
         env=env,
         input_size=13,
         hidden_size=args.hidden_size,
@@ -353,18 +362,24 @@ if not args.test:
         )
         # Checkpoint best performing model
         if episode_reward >= best_reward:
-            model.save_checkpoint(path=f"ckpt/{args.checkpoint_path}_sample.pth")
+            model.save_checkpoint(
+                path=f"saved_files/ckpt/nyc4/{args.checkpoint_path}_sample.pth"
+            )
             best_reward = episode_reward
-        model.save_checkpoint(path=f"ckpt/{args.checkpoint_path}_running.pth")
+        model.save_checkpoint(
+            path=f"saved_files/ckpt/nyc4/{args.checkpoint_path}_running.pth"
+        )
         if i_episode % 10 == 0:
             test_reward, test_served_demand, test_rebalancing_cost = model.test_agent(
                 1, env, args.cplexpath, args.directory, parser=parser
             )
             if test_reward >= best_reward_test:
                 best_reward_test = test_reward
-                model.save_checkpoint(path=f"ckpt/{args.checkpoint_path}_test.pth")
+                model.save_checkpoint(
+                    path=f"saved_files/ckpt/nyc4/{args.checkpoint_path}_test.pth"
+                )
 else:
-    scenario = scenario(
+    scenario = Scenario(
         json_file=f"data/scenario_{city}.json",
         demand_ratio=demand_ratio[city],
         json_hr=json_hr[city],
@@ -373,10 +388,10 @@ else:
         tf=args.max_steps,
     )
 
-    env = amod(scenario, beta=beta[city])
+    env = AMoD(scenario, beta=beta[city])
     parser = GNNParser(env, T=6, json_file=f"data/scenario_{city}.json")
 
-    model = sac(
+    model = SAC(
         env=env,
         input_size=13,
         hidden_size=256,
