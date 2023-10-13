@@ -72,7 +72,7 @@ class ActorCritic(nn.Module):
 
         softplus used on the actor along with 'jitter'.
         concentration: input for the Dirichlet distribution.
-        value: The objective value of the current state?
+        value: The objective value of the current state, given an action
         returns: concentration, value
         """
         # parse raw environment data in model format
