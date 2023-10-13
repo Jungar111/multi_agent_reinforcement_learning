@@ -22,6 +22,7 @@ class GNNActor(nn.Module):
         self.lin1 = nn.Linear(in_channels, 32)
         self.lin2 = nn.Linear(32, 32)
         self.lin3 = nn.Linear(32, 1)
+        self.price_lin = nn.Linear(32, 16)
         self.device = device
 
     def forward(self, data: Data):
@@ -31,6 +32,8 @@ class GNNActor(nn.Module):
         ).to(self.device)
         x = out + data.x.to(self.device)
         x = F.relu(self.lin1(x))
-        x = F.relu(self.lin2(x))
-        x = self.lin3(x)
-        return x
+        last_hidden_layer = F.relu(self.lin2(x))
+        dirichlet_concentration = self.lin3(last_hidden_layer)
+        price = F.relu(self.price_lin(last_hidden_layer))
+
+        return dirichlet_concentration, price

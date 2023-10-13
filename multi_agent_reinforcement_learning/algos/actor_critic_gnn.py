@@ -79,12 +79,14 @@ class ActorCritic(nn.Module):
         x = self.parse_obs(obs).to(self.config.device)
 
         # actor: computes concentration parameters of a Dirichlet distribution
-        a_out = self.actor(x)
+        a_out, price = self.actor(x)
+        price = price.fill_diagonal_(0)
+
         concentration = F.softplus(a_out).reshape(-1) + jitter
 
         # critic: estimates V(s_t)
         value = self.critic(x)
-        return concentration, value
+        return concentration, price, value
 
     def parse_obs(self, obs: T.Tuple[dict, int, dict, dict]):
         """Parse observations.
@@ -102,7 +104,7 @@ class ActorCritic(nn.Module):
         obs: observation of the current distribution of vehicles.
         return: List of the next actions
         """
-        concentration, value = self.forward(obs)
+        concentration, price, value = self.forward(obs)
 
         if probabilistic:
             m = Dirichlet(concentration)
@@ -113,7 +115,7 @@ class ActorCritic(nn.Module):
         else:
             action = (concentration) / (concentration.sum() + 1e-20)
             action = action.detach()
-        return list(action.cpu().numpy())
+        return list(action.cpu().numpy()), price.detach().cpu().numpy()
 
     def training_step(self):
         """Take one training step."""

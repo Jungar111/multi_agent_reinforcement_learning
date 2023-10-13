@@ -59,11 +59,15 @@ def _train_loop(
             # use GNN-RL policy (Step 2 in paper)
 
             actions = []
+            prices = []
             for model in models:
                 model.train_log.reward += model.actor_data.pax_reward
-                actions.append(
-                    model.select_action(model.actor_data.obs, probabilistic=training)
+                action, price = model.select_action(
+                    model.actor_data.obs, probabilistic=training
                 )
+                model.actor_data.price = price
+                actions.append(action)
+                prices.append(price)
 
             for idx, action in enumerate(actions):
                 # transform sample from Dirichlet into actual vehicle counts (i.e. (x1*x2*..*xn)*num_vehicles)

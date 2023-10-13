@@ -150,6 +150,56 @@ class AMoD:
         paxAction = [flow[i, j] if (i, j) in flow else 0 for i, j in self.edges]
         return paxAction
 
+    def distribute_hypergeometric(
+        self,
+        distribution_in_area_for_actor: T.List[T.Union[int, float]],
+        no_customers: int,
+        origin: int,
+        dest: int,
+        t: int,
+    ):
+        # PCG64 produces a random integer stream that the generator needs
+        # will always procuce same stream given seed
+        demand_distribution_to_actors = np.random.Generator(
+            np.random.PCG64(self.config.seed)
+        ).multivariate_hypergeometric(
+            np.array(distribution_in_area_for_actor), no_customers
+        )
+        for idx, demand in enumerate(demand_distribution_to_actors):
+            self.actor_data[idx].demand[origin, dest][t] = demand
+
+    def distribute_based_on_price(
+        self,
+        price: T.List[float],
+        no_customers: int,
+        origin: int,
+        dest: int,
+        t: int,
+        cars_in_area_for_each_company: T.List[int],
+    ):
+        rand = np.random.dirichlet(np.array(price) + 1e-2, size=no_customers)
+        values, counts = np.unique(np.argmax(rand, axis=1), return_counts=True)
+        chosen_company = {val: co for val, co in zip(values, counts)}
+        actor_full = {}
+        for actor_idx in values:
+            no_cars = min(
+                cars_in_area_for_each_company[actor_idx],
+                chosen_company.get(actor_idx, 0),
+            )
+            self.actor_data[actor_idx].demand[origin, dest][t] = no_cars
+            actor_full[actor_idx] = {
+                "full": no_cars == cars_in_area_for_each_company[actor_idx],
+                "excess": chosen_company[actor_idx]
+                - cars_in_area_for_each_company[actor_idx],
+            }
+
+        for actor_idx, data in actor_full.items():
+            if data["full"]:
+                if actor_idx == 0:
+                    self.actor_data[1].demand[origin, dest][t] += data["excess"]
+                if actor_idx == 1:
+                    self.actor_data[0].demand[origin, dest][t] += data["excess"]
+
     # pax step
     def pax_step(
         self,
@@ -180,15 +230,15 @@ class AMoD:
                 for idx, data in enumerate(self.actor_data):
                     data.demand[origin, dest][t] = cars_in_area_for_each_company[idx]
             else:
-                # PCG64 produces a random integer stream that the generator needs
-                # will always procuce same stream given seed
-                demand_distribution_to_actors = np.random.Generator(
-                    np.random.PCG64(self.config.seed)
-                ).multivariate_hypergeometric(
-                    cars_in_area_for_each_company, no_customers
+                prices = [actor.price[origin, dest][t] for actor in self.actor_data]
+                self.distribute_based_on_price(
+                    price=prices,
+                    no_customers=no_customers,
+                    cars_in_area_for_each_company=cars_in_area_for_each_company,
+                    origin=origin,
+                    dest=dest,
+                    t=t,
                 )
-                for idx, demand in enumerate(demand_distribution_to_actors):
-                    self.actor_data[idx].demand[origin, dest][t] = demand
 
         self.ext_reward = np.zeros(self.nregion)
         for i in self.region:
@@ -237,7 +287,7 @@ class AMoD:
                 ]
                 # add to reward
                 actor.pax_reward += actor.pax_action[k] * (
-                    self.price[i, j][t] - self.demand_time[i, j][t] * self.beta
+                    actor.price[i, j][t] - self.demand_time[i, j][t] * self.beta
                 )
                 # Add passenger action * price to revenue
                 # actor.ext_reward[i] += max(
@@ -245,7 +295,7 @@ class AMoD:
                 #     actor.pax_action[k]
                 #     * (self.price[i, j][t] - self.demand_time[i, j][t] * self.beta),
                 # )
-                actor.info.revenue += actor.pax_action[k] * (self.price[i, j][t])
+                actor.info.revenue += actor.pax_action[k] * (actor.price[i, j][t])
 
             # for acc, the time index would be t+1, but for demand, the time index would be t
             actor.obs = (
@@ -354,7 +404,7 @@ class AMoD:
             # trip attribute (origin, destination, time of request, demand, price)
             for i, j, t, d, p in tripAttr:
                 self.demand[i, j][t] = d
-                self.price[i, j][t] = p
+                actor.price[i, j][0] = p
 
             actor.demand = defaultdict(dict)
 
