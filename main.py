@@ -221,10 +221,10 @@ def main(config: Config):
     else:
         # Load pre-trained model
         rl1_actor.load_checkpoint(
-            path=f"./{config.directory}/ckpt/nyc4/a2c_gnn_RL_1.pth"
+            path=f"./{config.directory}/ckpt/nyc4/a2c_gnn_RL_1_big_run.pth"
         )
         rl2_actor.load_checkpoint(
-            path=f"./{config.directory}/ckpt/nyc4/a2c_gnn_RL_2.pth"
+            path=f"./{config.directory}/ckpt/nyc4/a2c_gnn_RL_2_big_run.pth"
         )
 
         test_episodes = 1
@@ -246,14 +246,16 @@ def main(config: Config):
             T=episode_length,
             models=models,
         )
-
+        # actor_evaluator.plot_distribution_at_time_step_t(
+        #     actions=np.array(all_actions), models=models
+        # )
     wandb.finish()
 
 
 if __name__ == "__main__":
     config = args_to_config()
     config.wandb_mode = "disabled"
-    # config.test = True
+    config.test = True
     # config.max_episodes = 300
     # config.json_file = None
     # config.grid_size_x = 2
