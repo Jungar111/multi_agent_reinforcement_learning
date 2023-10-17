@@ -246,9 +246,11 @@ def main(config: Config):
             T=episode_length,
             models=models,
         )
+
         # actor_evaluator.plot_distribution_at_time_step_t(
         #     actions=np.array(all_actions), models=models
         # )
+
     wandb.finish()
 
 
