@@ -65,7 +65,13 @@ def _train_loop(
                 action, price = model.select_action(
                     model.actor_data.obs, probabilistic=training
                 )
-                model.actor_data.price = price
+
+                # @TODO please optimise this. Must be very slow.
+                num_cells = config.grid_size_y * config.grid_size_y
+                for i in range(num_cells):
+                    for j in range(num_cells):
+                        model.actor_data.price[i, j][step + 1] = price[i][j]
+
                 actions.append(action)
                 prices.append(price)
 
@@ -261,7 +267,7 @@ def main(config: Config):
 if __name__ == "__main__":
     config = args_to_config()
     config.wandb_mode = "disabled"
-    config.test = True
+    # config.test = True
     # config.max_episodes = 300
     # config.json_file = None
     # config.grid_size_x = 2

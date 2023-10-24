@@ -181,7 +181,7 @@ class AMoD:
         values, counts = np.unique(np.argmax(rand, axis=1), return_counts=True)
         chosen_company = {val: co for val, co in zip(values, counts)}
         actor_full = {}
-        for actor_idx in values:
+        for actor_idx in range(2):
             no_cars = min(
                 cars_in_area_for_each_company[actor_idx],
                 chosen_company.get(actor_idx, 0),
@@ -189,7 +189,7 @@ class AMoD:
             self.actor_data[actor_idx].demand[origin, dest][t] = no_cars
             actor_full[actor_idx] = {
                 "full": no_cars == cars_in_area_for_each_company[actor_idx],
-                "excess": chosen_company[actor_idx]
+                "excess": chosen_company.get(actor_idx, None)
                 - cars_in_area_for_each_company[actor_idx],
             }
 
