@@ -21,7 +21,7 @@ class GNNActor(nn.Module):
         self.conv1 = GCNConv(in_channels, in_channels)
         self.lin1 = nn.Linear(in_channels, 32)
         self.lin2 = nn.Linear(32, 32)
-        self.lin3 = nn.Linear(32, 1)
+        self.dirichlet_concentration_layer = nn.Linear(32, 1)
         self.price_lin = nn.Linear(32, 16)
         self.device = device
 
@@ -33,7 +33,7 @@ class GNNActor(nn.Module):
         x = out + data.x.to(self.device)
         x = F.relu(self.lin1(x))
         last_hidden_layer = F.relu(self.lin2(x))
-        dirichlet_concentration = self.lin3(last_hidden_layer)
+        dirichlet_concentration = self.dirichlet_concentration_layer(last_hidden_layer)
         price = F.relu(self.price_lin(last_hidden_layer))
 
         return dirichlet_concentration, price

@@ -189,7 +189,7 @@ class AMoD:
             self.actor_data[actor_idx].demand[origin, dest][t] = no_cars
             actor_full[actor_idx] = {
                 "full": no_cars == cars_in_area_for_each_company[actor_idx],
-                "excess": chosen_company.get(actor_idx, None)
+                "excess": chosen_company.get(actor_idx, 0)
                 - cars_in_area_for_each_company[actor_idx],
             }
 

@@ -1,10 +1,11 @@
 """Main file for project."""
 from __future__ import print_function
+from pathlib import Path
 
-from datetime import datetime
 import typing as T
-import numpy as np
+from datetime import datetime
 
+import numpy as np
 from tqdm import trange
 
 import wandb
@@ -15,13 +16,13 @@ from multi_agent_reinforcement_learning.data_models.config import Config
 from multi_agent_reinforcement_learning.data_models.logs import ModelLog
 from multi_agent_reinforcement_learning.envs.amod import AMoD
 from multi_agent_reinforcement_learning.envs.scenario import Scenario
+from multi_agent_reinforcement_learning.evaluation.actor_evaluation import (
+    ActorEvaluator,
+)
 from multi_agent_reinforcement_learning.utils.argument_parser import args_to_config
 from multi_agent_reinforcement_learning.utils.init_logger import init_logger
 from multi_agent_reinforcement_learning.utils.minor_utils import dictsum
 from multi_agent_reinforcement_learning.utils.setup_grid import setup_dummy_grid
-from multi_agent_reinforcement_learning.evaluation.actor_evaluation import (
-    ActorEvaluator,
-)
 
 logger = init_logger()
 
@@ -40,6 +41,7 @@ def _train_loop(
     Used both for testing and training, by setting training.
     """
     epochs = trange(n_episodes)
+    episode_mean_price = {model.actor_data.name: [] for model in models}
     for i_episode in epochs:
         for model in models:
             model.actor_data.model_log = ModelLog()
@@ -74,6 +76,7 @@ def _train_loop(
 
                 actions.append(action)
                 prices.append(price)
+                episode_mean_price[model.actor_data.name].append(price.mean())
 
             for idx, action in enumerate(actions):
                 # transform sample from Dirichlet into actual vehicle counts (i.e. (x1*x2*..*xn)*num_vehicles)
@@ -146,6 +149,13 @@ def _train_loop(
 
         for model in models:
             wandb.log({**model.actor_data.model_log.dict(model.actor_data.name)})
+            wandb.log(
+                {
+                    f"Mean price {model.actor_data.name}": np.mean(
+                        episode_mean_price[model.actor_data.name]
+                    )
+                }
+            )
 
         if not training:
             return all_actions
@@ -159,9 +169,10 @@ def main(config: Config):
 
     actor_data = [
         ActorData(
-            name="RL_1", no_cars=config.total_number_of_cars - advesary_number_of_cars
+            name="RL_1_with_price",
+            no_cars=config.total_number_of_cars - advesary_number_of_cars,
         ),
-        ActorData(name="RL_2", no_cars=advesary_number_of_cars),
+        ActorData(name="RL_2_with_price", no_cars=advesary_number_of_cars),
     ]
 
     wandb_config_log = {**vars(config)}
@@ -228,6 +239,21 @@ def main(config: Config):
             training=True,
         )
 
+        ckpt_paths = [
+            str(
+                Path(
+                    "saved_files",
+                    "ckpt",
+                    "nyc4",
+                    f"a2c_gnn_{model.actor_data.name}.pth",
+                )
+            )
+            for model in models
+        ]
+
+        for ckpt_path in ckpt_paths:
+            wandb.save(ckpt_path)
+
     else:
         # Load pre-trained model
         rl1_actor.load_checkpoint(
@@ -266,7 +292,7 @@ def main(config: Config):
 
 if __name__ == "__main__":
     config = args_to_config()
-    config.wandb_mode = "disabled"
+    # config.wandb_mode = "disabled"
     # config.test = True
     # config.max_episodes = 300
     # config.json_file = None
