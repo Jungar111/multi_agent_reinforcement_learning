@@ -39,6 +39,7 @@ def _train_loop(
 
     Used both for testing and training, by setting training.
     """
+    best_reward = -np.inf
     epochs = trange(n_episodes)
     for i_episode in epochs:
         for model in models:
@@ -121,17 +122,18 @@ def _train_loop(
 
         # Checkpoint best performing model
         if training:
-            for model in models:
-                if model.actor_data.model_log.reward >= model.actor_data.best_reward:
+            if (
+                sum([model.actor_data.model_log.reward for model in models])
+                > best_reward
+            ):
+                for model in models:
                     model.save_checkpoint(
                         path=f"./{config.directory}/ckpt/nyc4/a2c_gnn_{model.actor_data.name}.pth"
                     )
-                    model.actor_data.best_reward = model.actor_data.model_log.reward
-                    wandb.log(
-                        {
-                            f"Best Reward {model.actor_data.name}": model.actor_data.best_reward
-                        }
+                    best_reward = sum(
+                        [model.actor_data.model_log.reward for model in models]
                     )
+                    wandb.log({"Best Reward": best_reward})
         # Log KPIs on weights and biases
 
         for model in models:
@@ -256,9 +258,9 @@ def main(config: Config):
 
 if __name__ == "__main__":
     config = args_to_config()
-    config.wandb_mode = "disabled"
-    config.test = True
-    # config.max_episodes = 300
+    # config.wandb_mode = "disabled"
+    # config.test = True
+    config.max_episodes = 3
     # config.json_file = None
     # config.grid_size_x = 2
     # config.grid_size_y = 3
