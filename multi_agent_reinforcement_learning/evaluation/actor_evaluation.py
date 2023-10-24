@@ -24,14 +24,15 @@ class ActorEvaluator:
         fig, ax = plt.subplots(no_time_steps, len(actions))
         for idx, model in enumerate(models):
             for t in range(no_time_steps):
-                chosen_time_step = t * 5
+                chosen_time_step = t * 11
                 actor_actions = actions[idx, chosen_time_step, :].reshape(4, 4)
                 for i in range(4):
                     for j in range(4):
                         ax[t, idx].text(
                             i,
                             j,
-                            model.actor_data.demand[i, j][chosen_time_step + 1],
+                            # int(actor_actions[j, i]),
+                            model.actor_data.demand[j, i][chosen_time_step + 1],
                             color="red",
                         )
                 pos = ax[t, idx].matshow(actor_actions)
@@ -55,7 +56,7 @@ class ActorEvaluator:
                     ax[idx].text(
                         i,
                         j,
-                        np.mean(list(model.actor_data.demand[i, j].values())).round(2),
+                        np.mean(list(model.actor_data.demand[j, i].values())).round(2),
                         color="red",
                     )
             pos = ax[idx].matshow(actor_actions.mean(axis=0))
