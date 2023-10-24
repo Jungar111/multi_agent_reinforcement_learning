@@ -16,101 +16,12 @@ from multi_agent_reinforcement_learning.envs.sac_scenario import Scenario
 from multi_agent_reinforcement_learning.algos.sac import SAC
 from multi_agent_reinforcement_learning.algos.sac_reb_flow_solver import solveRebFlow
 from multi_agent_reinforcement_learning.utils.minor_utils import dictsum
-import json
-from torch_geometric.data import Data
+from multi_agent_reinforcement_learning.algos.sac_gnn_parser import GNNParser
 import copy
 import platform
 
-
-class GNNParser:
-    """
-    Parser converting raw environment observations to agent inputs (s_t).
-    """
-
-    def __init__(self, env, T=10, json_file=None, scale_factor=0.01):
-        super().__init__()
-        self.env = env
-        self.T = T
-        self.s = scale_factor
-        self.json_file = json_file
-        if self.json_file is not None:
-            with open(json_file, "r") as file:
-                self.data = json.load(file)
-
-    def parse_obs(self, obs):
-        x = (
-            torch.cat(
-                (
-                    torch.tensor(
-                        [obs[0][n][self.env.time + 1] * self.s for n in self.env.region]
-                    )
-                    .view(1, 1, self.env.nregion)
-                    .float(),
-                    torch.tensor(
-                        [
-                            [
-                                (obs[0][n][self.env.time + 1] + self.env.dacc[n][t])
-                                * self.s
-                                for n in self.env.region
-                            ]
-                            for t in range(
-                                self.env.time + 1, self.env.time + self.T + 1
-                            )
-                        ]
-                    )
-                    .view(1, self.T, self.env.nregion)
-                    .float(),
-                    torch.tensor(
-                        [
-                            [
-                                sum(
-                                    [
-                                        (self.env.scenario.demand_input[i, j][t])
-                                        * (self.env.price[i, j][t])
-                                        * self.s
-                                        for j in self.env.region
-                                    ]
-                                )
-                                for i in self.env.region
-                            ]
-                            for t in range(
-                                self.env.time + 1, self.env.time + self.T + 1
-                            )
-                        ]
-                    )
-                    .view(1, self.T, self.env.nregion)
-                    .float(),
-                ),
-                dim=1,
-            )
-            .squeeze(0)
-            .view(1 + self.T + self.T, self.env.nregion)
-            .T
-        )
-        if self.json_file is not None:
-            edge_index = torch.vstack(
-                (
-                    torch.tensor(
-                        [edge["i"] for edge in self.data["topology_graph"]]
-                    ).view(1, -1),
-                    torch.tensor(
-                        [edge["j"] for edge in self.data["topology_graph"]]
-                    ).view(1, -1),
-                )
-            ).long()
-        else:
-            edge_index = torch.cat(
-                (
-                    torch.arange(self.env.nregion).view(1, self.env.nregion),
-                    torch.arange(self.env.nregion).view(1, self.env.nregion),
-                ),
-                dim=0,
-            ).long()
-        data = Data(x, edge_index)
-        return data
-
-
 # Define calibrated simulation parameters
+# Where should these be? Perhaps in config?
 demand_ratio = {
     "san_francisco": 2,
     "washington_dc": 4.2,
@@ -265,23 +176,22 @@ parser.add_argument(
 args = parser.parse_args()
 args.cuda = not args.no_cuda and torch.cuda.is_available()
 device = torch.device("cuda" if args.cuda else "cpu")
-city = args.city
 
 
 if not args.test:
     scenario = Scenario(
-        json_file=f"data/scenario_{city}.json",
-        demand_ratio=demand_ratio[city],
-        json_hr=json_hr[city],
+        json_file=f"data/scenario_{args.city}.json",
+        demand_ratio=demand_ratio[args.city],
+        json_hr=json_hr[args.city],
         sd=args.seed,
         json_tstep=args.json_tstep,
         tf=args.max_steps,
     )
 
-    env = AMoD(scenario, beta=beta[city])
+    env = AMoD(scenario, beta=beta[args.city])
 
     parser = GNNParser(
-        env, T=6, json_file=f"data/scenario_{city}.json"
+        env, T=6, json_file=f"data/scenario_{args.city}.json"
     )  # Timehorizon T=6 (K in paper)
 
     model = SAC(
@@ -389,16 +299,16 @@ if not args.test:
                 )
 else:
     scenario = Scenario(
-        json_file=f"data/scenario_{city}.json",
-        demand_ratio=demand_ratio[city],
-        json_hr=json_hr[city],
+        json_file=f"data/scenario_{args.city}.json",
+        demand_ratio=demand_ratio[args.city],
+        json_hr=json_hr[args.city],
         sd=args.seed,
-        json_tstep=test_tstep[city],
+        json_tstep=test_tstep[args.city],
         tf=args.max_steps,
     )
 
-    env = AMoD(scenario, beta=beta[city])
-    parser = GNNParser(env, T=6, json_file=f"data/scenario_{city}.json")
+    env = AMoD(scenario, beta=beta[args.city])
+    parser = GNNParser(env, T=6, json_file=f"data/scenario_{args.city}.json")
 
     model = SAC(
         env=env,
