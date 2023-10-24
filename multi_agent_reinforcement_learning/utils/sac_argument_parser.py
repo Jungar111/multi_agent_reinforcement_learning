@@ -53,7 +53,7 @@ def parse_arguments():
     parser.add_argument(
         "--test",
         type=bool,
-        default=True,
+        default=False,
         help="activates test mode for agent evaluation",
     )
     parser.add_argument(
