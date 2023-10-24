@@ -522,7 +522,9 @@ class SAC(nn.Module):
             done = False
             while not done:
                 obs, paxreward, done, info, _, _ = env.pax_step(
-                    CPLEXPATH=cplexpath, PATH="scenario_nyc4_test", directory=directory
+                    CPLEXPATH=cplexpath,
+                    PATH="scenario_sac_brooklyn",
+                    directory=directory,
                 )
                 eps_reward += paxreward
 
@@ -537,7 +539,7 @@ class SAC(nn.Module):
                 }
 
                 rebAction = solveRebFlow(
-                    env, "scenario_nyc4_test", desiredAcc, cplexpath, directory
+                    env, "scenario_sac_brooklyn", desiredAcc, cplexpath, directory
                 )
 
                 _, rebreward, done, info, _, _ = env.reb_step(rebAction)

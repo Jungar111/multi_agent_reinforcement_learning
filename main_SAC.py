@@ -8,7 +8,6 @@ from tqdm import trange
 
 # import wandb
 
-import argparse
 import numpy as np
 import torch
 from multi_agent_reinforcement_learning.envs.sac_amod import AMoD
@@ -17,8 +16,10 @@ from multi_agent_reinforcement_learning.algos.sac import SAC
 from multi_agent_reinforcement_learning.algos.sac_reb_flow_solver import solveRebFlow
 from multi_agent_reinforcement_learning.utils.minor_utils import dictsum
 from multi_agent_reinforcement_learning.algos.sac_gnn_parser import GNNParser
+from multi_agent_reinforcement_learning.utils.sac_argument_parser import parse_arguments
 import copy
-import platform
+
+args = parse_arguments()
 
 # Define calibrated simulation parameters
 # Where should these be? Perhaps in config?
@@ -41,142 +42,7 @@ beta = {
     "shenzhen_downtown_west": 0.5,
 }
 
-test_tstep = {"san_francisco": 3, "nyc_brooklyn": 4, "shenzhen_downtown_west": 3}
-
-cplex_path = ""
-if platform.system() == "Linux":
-    cplex_path = "/opt/ibm/ILOG/CPLEX_Studio2211/opl/bin/x86-64_linux/"
-elif platform.system() == "Windows":
-    cplex_path = r"C:\Program Files\IBM\ILOG\CPLEX_Studio2211\\opl\\bin\\x64_win64\\"
-else:
-    raise NotImplementedError()
-
-parser = argparse.ArgumentParser(description="SAC-GNN")
-
-# Simulator parameters
-parser.add_argument(
-    "--seed", type=int, default=10, metavar="S", help="random seed (default: 10)"
-)
-parser.add_argument(
-    "--demand_ratio",
-    type=int,
-    default=0.5,
-    metavar="S",
-    help="demand_ratio (default: 0.5)",
-)
-parser.add_argument(
-    "--json_hr", type=int, default=7, metavar="S", help="json_hr (default: 7)"
-)
-parser.add_argument(
-    "--json_tstep",
-    type=int,
-    default=3,
-    metavar="S",
-    help="minutes per timestep (default: 3min)",
-)
-parser.add_argument(
-    "--beta",
-    type=int,
-    default=0.5,
-    metavar="S",
-    help="cost of rebalancing (default: 0.5)",
-)
-
-# Model parameters
-parser.add_argument(
-    "--test", type=bool, default=False, help="activates test mode for agent evaluation"
-)
-parser.add_argument(
-    "--cplexpath",
-    type=str,
-    default=cplex_path,
-    help="defines directory of the CPLEX installation",
-)
-parser.add_argument(
-    "--directory",
-    type=str,
-    default="saved_files",
-    help="defines directory where to save files",
-)
-parser.add_argument(
-    "--max_episodes",
-    type=int,
-    default=10000,
-    metavar="N",
-    help="number of episodes to train agent (default: 16k)",
-)
-parser.add_argument(
-    "--max_steps",
-    type=int,
-    default=20,
-    metavar="N",
-    help="number of steps per episode (default: T=20)",
-)
-parser.add_argument("--no-cuda", type=bool, default=True, help="disables CUDA training")
-parser.add_argument(
-    "--batch_size",
-    type=int,
-    default=100,
-    help="batch size for training (default: 100)",
-)
-parser.add_argument(
-    "--alpha",
-    type=float,
-    default=0.3,
-    help="entropy coefficient (default: 0.3)",
-)
-parser.add_argument(
-    "--hidden_size",
-    type=int,
-    default=256,
-    help="hidden size of neural networks (default: 256)",
-)
-parser.add_argument(
-    "--checkpoint_path",
-    type=str,
-    default="SAC",
-    help="name of checkpoint file to save/load (default: SAC)",
-)
-parser.add_argument(
-    "--clip",
-    type=int,
-    default=500,
-    help="clip value for gradient clipping (default: 500)",
-)
-parser.add_argument(
-    "--p_lr",
-    type=float,
-    default=1e-3,
-    help="learning rate for policy network (default: 1e-4)",
-)
-parser.add_argument(
-    "--q_lr",
-    type=float,
-    default=1e-3,
-    help="learning rate for Q networks (default: 4e-3)",
-)
-parser.add_argument(
-    "--city",
-    type=str,
-    default="nyc_brooklyn",
-    help="city to train on",
-)
-parser.add_argument(
-    "--rew_scale",
-    type=float,
-    default=0.1,
-    help="reward scaling factor (default: 0.1)",
-)
-parser.add_argument(
-    "--critic_version",
-    type=int,
-    default=4,
-    help="critic version (default: 4)",
-)
-args = parser.parse_args()
-args.cuda = not args.no_cuda and torch.cuda.is_available()
 device = torch.device("cuda" if args.cuda else "cpu")
-
 
 if not args.test:
     scenario = Scenario(
@@ -233,7 +99,9 @@ if not args.test:
                 obs1 = copy.deepcopy(o)
 
             obs, paxreward, done, info, _, _ = env.pax_step(
-                CPLEXPATH=args.cplexpath, PATH="scenario_nyc4", directory=args.directory
+                CPLEXPATH=args.cplexpath,
+                PATH="scenario_sac_brooklyn",
+                directory=args.directory,
             )
 
             o = parser.parse_obs(obs=obs)
@@ -255,7 +123,7 @@ if not args.test:
             # solve minimum rebalancing distance problem (Step 3 in paper)
             rebAction = solveRebFlow(
                 env,
-                "scenario_nyc4",
+                "scenario_sac_brooklyn",
                 desiredAcc,
                 args.cplexpath,
                 directory=args.directory,
@@ -282,11 +150,11 @@ if not args.test:
         # Checkpoint best performing model
         if episode_reward >= best_reward:
             model.save_checkpoint(
-                path=f"saved_files/ckpt/nyc4/{args.checkpoint_path}_sample.pth"
+                path=f"saved_files/ckpt/sac_brooklyn/{args.checkpoint_path}_sample.pth"
             )
             best_reward = episode_reward
         model.save_checkpoint(
-            path=f"saved_files/ckpt/nyc4/{args.checkpoint_path}_running.pth"
+            path=f"saved_files/ckpt/sac_brooklyn/{args.checkpoint_path}_running.pth"
         )
         if i_episode % 10 == 0:
             test_reward, test_served_demand, test_rebalancing_cost = model.test_agent(
@@ -295,7 +163,7 @@ if not args.test:
             if test_reward >= best_reward_test:
                 best_reward_test = test_reward
                 model.save_checkpoint(
-                    path=f"saved_files/ckpt/nyc4/{args.checkpoint_path}_test.pth"
+                    path=f"saved_files/ckpt/sac_brooklyn/{args.checkpoint_path}_test.pth"
                 )
 else:
     scenario = Scenario(
@@ -303,7 +171,7 @@ else:
         demand_ratio=demand_ratio[args.city],
         json_hr=json_hr[args.city],
         sd=args.seed,
-        json_tstep=test_tstep[args.city],
+        json_tstep=args.json_tstep,
         tf=args.max_steps,
     )
 
@@ -323,7 +191,9 @@ else:
     ).to(device)
 
     print("load model")
-    model.load_checkpoint(path=f"ckpt/{args.checkpoint_path}.pth")
+    model.load_checkpoint(
+        path=f"saved_files/ckpt/sac_brooklyn/{args.checkpoint_path}_test.pth"
+    )
 
     test_episodes = args.max_episodes  # set max number of training episodes
     T = args.max_steps  # set episode length
@@ -347,7 +217,7 @@ else:
             # take matching step (Step 1 in paper)
             obs, paxreward, done, info, _, _ = env.pax_step(
                 CPLEXPATH=args.cplexpath,
-                PATH="scenario_nyc4_test",
+                PATH="scenario_sac_brooklyn",
                 directory=args.directory,
             )
 
@@ -364,7 +234,7 @@ else:
             }
             # solve minimum rebalancing distance problem (Step 3 in paper)
             rebAction = solveRebFlow(
-                env, "scenario_nyc4_test", desiredAcc, args.cplexpath, args.directory
+                env, "scenario_sac_brooklyn", desiredAcc, args.cplexpath, args.directory
             )
 
             _, rebreward, done, info, _, _ = env.reb_step(rebAction)
