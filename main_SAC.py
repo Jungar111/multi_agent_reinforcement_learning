@@ -1,9 +1,18 @@
+"""Main file for the SAC implementation for the project."""
 from __future__ import print_function
-import argparse
+
+# from datetime import datetime
+# import typing as T
+
 from tqdm import trange
+
+# import wandb
+
+import argparse
 import numpy as np
 import torch
-from multi_agent_reinforcement_learning.envs.sac_amod_env import Scenario, AMoD
+from multi_agent_reinforcement_learning.envs.sac_amod import AMoD
+from multi_agent_reinforcement_learning.envs.sac_scenario import Scenario
 from multi_agent_reinforcement_learning.algos.sac import SAC
 from multi_agent_reinforcement_learning.algos.sac_reb_flow_solver import solveRebFlow
 from multi_agent_reinforcement_learning.utils.minor_utils import dictsum

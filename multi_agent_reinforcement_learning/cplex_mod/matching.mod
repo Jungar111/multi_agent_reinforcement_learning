@@ -1,8 +1,8 @@
-/*********************************************
- * OPL 12.10.0.0 Model
- * Author: yangk
- * Creation Date: Aug 25, 2020 at 10:45:21 AM
- *********************************************/
+execute
+{
+  cplex.threads=6; // Number of cores on your CPU limits this.
+}
+
 tuple demandAttrTuple{
   	int i;
   	int j;

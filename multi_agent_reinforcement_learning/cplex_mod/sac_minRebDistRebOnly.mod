@@ -1,6 +1,6 @@
 execute
 {
-  cplex.threads=4;
+  cplex.threads=6;
 }
 tuple Edge{
   int i;

@@ -1,3 +1,4 @@
+"""RebFlow solver for the SAC."""
 import os
 import subprocess
 from collections import defaultdict
