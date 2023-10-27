@@ -15,9 +15,13 @@ from multi_agent_reinforcement_learning.envs.sac_scenario import Scenario
 from multi_agent_reinforcement_learning.algos.sac import SAC
 from multi_agent_reinforcement_learning.algos.sac_reb_flow_solver import solveRebFlow
 from multi_agent_reinforcement_learning.utils.minor_utils import dictsum
+from multi_agent_reinforcement_learning.utils.init_logger import init_logger
 from multi_agent_reinforcement_learning.algos.sac_gnn_parser import GNNParser
 from multi_agent_reinforcement_learning.utils.sac_argument_parser import parse_arguments
 import copy
+
+logger = init_logger()
+
 
 args = parse_arguments()
 
@@ -45,6 +49,9 @@ beta = {
 device = torch.device("cuda" if args.cuda else "cpu")
 
 if not args.test:
+    """Run main training loop."""
+    logger.info("Running main training loop for SAC.")
+
     scenario = Scenario(
         json_file=f"data/scenario_{args.city}.json",
         demand_ratio=demand_ratio[args.city],
@@ -166,6 +173,9 @@ if not args.test:
                     path=f"saved_files/ckpt/sac_brooklyn/{args.checkpoint_path}_test.pth"
                 )
 else:
+    """Run main testing loop."""
+    logger.info("Running main testing loop for SAC.")
+
     scenario = Scenario(
         json_file=f"data/scenario_{args.city}.json",
         demand_ratio=demand_ratio[args.city],
