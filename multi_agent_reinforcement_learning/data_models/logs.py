@@ -10,8 +10,5 @@ class ModelLog(BaseModel):
     rebalancing_cost: float = Field(default=0.0)
 
     def dict(self, name):
-        """Return logs as a dict.
-
-        Done because we want to be able to see multiple actors in same plot.
-        """
+        """Return logs as a dict."""
         return {f"{name}_{key}": val for key, val in dict(self).items()}
