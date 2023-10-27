@@ -158,7 +158,7 @@ class AMoD:
         cplex_path: T.Optional[str] = None,
         path: str = "",
         platform: str = "linux",
-    ) -> T.Tuple[T.List[ActorData], bool, T.List[bool]]:
+    ) -> T.Tuple[T.List[ActorData], bool]:
         """Take one pax step.
 
         paxAction: Passenger actions for timestep
@@ -263,8 +263,7 @@ class AMoD:
 
         # if passenger is executed first
         done = False
-        ext_done = [done] * self.nregion
-        return self.actor_data, done, ext_done
+        return self.actor_data, done
 
     def reb_step(self) -> T.Tuple[T.List[ActorData], bool]:
         """Take on reb step, Adjusting costs, reward.
@@ -319,9 +318,7 @@ class AMoD:
                 if (i, j) in actor.flow.reb_flow and t in actor.flow.reb_flow[i, j]:
                     actor.graph_state.acc[j][t + 1] += actor.flow.reb_flow[i, j][t]
                 if (i, j) in actor.flow.pax_flow and t in actor.flow.pax_flow[i, j]:
-                    actor.graph_state.acc[j][t + 1] += actor.graph_state.pax_flow[i, j][
-                        t
-                    ]
+                    actor.graph_state.acc[j][t + 1] += actor.flow.pax_flow[i, j][t]
 
         self.time += 1
 

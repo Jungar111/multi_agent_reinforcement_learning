@@ -262,7 +262,7 @@ def main(config: Config):
 
 if __name__ == "__main__":
     config = args_to_config()
-    # config.wandb_mode = "disabled"
+    config.wandb_mode = "disabled"
     # config.test = True
     config.max_episodes = 3
     # config.json_file = None
