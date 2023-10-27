@@ -177,7 +177,7 @@ class AMoD:
         t: int,
         cars_in_area_for_each_company: T.List[int],
     ):
-        rand = np.random.dirichlet(np.array(price) + 1e-2, size=no_customers)
+        rand = np.random.dirichlet(1 / (np.array(price) + 1e-2), size=no_customers)
         values, counts = np.unique(np.argmax(rand, axis=1), return_counts=True)
         chosen_company = {val: co for val, co in zip(values, counts)}
         actor_full = {}

@@ -34,6 +34,6 @@ class GNNActor(nn.Module):
         x = F.relu(self.lin1(x))
         last_hidden_layer = F.relu(self.lin2(x))
         dirichlet_concentration = self.dirichlet_concentration_layer(last_hidden_layer)
-        price = F.relu(self.price_lin(last_hidden_layer))
+        price = F.relu(self.price_lin(last_hidden_layer)) + 2
 
         return dirichlet_concentration, price
