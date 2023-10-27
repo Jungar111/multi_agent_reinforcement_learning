@@ -52,31 +52,34 @@ def _train_loop(
 
         for step in range(episode_length):
             # take matching step (Step 1 in paper)
-            actor_data, done, ext_done = env.pax_step(
+            actor_data, done = env.pax_step(
                 cplex_path=config.cplex_path, path="scenario_nyc4"
             )
             for actor in models:
-                actor.actor_data.model_log.reward += actor.actor_data.pax_reward
+                actor.actor_data.model_log.reward += actor.actor_data.rewards.pax_reward
             # use GNN-RL policy (Step 2 in paper)
 
             actions = []
             for model in models:
-                model.train_log.reward += model.actor_data.pax_reward
+                model.train_log.reward += model.actor_data.rewards.pax_reward
                 actions.append(
-                    model.select_action(model.actor_data.obs, probabilistic=training)
+                    model.select_action(
+                        model.actor_data.graph_state, probabilistic=training
+                    )
                 )
 
             for idx, action in enumerate(actions):
                 # transform sample from Dirichlet into actual vehicle counts (i.e. (x1*x2*..*xn)*num_vehicles)
-                models[idx].actor_data.desired_acc = {
+                models[idx].actor_data.flow.desired_acc = {
                     env.region[i]: int(
-                        action[i] * dictsum(actor_data[idx].acc, env.time + 1)
+                        action[i]
+                        * dictsum(actor_data[idx].graph_state.acc, env.time + 1)
                     )
                     for i in range(n_actions)
                 }
 
                 all_actions[idx, step, :] = list(
-                    models[idx].actor_data.desired_acc.values()
+                    models[idx].actor_data.flow.desired_acc.values()
                 )
 
             # solve minimum rebalancing distance problem (Step 3 in paper)
@@ -86,10 +89,10 @@ def _train_loop(
             actor_data, done = env.reb_step()
 
             for model in models:
-                model.train_log.reward += model.actor_data.reb_reward
+                model.train_log.reward += model.actor_data.rewards.reb_reward
             # track performance over episode
             for model in models:
-                model.actor_data.model_log.reward += model.actor_data.reb_reward
+                model.actor_data.model_log.reward += model.actor_data.rewards.reb_reward
                 model.actor_data.model_log.served_demand += (
                     model.actor_data.info.served_demand
                 )
@@ -97,7 +100,8 @@ def _train_loop(
                     model.actor_data.info.rebalancing_cost
                 )
                 model.rewards.append(
-                    model.actor_data.pax_reward + model.actor_data.reb_reward
+                    model.actor_data.rewards.pax_reward
+                    + model.actor_data.rewards.reb_reward
                 )
 
                 model.train_log.served_demand += model.actor_data.info.served_demand
@@ -182,7 +186,7 @@ def main(config: Config):
     else:
         scenario = Scenario(
             config=config,
-            json_file=config.json_file,
+            json_file=str(config.json_file),
             sd=config.seed,
             demand_ratio=config.demand_ratio,
             json_hr=config.json_hr,
