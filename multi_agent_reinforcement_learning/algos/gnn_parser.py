@@ -43,8 +43,7 @@ class GNNParser:
         second_t = torch.tensor(
             [
                 [
-                    (obs.acc[n][self.env.time + 1] + actor_data.graph_state.dacc[n][t])
-                    * self.s
+                    (obs.acc[n][self.env.time + 1] + obs.dacc[n][t]) * self.s
                     for n in self.env.region
                 ]
                 for t in range(self.env.time + 1, self.env.time + self.T + 1)
