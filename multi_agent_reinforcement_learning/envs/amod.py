@@ -9,6 +9,7 @@ from copy import deepcopy
 import numpy as np
 from multi_agent_reinforcement_learning.data_models.actor_data import (
     ActorData,
+    GraphState,
     PaxStepInfo,
 )
 from multi_agent_reinforcement_learning.envs.scenario import Scenario
@@ -77,8 +78,8 @@ class AMoD:
             ]  # Append the time it takes to rebalance to all edges
         for actor in actor_data:
             for n in self.region:
-                actor.acc[n][0] = self.G.nodes[n][f"acc_init_{actor.name}"]
-                actor.dacc[n] = defaultdict(float)
+                actor.graph_state.acc[n][0] = self.G.nodes[n][f"acc_init_{actor.name}"]
+                actor.graph_state.dacc[n] = defaultdict(float)
         self.beta = beta * scenario.tstep  # Rebalancing cost
         t = self.time
 
@@ -167,18 +168,20 @@ class AMoD:
 
         for data in self.actor_data:
             data.info = PaxStepInfo()
-            data.pax_reward = 0
+            data.rewards.pax_reward = 0
 
         # Distributing customers stochastic given presence in area.
         for (origin, dest), area_demand in self.demand.items():
             no_customers = area_demand[t]
             cars_in_area_for_each_company = [
-                int(data.acc[origin][t]) for data in self.actor_data
+                int(data.graph_state.acc[origin][t]) for data in self.actor_data
             ]
 
             if sum(cars_in_area_for_each_company) < no_customers:
                 for idx, data in enumerate(self.actor_data):
-                    data.demand[origin, dest][t] = cars_in_area_for_each_company[idx]
+                    data.graph_state.demand[origin, dest][
+                        t
+                    ] = cars_in_area_for_each_company[idx]
             else:
                 # PCG64 produces a random integer stream that the generator needs
                 # will always procuce same stream given seed
@@ -188,23 +191,23 @@ class AMoD:
                     cars_in_area_for_each_company, no_customers
                 )
                 for idx, demand in enumerate(demand_distribution_to_actors):
-                    self.actor_data[idx].demand[origin, dest][t] = demand
+                    self.actor_data[idx].graph_state.demand[origin, dest][t] = demand
 
         self.ext_reward = np.zeros(self.nregion)
         for i in self.region:
             for actor in self.actor_data:
-                actor.acc[i][t + 1] = actor.acc[i][t]
+                actor.graph_state.acc[i][t + 1] = actor.graph_state.acc[i][t]
 
         if pax_action is None:
             # default matching algorithm used if isMatching is True, matching method will need the
             # information of self.acc[t+1], therefore this part cannot be put forward
             for actor in self.actor_data:
-                actor.pax_action = self.matching(
+                actor.actions.pax_action = self.matching(
                     CPLEXPATH=cplex_path,
                     PATH=path,
                     platform=platform,
-                    demand=actor.demand,
-                    acc=actor.acc,
+                    demand=actor.graph_state.demand,
+                    acc=actor.graph_state.acc,
                     name=actor.name,
                 )
 
@@ -213,49 +216,50 @@ class AMoD:
             for k in range(len(self.edges)):
                 i, j = self.edges[k]
                 if (
-                    (i, j) not in actor.demand
-                    or t not in actor.demand[i, j]
-                    or actor.pax_action[k] < 1e-3
+                    (i, j) not in actor.graph_state.demand
+                    or t not in actor.graph_state.demand[i, j]
+                    or actor.actions.pax_action[k] < 1e-3
                 ):
                     continue
                 # I moved the min operator above, since we want paxFlow to be consistent with paxAction
-                actor.pax_action[k] = min(actor.acc[i][t + 1], actor.pax_action[k])
-                assert actor.pax_action[k] < actor.acc[i][t + 1] + 1e-3
+                actor.actions.pax_action[k] = min(
+                    actor.graph_state.acc[i][t + 1], actor.actions.pax_action[k]
+                )
+                assert (
+                    actor.actions.pax_action[k] < actor.graph_state.acc[i][t + 1] + 1e-3
+                )
                 # define servedDemand as the current passenger action
-                actor.served_demand[i, j][t] = actor.pax_action[k]
-                actor.pax_flow[i, j][t + self.demand_time[i, j][t]] = actor.pax_action[
-                    k
-                ]
-                actor.info.operating_cost += (
-                    self.demand_time[i, j][t] * self.beta * actor.pax_action[k]
-                )  # define the cost of picking of the current passenger
-                actor.acc[i][t + 1] -= actor.pax_action[k]
-                # Add to served_demand
-                actor.info.served_demand += actor.served_demand[i, j][t]
-                actor.dacc[j][t + self.demand_time[i, j][t]] += actor.pax_flow[i, j][
+                actor.flow.served_demand[i, j][t] = actor.actions.pax_action[k]
+                actor.flow.pax_flow[i, j][
                     t + self.demand_time[i, j][t]
-                ]
+                ] = actor.actions.pax_action[k]
+                actor.info.operating_cost += (
+                    self.demand_time[i, j][t] * self.beta * actor.actions.pax_action[k]
+                )
+                # define the cost of picking of the current passenger
+                actor.graph_state.acc[i][t + 1] -= actor.actions.pax_action[k]
+                # Add to served_demand
+                actor.info.served_demand += actor.flow.served_demand[i, j][t]
+                actor.graph_state.dacc[j][
+                    t + self.demand_time[i, j][t]
+                ] += actor.flow.pax_flow[i, j][t + self.demand_time[i, j][t]]
                 # add to reward
-                actor.pax_reward += actor.pax_action[k] * (
+                actor.rewards.pax_reward += actor.actions.pax_action[k] * (
                     self.price[i, j][t] - self.demand_time[i, j][t] * self.beta
                 )
-                # Add passenger action * price to revenue
-                # actor.ext_reward[i] += max(
-                #     0,
-                #     actor.pax_action[k]
-                #     * (self.price[i, j][t] - self.demand_time[i, j][t] * self.beta),
-                # )
-                actor.info.revenue += actor.pax_action[k] * (self.price[i, j][t])
+                actor.info.revenue += actor.actions.pax_action[k] * (
+                    self.price[i, j][t]
+                )
 
             # for acc, the time index would be t+1, but for demand, the time index would be t
-            actor.obs = (
-                actor.acc,
+            actor.graph_state = GraphState(
                 self.time,
-                actor.dacc,
-                actor.demand,
+                actor.graph_state.demand,
+                actor.graph_state.acc,
+                actor.graph_state.dacc,
             )
 
-            actor.pax_reward = max(0, actor.pax_reward)
+            actor.rewards.pax_reward = max(0, actor.rewards.pax_reward)
 
         # if passenger is executed first
         done = False
@@ -273,8 +277,7 @@ class AMoD:
             # reward is calculated from before this to the
             # next rebalancing, we may also have two rewards,
             # one for pax matching and one for rebalancing
-            actor.reb_reward = 0
-            actor.ext_reward = np.zeros(self.nregion)
+            actor.rewards.reb_reward = 0
 
         # rebalancing loop
         for actor in self.actor_data:
@@ -285,18 +288,24 @@ class AMoD:
                 # TODO: add check for actions respecting constraints? e.g. sum of all action[k] starting in "i" <=
                 # self.acc[i][t+1] (in addition to our agent action method)
                 # update the number of vehicles
-                actor.reb_action[k] = min(actor.acc[i][t + 1], actor.reb_action[k])
-                actor.reb_flow[i, j][t + self.reb_time[i, j][t]] = actor.reb_action[k]
-                actor.acc[i][t + 1] -= actor.reb_action[k]
-                actor.dacc[j][t + self.reb_time[i, j][t]] += actor.reb_flow[i, j][
+                actor.actions.reb_action[k] = min(
+                    actor.graph_state.acc[i][t + 1], actor.actions.reb_action[k]
+                )
+                actor.flow.reb_flow[i, j][
                     t + self.reb_time[i, j][t]
-                ]
+                ] = actor.actions.reb_action[k]
+                actor.graph_state.acc[i][t + 1] -= actor.actions.reb_action[k]
+                actor.graph_state.dacc[j][
+                    t + self.reb_time[i, j][t]
+                ] += actor.flow.reb_flow[i, j][t + self.reb_time[i, j][t]]
 
-                reb_cost = self.reb_time[i, j][t] * self.beta * actor.reb_action[k]
+                reb_cost = (
+                    self.reb_time[i, j][t] * self.beta * actor.actions.reb_action[k]
+                )
 
                 actor.info.rebalancing_cost += reb_cost
                 actor.info.operating_cost += reb_cost
-                actor.reb_reward -= reb_cost
+                actor.rewards.reb_reward -= reb_cost
                 self.ext_reward[i] -= reb_cost
 
         # arrival for the next time step, executed in the last state of a time step
@@ -307,19 +316,21 @@ class AMoD:
                 # this means that after pax arrived, vehicles can only be rebalanced in the next time step, let me
                 # know if you have different opinion
                 i, j = self.edges[k]
-                if (i, j) in actor.reb_flow and t in actor.reb_flow[i, j]:
-                    actor.acc[j][t + 1] += actor.reb_flow[i, j][t]
-                if (i, j) in actor.pax_flow and t in actor.pax_flow[i, j]:
-                    actor.acc[j][t + 1] += actor.pax_flow[i, j][t]
+                if (i, j) in actor.flow.reb_flow and t in actor.flow.reb_flow[i, j]:
+                    actor.graph_state.acc[j][t + 1] += actor.flow.reb_flow[i, j][t]
+                if (i, j) in actor.flow.pax_flow and t in actor.flow.pax_flow[i, j]:
+                    actor.graph_state.acc[j][t + 1] += actor.graph_state.pax_flow[i, j][
+                        t
+                    ]
 
         self.time += 1
 
         for actor in self.actor_data:
             actor.obs = (
-                actor.acc,
+                actor.graph_state.acc,
                 self.time,
-                actor.dacc,
-                actor.demand,
+                actor.graph_state.dacc,
+                actor.graph_state.demand,
             )
 
         for i, j in self.G.edges:
@@ -332,23 +343,23 @@ class AMoD:
         """Reset the episode."""
         for actor in self.actor_data:
             actor.info = PaxStepInfo()
-            actor.reb_reward = 0
-            actor.pax_reward = 0
-            actor.acc = defaultdict(dict)
-            actor.dacc = defaultdict(dict)
-            actor.reb_flow = defaultdict(dict)
-            actor.pax_flow = defaultdict(dict)
-            actor.demand = defaultdict(dict)  # demand
+            actor.rewards.reb_reward = 0
+            actor.rewards.pax_reward = 0
+            actor.graph_state.acc = defaultdict(dict)
+            actor.graph_state.dacc = defaultdict(dict)
+            actor.graph_state.demand = defaultdict(dict)
+            actor.flow.reb_flow = defaultdict(dict)
+            actor.flow.pax_flow = defaultdict(dict)
             for i, j in self.demand:
-                actor.served_demand[i, j] = defaultdict(float)
+                actor.flow.served_demand[i, j] = defaultdict(float)
 
             for i, j in self.G.edges:
-                actor.reb_flow[i, j] = defaultdict(float)
-                actor.pax_flow[i, j] = defaultdict(float)
+                actor.flow.reb_flow[i, j] = defaultdict(float)
+                actor.flow.pax_flow[i, j] = defaultdict(float)
 
             for n in self.G:
-                actor.acc[n][0] = self.G.nodes[n][f"acc_init_{actor.name}"]
-                actor.dacc[n] = defaultdict(float)
+                actor.graph_state.acc[n][0] = self.G.nodes[n][f"acc_init_{actor.name}"]
+                actor.graph_state.dacc[n] = defaultdict(float)
 
             tripAttr = self.scenario.get_random_demand(reset=True)
             # trip attribute (origin, destination, time of request, demand, price)
@@ -356,7 +367,7 @@ class AMoD:
                 self.demand[i, j][t] = d
                 self.price[i, j][t] = p
 
-            actor.demand = defaultdict(dict)
+            actor.graph_state.demand = defaultdict(dict)
 
         self.edges = []
         for i in self.G:
