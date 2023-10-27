@@ -3,6 +3,7 @@ from __future__ import print_function
 
 from datetime import datetime
 import typing as T
+import numpy as np
 
 from tqdm import trange
 
@@ -31,25 +32,31 @@ def _train_loop(
     env: AMoD,
     models: T.List[ActorCritic],
     n_actions: int,
-    T: int,
+    episode_length: int,
     training: bool = True,
 ):
     """General train loop.
 
-    Used both for testing and training, by setting backprop.
+    Used both for testing and training, by setting training.
     """
+    best_reward = -np.inf
     epochs = trange(n_episodes)
     for i_episode in epochs:
         for model in models:
             model.actor_data.model_log = ModelLog()
         env.reset()  # initialize environment
-        for step in range(T):
+
+        all_actions = np.zeros(
+            (len(models), episode_length, config.grid_size_x * config.grid_size_y)
+        )
+
+        for step in range(episode_length):
             # take matching step (Step 1 in paper)
             actor_data, done, ext_done = env.pax_step(
                 cplex_path=config.cplex_path, path="scenario_nyc4"
             )
-            for model in models:
-                model.actor_data.model_log.reward += model.actor_data.pax_reward
+            for actor in models:
+                actor.actor_data.model_log.reward += actor.actor_data.pax_reward
             # use GNN-RL policy (Step 2 in paper)
 
             actions = []
@@ -67,6 +74,10 @@ def _train_loop(
                     )
                     for i in range(n_actions)
                 }
+
+                all_actions[idx, step, :] = list(
+                    models[idx].actor_data.desired_acc.values()
+                )
 
             # solve minimum rebalancing distance problem (Step 3 in paper)
 
@@ -110,21 +121,26 @@ def _train_loop(
         )
 
         # Checkpoint best performing model
-        for model in models:
-            if model.actor_data.model_log.reward >= model.actor_data.best_reward:
-                model.save_checkpoint(
-                    path=f"./{config.directory}/ckpt/nyc4/a2c_gnn_{model.actor_data.name}.pth"
-                )
-                model.actor_data.best_reward = model.actor_data.model_log.reward
-                wandb.log(
-                    {
-                        f"Best Reward {model.actor_data.name}": model.actor_data.best_reward
-                    }
-                )
+        if training:
+            if (
+                sum([model.actor_data.model_log.reward for model in models])
+                > best_reward
+            ):
+                for model in models:
+                    model.save_checkpoint(
+                        path=f"./{config.directory}/ckpt/nyc4/a2c_gnn_{model.actor_data.name}.pth"
+                    )
+                    best_reward = sum(
+                        [model.actor_data.model_log.reward for model in models]
+                    )
+                    wandb.log({"Best Reward": best_reward})
         # Log KPIs on weights and biases
 
         for model in models:
             wandb.log({**model.actor_data.model_log.dict(model.actor_data.name)})
+
+        if not training:
+            return all_actions
 
 
 def main(config: Config):
@@ -186,51 +202,67 @@ def main(config: Config):
     )
 
     models = [rl1_actor, rl2_actor]
-    T = config.max_steps  # set episode length
+    episode_length = config.max_steps  # set episode length
     n_actions = len(env.region)
 
     if not config.test:
-        #######################################
-        #############Training Loop#############
-        #######################################
-        # Initialize lists for logging
         train_episodes = config.max_episodes  # set max number of training episodes
         for model in models:
             model.train()
 
         _train_loop(
-            train_episodes, actor_data, env, models, n_actions, T, training=True
+            train_episodes,
+            actor_data,
+            env,
+            models,
+            n_actions,
+            episode_length,
+            training=True,
         )
 
     else:
         # Load pre-trained model
         rl1_actor.load_checkpoint(
-            path=f"./{config.directory}/ckpt/nyc4/a2c_gnn_test.pth"
+            path=f"./{config.directory}/ckpt/nyc4/a2c_gnn_RL_1_big_run.pth"
         )
         rl2_actor.load_checkpoint(
-            path=f"./{config.directory}/ckpt/nyc4/a2c_gnn_test.pth"
+            path=f"./{config.directory}/ckpt/nyc4/a2c_gnn_RL_2_big_run.pth"
         )
 
-        test_episodes = 1  # set max number of training episodes
-        T = config.max_steps  # set episode length
-        # Initialize lists for logging
+        test_episodes = 1
+        episode_length = config.max_steps
 
-        _train_loop(
-            test_episodes, actor_data, env, models, n_actions, T, training=False
+        all_actions = _train_loop(
+            test_episodes,
+            actor_data,
+            env,
+            models,
+            n_actions,
+            episode_length,
+            training=False,
         )
 
-        actor_evaluator = ActorEvaluator(actor_data=actor_data)
-        actor_evaluator.plot_average_distribution()
+        actor_evaluator = ActorEvaluator()
+        actor_evaluator.plot_average_distribution(
+            actions=np.array(all_actions),
+            T=episode_length,
+            models=models,
+        )
+
+        # actor_evaluator.plot_distribution_at_time_step_t(
+        #     actions=np.array(all_actions), models=models
+        # )
 
     wandb.finish()
 
 
 if __name__ == "__main__":
     config = args_to_config()
-    config.wandb_mode = "disabled"
-    config.max_episodes = 300
-    config.json_file = None
-    config.grid_size_x = 2
-    config.grid_size_y = 3
-    config.tf = 20
+    # config.wandb_mode = "disabled"
+    # config.test = True
+    config.max_episodes = 3
+    # config.json_file = None
+    # config.grid_size_x = 2
+    # config.grid_size_y = 3
+    # config.tf = 20
     main(config)
