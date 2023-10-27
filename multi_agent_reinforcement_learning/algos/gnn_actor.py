@@ -12,7 +12,6 @@ class GNNActor(nn.Module):
     def __init__(
         self,
         in_channels: int,
-        out_channels: int,
         device: torch.device = torch.device("cuda:0"),
     ):
         """Init method for an GNNActor. Defining the model architecture."""

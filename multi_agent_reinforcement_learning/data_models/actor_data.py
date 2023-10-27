@@ -1,6 +1,5 @@
 from collections import defaultdict
 from dataclasses import dataclass, field
-import numpy as np
 import typing as T
 from multi_agent_reinforcement_learning.data_models.logs import ModelLog
 
@@ -14,25 +13,59 @@ class PaxStepInfo:
 
 
 @dataclass
+class GraphState:
+    time: int = 0
+    demand: defaultdict[T.Tuple[int, int], T.Dict[int, float]] = field(
+        default_factory=lambda: defaultdict(dict)
+    )
+    acc: defaultdict[T.Tuple[int, int], T.Dict[int, float]] = field(
+        default_factory=lambda: defaultdict(dict)
+    )
+    dacc: defaultdict[T.Tuple[int, int], T.Dict[int, float]] = field(
+        default_factory=lambda: defaultdict(dict)
+    )
+
+
+@dataclass
+class Actions:
+    reb_action: T.Optional[T.List[float]] = None
+    pax_action: T.Optional[T.List[int]] = None
+
+
+@dataclass
+class Rewards:
+    pax_reward: float = 0
+    reb_reward: float = 0
+
+
+@dataclass
+class Flow:
+    reb_flow: defaultdict[T.Tuple[int, int], T.Dict[int, float]] = field(
+        default_factory=lambda: defaultdict(dict)
+    )
+    pax_flow: defaultdict[T.Tuple[int, int], T.Dict[int, float]] = field(
+        default_factory=lambda: defaultdict(dict)
+    )
+    desired_acc: T.Optional[T.Dict[int, int]] = None
+    served_demand: defaultdict[T.Tuple[int, int], T.Dict[int, float]] = field(
+        default_factory=lambda: defaultdict(dict)
+    )
+
+
+@dataclass
+class CplexData:
+    acc_actor_tuple: T.Optional[T.List[T.Tuple[int, int]]] = None
+    acc_init_tuple: T.Optional[T.List[T.Tuple[int, int]]] = None
+
+
+@dataclass
 class ActorData:
     name: str
     no_cars: int
+    graph_state: GraphState = GraphState()
+    actions: Actions = Actions()
+    flow: Flow = Flow()
     model_log: ModelLog = ModelLog()
-    best_reward: float = -np.inf
-    reb_action: T.Optional[T.List[float]] = None
-    pax_action: T.Optional[T.List[int]] = None
-    ext_reward: T.Optional[np.ndarray] = None
-    obs: T.Optional[T.Tuple[defaultdict, int, defaultdict, defaultdict]] = None
-    pax_reward: float = 0
-    reb_reward: float = 0
-    demand: defaultdict[dict] = field(default_factory=lambda: defaultdict(dict))
-    acc: defaultdict[dict] = field(default_factory=lambda: defaultdict(dict))
-    dacc: defaultdict[dict] = field(default_factory=lambda: defaultdict(dict))
-    reb_flow: defaultdict[dict] = field(default_factory=lambda: defaultdict(dict))
-    pax_flow: defaultdict[dict] = field(default_factory=lambda: defaultdict(dict))
-    served_demand: defaultdict[dict] = field(default_factory=lambda: defaultdict(dict))
+    rewards: Rewards = Rewards()
     info: PaxStepInfo = PaxStepInfo()
-    desired_acc: T.Optional[T.Dict[int, int]] = None
-    acc_actor_tuple: T.Optional[T.List[T.Tuple[int, int]]] = None
-    acc_init_tuple: T.Optional[T.List[T.Tuple[int, int]]] = None
-    action: T.Optional[T.List[float]] = None
+    cplex_data: CplexData = CplexData()

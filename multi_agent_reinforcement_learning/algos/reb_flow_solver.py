@@ -2,10 +2,11 @@
 import os
 import subprocess
 from collections import defaultdict
+from multi_agent_reinforcement_learning.envs.amod import AMoD
 from multi_agent_reinforcement_learning.utils.minor_utils import mat2str
 
 
-def solveRebFlow(env, res_path, CPLEXPATH):
+def solveRebFlow(env: AMoD, res_path: str, CPLEXPATH: str):
     """Solves the Reb Flow."""
     t = env.time
 
@@ -22,10 +23,12 @@ def solveRebFlow(env, res_path, CPLEXPATH):
     )
 
     for data in env.actor_data:
-        data.acc_actor_tuple = [
-            (n, int(round(data.desired_acc[n]))) for n in data.desired_acc
+        data.cplex_data.acc_actor_tuple = [
+            (n, int(round(data.flow.desired_acc[n]))) for n in data.flow.desired_acc
         ]
-        data.acc_init_tuple = [(n, int(data.acc[n][t + 1])) for n in data.acc]
+        data.cplex_data.acc_init_tuple = [
+            (n, int(data.graph_state.acc[n][t + 1])) for n in data.graph_state.acc
+        ]
 
         if not os.path.exists(OPTPath):
             os.makedirs(OPTPath)
@@ -34,8 +37,12 @@ def solveRebFlow(env, res_path, CPLEXPATH):
         with open(datafile, "w") as file:
             file.write('path="' + resfile + '";\r\n')
             file.write("edgeAttr=" + mat2str(edgeAttr) + ";\r\n")
-            file.write("acc_init_tuple=" + mat2str(data.acc_init_tuple) + ";\r\n")
-            file.write("acc_actor_tuple=" + mat2str(data.acc_actor_tuple) + ";\r\n")
+            file.write(
+                "acc_init_tuple=" + mat2str(data.cplex_data.acc_init_tuple) + ";\r\n"
+            )
+            file.write(
+                "acc_actor_tuple=" + mat2str(data.cplex_data.acc_actor_tuple) + ";\r\n"
+            )
         modfile = modPath + "minRebDistRebOnly.mod"
         if CPLEXPATH is None:
             CPLEXPATH = "/opt/ibm/ILOG/CPLEX_Studio128/opl/bin/x86-64_linux/"
@@ -60,4 +67,4 @@ def solveRebFlow(env, res_path, CPLEXPATH):
                             continue
                         i, j, f = v.split(",")
                         flow[int(i), int(j)] = float(f)
-        data.reb_action = [flow[i, j] for i, j in env.edges]
+        data.actions.reb_action = [flow[i, j] for i, j in env.edges]
