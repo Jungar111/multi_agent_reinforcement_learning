@@ -4,7 +4,7 @@ import argparse
 import platform
 import torch
 
-from multi_agent_reinforcement_learning.data_models.config import Config
+from multi_agent_reinforcement_learning.data_models.config import A2CConfig
 
 
 def parse_arguments():
@@ -101,7 +101,7 @@ def parse_arguments():
 def args_to_config():
     """Convert args to Pydantic model."""
     args = parse_arguments()
-    return Config(**vars(args))
+    return A2CConfig(**vars(args))
 
 
 if __name__ == "__main__":

@@ -5,8 +5,8 @@ from pathlib import Path
 import typing as T
 
 
-class Config(BaseModel):
-    """Config class."""
+class A2CConfig(BaseModel):
+    """Config class for the A2C method."""
 
     model_config = ConfigDict(arbitrary_types_allowed=True, validate_assignment=True)
 
@@ -44,3 +44,51 @@ class Config(BaseModel):
     def update_n_regions(cls, value, values):
         value = values.grid_size_x * values.grid_size_y
         return value
+
+
+class SACConfig(BaseModel):
+    """Config class for the SAC implementation."""
+
+    model_config = ConfigDict(arbitrary_types_allowed=True, validate_assignment=True)
+
+    device: torch.device
+
+    test: bool
+
+    city: str
+    seed: int
+    json_tstep: int
+    max_steps: int
+    hidden_size: int
+    p_lr: float
+    q_lr: float
+    alpha: float
+    batch_size: int
+    critic_version: int
+    max_episodes: int
+    cplex_path: str
+    directory: str
+    rew_scale: float
+    checkpoint_path: str
+    clip: int
+
+    path: str = "scenario_nyc_brooklyn"
+    json_file: T.Optional[Path] = Path("data", "scenario_nyc_brooklyn.json")
+    demand_ratio: T.Dict[str, float] = {
+        "san_francisco": 2,
+        "washington_dc": 4.2,
+        "nyc_brooklyn": 9,
+        "shenzhen_downtown_west": 2.5,
+    }
+    json_hr: T.Dict[str, int] = {
+        "san_francisco": 19,
+        "washington_dc": 19,
+        "nyc_brooklyn": 19,
+        "shenzhen_downtown_west": 8,
+    }
+    beta: T.Dict[str, float] = {
+        "san_francisco": 0.2,
+        "washington_dc": 0.5,
+        "nyc_brooklyn": 0.5,
+        "shenzhen_downtown_west": 0.5,
+    }

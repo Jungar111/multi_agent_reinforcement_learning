@@ -4,7 +4,7 @@ import torch
 import argparse
 import platform
 
-from multi_agent_reinforcement_learning.data_models.config import Config
+from multi_agent_reinforcement_learning.data_models.config import SACConfig
 
 
 def parse_arguments():
@@ -24,16 +24,16 @@ def parse_arguments():
     parser.add_argument(
         "--seed", type=int, default=10, metavar="S", help="random seed (default: 10)"
     )
-    parser.add_argument(
-        "--demand_ratio",
-        type=int,
-        default=0.5,
-        metavar="S",
-        help="demand_ratio (default: 0.5)",
-    )
-    parser.add_argument(
-        "--json_hr", type=int, default=7, metavar="S", help="json_hr (default: 7)"
-    )
+    # parser.add_argument(
+    #     "--demand_ratio",
+    #     type=int,
+    #     default=0.5,
+    #     metavar="S",
+    #     help="demand_ratio (default: 0.5)",
+    # )
+    # parser.add_argument(
+    #     "--json_hr", type=int, default=7, metavar="S", help="json_hr (default: 7)"
+    # )
     parser.add_argument(
         "--json_tstep",
         type=int,
@@ -41,13 +41,13 @@ def parse_arguments():
         metavar="S",
         help="minutes per timestep (default: 3min)",
     )
-    parser.add_argument(
-        "--beta",
-        type=int,
-        default=0.5,
-        metavar="S",
-        help="cost of rebalancing (default: 0.5)",
-    )
+    # parser.add_argument(
+    #     "--beta",
+    #     type=int,
+    #     default=0.5,
+    #     metavar="S",
+    #     help="cost of rebalancing (default: 0.5)",
+    # )
 
     # Model parameters
     parser.add_argument(
@@ -57,7 +57,7 @@ def parse_arguments():
         help="activates test mode for agent evaluation",
     )
     parser.add_argument(
-        "--cplexpath",
+        "--cplex_path",
         type=str,
         default=cplex_path,
         help="defines directory of the CPLEX installation",
@@ -159,4 +159,4 @@ def parse_arguments():
 def args_to_config():
     """Convert args to pydantic model."""
     args = parse_arguments()
-    return Config(**vars(args))
+    return SACConfig(**vars(args))

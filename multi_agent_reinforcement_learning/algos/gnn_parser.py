@@ -7,7 +7,7 @@ from multi_agent_reinforcement_learning.data_models.actor_data import (
     ActorData,
     GraphState,
 )
-from multi_agent_reinforcement_learning.data_models.config import Config
+from multi_agent_reinforcement_learning.data_models.config import A2CConfig
 from multi_agent_reinforcement_learning.envs.amod import AMoD
 
 
@@ -17,7 +17,7 @@ class GNNParser:
     def __init__(
         self,
         env: AMoD,
-        config: Config,
+        config: A2CConfig,
         T: int = 10,
         scale_factor: float = 0.01,
     ):

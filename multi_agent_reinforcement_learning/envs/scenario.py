@@ -1,7 +1,7 @@
 """This is the environment for the scenario."""
 
 from collections import defaultdict
-from multi_agent_reinforcement_learning.data_models.config import Config
+from multi_agent_reinforcement_learning.data_models.config import A2CConfig
 import numpy as np
 import networkx as nx
 from copy import deepcopy
@@ -16,7 +16,7 @@ class Scenario:
 
     def __init__(
         self,
-        config: Config,
+        config: A2CConfig,
         actor_data: T.List[ActorData],
         sd=None,
         tripAttr=None,

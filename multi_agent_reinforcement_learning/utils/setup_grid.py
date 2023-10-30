@@ -1,9 +1,9 @@
 """Function that produces dummy grid for quicker training and testing."""
-from multi_agent_reinforcement_learning.data_models.config import Config
+from multi_agent_reinforcement_learning.data_models.config import A2CConfig
 import numpy as np
 
 
-def setup_dummy_grid(config: Config, determ: bool = True):
+def setup_dummy_grid(config: A2CConfig, determ: bool = True):
     """Setup dummy grid."""
     if determ:
         demand_input = {
