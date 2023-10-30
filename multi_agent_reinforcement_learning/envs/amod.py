@@ -176,7 +176,7 @@ class AMoD:
                 int(data.actor_data.graph_state.acc[origin][t]) for data in actor_data
             ]
 
-            if sum(cars_in_area_for_each_company) < no_customers * 50:
+            if sum(cars_in_area_for_each_company) < no_customers:
                 for idx, data in enumerate(actor_data):
                     data.actor_data.graph_state.demand[origin, dest][
                         t
