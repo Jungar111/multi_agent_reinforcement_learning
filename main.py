@@ -28,7 +28,6 @@ logger = init_logger()
 
 def _train_loop(
     n_episodes: int,
-    actor_data: T.List[ActorData],
     env: AMoD,
     models: T.List[ActorCritic],
     n_actions: int,
@@ -44,7 +43,7 @@ def _train_loop(
     for i_episode in epochs:
         for model in models:
             model.actor_data.model_log = ModelLog()
-        env.reset()  # initialize environment
+        env.reset(actor_data=models)  # initialize environment
 
         all_actions = np.zeros(
             (len(models), episode_length, config.grid_size_x * config.grid_size_y)
@@ -53,7 +52,7 @@ def _train_loop(
         for step in range(episode_length):
             # take matching step (Step 1 in paper)
             actor_data, done = env.pax_step(
-                cplex_path=config.cplex_path, path="scenario_nyc4"
+                actor_data=models, cplex_path=config.cplex_path, path="scenario_nyc4"
             )
             for actor in models:
                 actor.actor_data.model_log.reward += actor.actor_data.rewards.pax_reward
@@ -73,7 +72,7 @@ def _train_loop(
                 models[idx].actor_data.flow.desired_acc = {
                     env.region[i]: int(
                         action[i]
-                        * dictsum(actor_data[idx].graph_state.acc, env.time + 1)
+                        * dictsum(models[idx].actor_data.graph_state.acc, env.time + 1)
                     )
                     for i in range(n_actions)
                 }
@@ -84,9 +83,9 @@ def _train_loop(
 
             # solve minimum rebalancing distance problem (Step 3 in paper)
 
-            solveRebFlow(env, "scenario_nyc4", config.cplex_path)
+            solveRebFlow(env, "scenario_nyc4", config.cplex_path, actor_data=models)
 
-            actor_data, done = env.reb_step()
+            actor_data, done = env.reb_step(actor_data=models)
 
             for model in models:
                 model.train_log.reward += model.actor_data.rewards.reb_reward
@@ -119,9 +118,9 @@ def _train_loop(
 
         # Send current statistics to screen
         epochs.set_description(
-            f"Episode {i_episode+1} | Reward: {actor_data[0].model_log.reward:.2f} |"
-            f"ServedDemand: {actor_data[0].model_log.served_demand:.2f} "
-            f"| Reb. Cost: {actor_data[0].model_log.rebalancing_cost:.2f}"
+            f"Episode {i_episode+1} | Reward: {models[0].actor_data.model_log.reward:.2f} |"
+            f"ServedDemand: {models[0].actor_data.model_log.served_demand:.2f} "
+            f"| Reb. Cost: {models[0].actor_data.model_log.rebalancing_cost:.2f}"
         )
 
         # Checkpoint best performing model
@@ -155,14 +154,15 @@ def main(config: Config):
 
     actor_data = [
         ActorData(
-            name="RL_1", no_cars=config.total_number_of_cars - advesary_number_of_cars
+            name="RL_1_fms",
+            no_cars=config.total_number_of_cars - advesary_number_of_cars,
         ),
-        ActorData(name="RL_2", no_cars=advesary_number_of_cars),
+        ActorData(name="RL_2_fms", no_cars=advesary_number_of_cars),
     ]
 
     wandb_config_log = {**vars(config)}
     for actor in actor_data:
-        wandb_config_log[f"no_cars_{actor.name}"] = actor.no_cars
+        wandb_config_log[f"fms{actor.name}"] = actor.no_cars
 
     wandb.init(
         mode=config.wandb_mode,
@@ -216,7 +216,6 @@ def main(config: Config):
 
         _train_loop(
             train_episodes,
-            actor_data,
             env,
             models,
             n_actions,
@@ -238,7 +237,6 @@ def main(config: Config):
 
         all_actions = _train_loop(
             test_episodes,
-            actor_data,
             env,
             models,
             n_actions,
@@ -263,8 +261,8 @@ def main(config: Config):
 if __name__ == "__main__":
     config = args_to_config()
     config.wandb_mode = "disabled"
-    # config.test = True
-    config.max_episodes = 3
+    config.test = True
+    # config.max_episodes = 3
     # config.json_file = None
     # config.grid_size_x = 2
     # config.grid_size_y = 3
