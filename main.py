@@ -193,7 +193,7 @@ def main(config: Config):
             json_file=str(config.json_file),
             sd=config.seed,
             demand_ratio=config.demand_ratio,
-            json_hr=config.json_hr,
+            json_hr=config.json_hr[config.city],
             json_tstep=config.json_tsetp,
             actor_data=actor_data,
         )
