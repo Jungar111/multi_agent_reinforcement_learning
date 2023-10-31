@@ -47,7 +47,11 @@ def _train_loop(
         env.reset()  # initialize environment
 
         all_actions = np.zeros(
-            (len(models), episode_length, config.grid_size_x * config.grid_size_y)
+            (
+                len(models),
+                episode_length,
+                np.max(list(models[0].actor_data.flow.pax_flow.keys())) + 1,
+            )
         )
 
         for step in range(episode_length):

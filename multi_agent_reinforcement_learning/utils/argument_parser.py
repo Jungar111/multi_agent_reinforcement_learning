@@ -33,7 +33,7 @@ def parse_arguments():
         help="demand_ratio (default: 0.5)",
     )
     parser.add_argument(
-        "--json_hr", type=int, default=7, metavar="S", help="json_hr (default: 7)"
+        "--json_hr", type=int, default=19, metavar="S", help="json_hr (default: 7)"
     )
     parser.add_argument(
         "--json_tsetp",
