@@ -7,6 +7,13 @@ from torch_geometric.data import Data, Batch
 from torch_geometric.nn import GCNConv
 from multi_agent_reinforcement_learning.algos.sac_reb_flow_solver import solveRebFlow
 from multi_agent_reinforcement_learning.utils.minor_utils import dictsum
+from multi_agent_reinforcement_learning.data_models.config import SACConfig
+from multi_agent_reinforcement_learning.envs.sac_amod import AMoD
+
+from multi_agent_reinforcement_learning.data_models.actor_data import (
+    ActorData,
+    GraphState,
+)
 import random
 
 
@@ -270,24 +277,26 @@ class SAC(nn.Module):
 
     def __init__(
         self,
-        env,
-        input_size,
-        hidden_size=32,
-        alpha=0.2,
-        gamma=0.99,
-        polyak=0.995,
-        batch_size=128,
-        p_lr=3e-4,
-        q_lr=1e-3,
+        env: AMoD,
+        actor_data: ActorData,
+        config: SACConfig,
+        input_size: int,
+        hidden_size: int = 32,
+        alpha: float = 0.2,
+        gamma: float = 0.99,
+        polyak: float = 0.995,
+        batch_size: int = 128,
+        p_lr: float = 3e-4,
+        q_lr: float = 1e-3,
         use_automatic_entropy_tuning=False,
-        lagrange_thresh=-1,
-        min_q_weight=1,
+        lagrange_thresh: int = -1,
+        min_q_weight: int = 1,
         deterministic_backup=False,
         eps=np.finfo(np.float32).eps.item(),
         device=torch.device("cpu"),
-        min_q_version=3,
-        clip=200,
-        critic_version=4,
+        min_q_version: int = 3,
+        clip: int = 200,
+        critic_version: int = 4,
     ):
         super(SAC, self).__init__()
         self.env = env
@@ -297,6 +306,8 @@ class SAC(nn.Module):
         self.device = device
         self.path = None
         self.act_dim = env.nregion
+
+        self.actor_data = actor_data
 
         # SAC parameters
         self.alpha = alpha
@@ -381,11 +392,11 @@ class SAC(nn.Module):
                 self.log_alpha.parameters(), lr=1e-3
             )
 
-    def parse_obs(self, obs):
-        state = self.obs_parser.parse_obs(obs)
+    def parse_obs(self, obs: GraphState):
+        state = self.obs_parser.parse_obs(obs, actor_data=self.actor_data)
         return state
 
-    def select_action(self, data, deterministic=False):
+    def select_action(self, data, deterministic: bool = False):
         with torch.no_grad():
             a, _ = self.actor(data.x, data.edge_index, deterministic)
         a = a.squeeze(-1)

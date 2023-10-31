@@ -18,6 +18,7 @@ from multi_agent_reinforcement_learning.utils.init_logger import init_logger
 from multi_agent_reinforcement_learning.algos.sac_gnn_parser import GNNParser
 from multi_agent_reinforcement_learning.utils.sac_argument_parser import args_to_config
 from multi_agent_reinforcement_learning.data_models.config import SACConfig
+from multi_agent_reinforcement_learning.data_models.actor_data import ActorData
 import copy
 
 logger = init_logger()
@@ -25,24 +26,37 @@ logger = init_logger()
 
 def main(config: SACConfig):
     """Main loop for training and testing."""
+    actor_data = [
+        ActorData(name="SAC_RL_1", no_cars=500),
+        ActorData(name="SAC_RL_2", no_cars=500),
+    ]
     if not config.test:
         """Run main training loop."""
         logger.info("Running main training loop for SAC.")
 
         scenario = Scenario(
+            config=config,
             json_file=config.json_file,
             demand_ratio=config.demand_ratio[config.city],
             json_hr=config.json_hr[config.city],
             sd=config.seed,
             json_tstep=config.json_tstep,
             tf=config.max_steps,
+            actor_data=actor_data,
         )
-        env = AMoD(scenario, beta=config.beta[config.city])
+        env = AMoD(
+            scenario,
+            beta=config.beta[config.city],
+            scenario=scenario,
+            config=config,
+        )
         # Timehorizon T=6 (K in paper)
         parser = GNNParser(env, T=6, json_file=f"data/scenario_{config.city}.json")
 
-        model = SAC(
+        sac_rl1_actor = SAC(
             env=env,
+            config=config,
+            actor_data=actor_data[0],
             input_size=13,
             hidden_size=config.hidden_size,
             p_lr=config.p_lr,
@@ -52,14 +66,47 @@ def main(config: SACConfig):
             use_automatic_entropy_tuning=False,
             clip=config.clip,
             critic_version=config.critic_version,
-        ).to(config.device)
+        )
+
+        sac_rl2_actor = SAC(
+            env=env,
+            config=config,
+            actor_data=actor_data[1],
+            input_size=13,
+            hidden_size=config.hidden_size,
+            p_lr=config.p_lr,
+            q_lr=config.q_lr,
+            alpha=config.alpha,
+            batch_size=config.batch_size,
+            use_automatic_entropy_tuning=False,
+            clip=config.clip,
+            critic_version=config.critic_version,
+        )
+
+        models = [sac_rl1_actor, sac_rl2_actor].to_device()
+        # model = SAC(
+        #     env=env,
+        #     config=config,
+        #     actor_data=actor_data[0],
+        #     input_size=13,
+        #     hidden_size=config.hidden_size,
+        #     p_lr=config.p_lr,
+        #     q_lr=config.q_lr,
+        #     alpha=config.alpha,
+        #     batch_size=config.batch_size,
+        #     use_automatic_entropy_tuning=False,
+        #     clip=config.clip,
+        #     critic_version=config.critic_version,
+        # ).to(config.device)
 
         train_episodes = config.max_episodes
         # T = config.max_steps
         epochs = trange(train_episodes)
         best_reward = -np.inf
         best_reward_test = -np.inf
-        model.train()
+
+        for model in models:
+            model.train()
 
         for i_episode in epochs:
             obs = env.reset()  # initialize environment

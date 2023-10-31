@@ -24,16 +24,7 @@ def parse_arguments():
     parser.add_argument(
         "--seed", type=int, default=10, metavar="S", help="random seed (default: 10)"
     )
-    # parser.add_argument(
-    #     "--demand_ratio",
-    #     type=int,
-    #     default=0.5,
-    #     metavar="S",
-    #     help="demand_ratio (default: 0.5)",
-    # )
-    # parser.add_argument(
-    #     "--json_hr", type=int, default=7, metavar="S", help="json_hr (default: 7)"
-    # )
+
     parser.add_argument(
         "--json_tstep",
         type=int,
@@ -41,13 +32,6 @@ def parse_arguments():
         metavar="S",
         help="minutes per timestep (default: 3min)",
     )
-    # parser.add_argument(
-    #     "--beta",
-    #     type=int,
-    #     default=0.5,
-    #     metavar="S",
-    #     help="cost of rebalancing (default: 0.5)",
-    # )
 
     # Model parameters
     parser.add_argument(

@@ -1,27 +1,42 @@
-"""
-Autonomous Mobility-on-Demand Environment
------------------------------------------
-This file contains the specifications for the AMoD system simulator for the SAC.
-"""
-from collections import defaultdict
-import numpy as np
-import subprocess
+"""This is the Autonomous Mobility On Demand (AMoD) environment for SAC."""
+
 import os
-from multi_agent_reinforcement_learning.utils.minor_utils import mat2str
+import subprocess
+import typing as T
+from collections import defaultdict
 from copy import deepcopy
+
+import numpy as np
+from multi_agent_reinforcement_learning.data_models.actor_data import (
+    ActorData,
+    # GraphState,
+    # PaxStepInfo,
+)
+from multi_agent_reinforcement_learning.envs.sac_scenario import Scenario
+
+from multi_agent_reinforcement_learning.utils.minor_utils import mat2str
+from multi_agent_reinforcement_learning.data_models.config import SACConfig
 
 
 class AMoD:
+    """Class for the Autonomous Mobility On Demand for SAC."""
+
     # initialization
     def __init__(
-        self, scenario, beta=0.2
-    ):  # updated to take scenario and beta (cost for rebalancing) as input
-        self.scenario = deepcopy(
-            scenario
-        )  # I changed it to deep copy so that the scenario input is not modified by env
-        self.G = (
-            scenario.G
-        )  # Road Graph: node - region, edge - connection of regions, node attr: 'accInit', edge attr: 'time'
+        self,
+        actor_data: T.List[ActorData],
+        scenario: Scenario,
+        config: SACConfig,
+        beta: float = 0.2,
+    ):
+        """Initialise environment. Beta is cost of rebalancing."""
+        # updated to take scenario and beta (cost for rebalancing) as input
+        self.config = config
+        self.actor_data = actor_data
+        self.scenario = deepcopy(scenario)
+        # I changed it to deep copy so that the scenario input is not modified by env
+        self.G = scenario.G
+        # Road Graph: node - region, edge - connection of regions, node attr: 'accInit', edge attr: 'time'
         self.demandTime = self.scenario.demandTime
         self.rebTime = self.scenario.rebTime
         self.time = 0  # current time
@@ -35,31 +50,13 @@ class AMoD:
             self.arrDemand[i] = defaultdict(float)
 
         self.price = defaultdict(dict)  # price
-        for (
-            i,
-            j,
-            t,
-            d,
-            p,
-        ) in (
-            scenario.tripAttr
-        ):  # trip attribute (origin, destination, time of request, demand, price)
+        for i, j, t, d, p in scenario.tripAttr:
+            # trip attribute (origin, destination, time of request, demand, price)
             self.demand[i, j][t] = d
             self.price[i, j][t] = p
             self.depDemand[i][t] += d
             self.arrDemand[i][t + self.demandTime[i, j][t]] += d
-        self.acc = defaultdict(
-            dict
-        )  # number of vehicles within each region, key: i - region, t - time
-        self.dacc = defaultdict(
-            dict
-        )  # number of vehicles arriving at each region, key: i - region, t - time
-        self.rebFlow = defaultdict(
-            dict
-        )  # number of rebalancing vehicles, key: (i,j) - (origin, destination), t - time
-        self.paxFlow = defaultdict(
-            dict
-        )  # number of vehicles with passengers, key: (i,j) - (origin, destination), t - time
+
         self.edges = []  # set of rebalancing edges
         self.nregion = len(scenario.G)  # number of regions
         for i in self.G:
@@ -72,17 +69,22 @@ class AMoD:
         ]  # number of edges leaving each region
         for i, j in self.G.edges:
             self.G.edges[i, j]["time"] = self.rebTime[i, j][self.time]
-            self.rebFlow[i, j] = defaultdict(float)
-        for i, j in self.demand:
-            self.paxFlow[i, j] = defaultdict(float)
-        for n in self.region:
-            self.acc[n][0] = self.G.nodes[n]["accInit"]
-            self.dacc[n] = defaultdict(float)
+        #     self.rebFlow[i, j] = defaultdict(float)
+        # for i, j in self.demand:
+        #     self.paxFlow[i, j] = defaultdict(float)
+        for actor in actor_data:
+            for n in self.region:
+                actor.graph_state.acc[n][0] = self.G.nodes[n][f"acc_init_{actor.name}"]
+                actor.graph_state.dacc[n] = defaultdict(float)
+
         self.beta = beta * scenario.tstep
         t = self.time
-        self.servedDemand = defaultdict(dict)
-        for i, j in self.demand:
-            self.servedDemand[i, j] = defaultdict(float)
+        for actor in actor_data:
+            actor.flow.served_demand = defaultdict(dict)
+            for i, j in actor.flow.served_demand:
+                actor.flow.served_demand[i, j] = defaultdict(float)
+                actor.flow.reb_flow[i, j] = defaultdict(float)
+                actor.flow.pax_flow[i, j] = defaultdict(float)
 
         self.N = len(self.region)  # total number of cells
 

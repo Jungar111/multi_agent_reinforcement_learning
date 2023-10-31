@@ -72,6 +72,8 @@ class SACConfig(BaseModel):
     checkpoint_path: str
     clip: int
 
+    grid_size_x: int = 2
+    grid_size_y: int = 4
     path: str = "scenario_nyc_brooklyn"
     json_file: T.Optional[Path] = Path("data", "scenario_nyc_brooklyn.json")
     demand_ratio: T.Dict[str, float] = {
