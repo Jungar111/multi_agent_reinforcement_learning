@@ -9,6 +9,10 @@ from multi_agent_reinforcement_learning.algos.sac_reb_flow_solver import solveRe
 from multi_agent_reinforcement_learning.utils.minor_utils import dictsum
 from multi_agent_reinforcement_learning.data_models.config import SACConfig
 from multi_agent_reinforcement_learning.envs.sac_amod import AMoD
+from multi_agent_reinforcement_learning.data_models.logs import ModelLog
+from multi_agent_reinforcement_learning.algos.sac_gnn_parser import (
+    GNNParser as SACGNNParser,
+)
 
 from multi_agent_reinforcement_learning.data_models.actor_data import (
     ActorData,
@@ -308,6 +312,7 @@ class SAC(nn.Module):
         self.act_dim = env.nregion
         self.config = config
         self.actor_data = actor_data
+        self.train_log = ModelLog()
 
         # SAC parameters
         self.alpha = alpha
@@ -320,6 +325,9 @@ class SAC(nn.Module):
         self.use_automatic_entropy_tuning = use_automatic_entropy_tuning
         self.min_q_version = min_q_version
         self.clip = clip
+
+        # Parser
+        self.obs_parser = SACGNNParser(self.env)
 
         # conservative Q learning parameters
         self.num_random = 10
@@ -393,12 +401,15 @@ class SAC(nn.Module):
             )
 
     def parse_obs(self, obs: GraphState):
-        state = self.obs_parser.parse_obs(obs, actor_data=self.actor_data)
+        state = self.obs_parser.parse_obs(obs)
         return state
 
-    def select_action(self, data, deterministic: bool = False):
+    def select_action(
+        self, data, deterministic: bool = False, probabilistic: bool = False
+    ):
+        data_obs = self.parse_obs(data)
         with torch.no_grad():
-            a, _ = self.actor(data.x, data.edge_index, deterministic)
+            a, _ = self.actor(data_obs.x, data_obs.edge_index, deterministic)
         a = a.squeeze(-1)
         a = a.detach().cpu().numpy()[0]
         return list(a)

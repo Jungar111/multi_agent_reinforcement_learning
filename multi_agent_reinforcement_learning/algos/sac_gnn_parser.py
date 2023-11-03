@@ -3,6 +3,10 @@
 import json
 import torch
 from torch_geometric.data import Data
+from multi_agent_reinforcement_learning.data_models.actor_data import (
+    # ActorData,
+    GraphState,
+)
 
 
 class GNNParser:
@@ -20,19 +24,22 @@ class GNNParser:
             with open(json_file, "r") as file:
                 self.data = json.load(file)
 
-    def parse_obs(self, obs):
+    def parse_obs(self, obs: GraphState):
         x = (
             torch.cat(
                 (
                     torch.tensor(
-                        [obs[0][n][self.env.time + 1] * self.s for n in self.env.region]
+                        [
+                            obs.acc[n][self.env.time + 1] * self.s
+                            for n in self.env.region
+                        ]
                     )
                     .view(1, 1, self.env.nregion)
                     .float(),
                     torch.tensor(
                         [
                             [
-                                (obs[0][n][self.env.time + 1] + self.env.dacc[n][t])
+                                (obs.acc[n][self.env.time + 1] + obs.dacc[n][t])
                                 * self.s
                                 for n in self.env.region
                             ]
