@@ -104,7 +104,7 @@ class ActorCritic(nn.Module):
         obs: observation of the current distribution of vehicles.
         return: List of the next actions
         """
-        concentration, value = self.forward(obs, data)
+        concentration, value = self.forward(obs=obs, data=data)
 
         if probabilistic:
             m = Dirichlet(concentration)
