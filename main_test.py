@@ -11,11 +11,16 @@ import wandb
 from multi_agent_reinforcement_learning.algos.actor_critic_gnn import ActorCritic
 from multi_agent_reinforcement_learning.algos.reb_flow_solver import solveRebFlow
 from multi_agent_reinforcement_learning.data_models.actor_data import ActorData
-from multi_agent_reinforcement_learning.data_models.config import A2CConfig
+from multi_agent_reinforcement_learning.algos.sac import SAC
+from multi_agent_reinforcement_learning.data_models.config import A2CConfig, SACConfig
 from multi_agent_reinforcement_learning.data_models.logs import ModelLog
 from multi_agent_reinforcement_learning.envs.amod import AMoD
 from multi_agent_reinforcement_learning.envs.scenario import Scenario
-from multi_agent_reinforcement_learning.utils.argument_parser import args_to_config
+
+# from multi_agent_reinforcement_learning.utils.argument_parser import args_to_config
+from multi_agent_reinforcement_learning.utils.sac_argument_parser import (
+    args_to_config as SAC_args_to_config,
+)
 from multi_agent_reinforcement_learning.utils.init_logger import init_logger
 from multi_agent_reinforcement_learning.utils.minor_utils import dictsum
 from multi_agent_reinforcement_learning.utils.setup_grid import setup_dummy_grid
@@ -184,26 +189,78 @@ def main(config: A2CConfig):
             actor_data=actor_data,
         )
     else:
-        scenario = Scenario(
+        if isinstance(config, A2CConfig):
+            scenario = Scenario(
+                config=config,
+                json_file=str(config.json_file),
+                sd=config.seed,
+                demand_ratio=config.demand_ratio,
+                json_hr=config.json_hr,
+                json_tstep=config.json_tstep,
+                actor_data=actor_data,
+            )
+        elif isinstance(config, SACConfig):
+            scenario = Scenario(
+                config=config,
+                json_file=str(config.json_file),
+                sd=config.seed,
+                demand_ratio=config.demand_ratio[config.city],
+                json_hr=config.json_hr[config.city],
+                json_tstep=config.json_tstep,
+                actor_data=actor_data,
+            )
+        else:
+            raise ValueError("Asger is über gay, ps. config error.")
+
+    if isinstance(config, A2CConfig):
+        env = AMoD(
+            scenario=scenario, beta=config.beta, actor_data=actor_data, config=config
+        )
+        # Initialize A2C-GNN
+        rl1_actor = ActorCritic(
+            env=env, input_size=21, config=config, actor_data=actor_data[0]
+        )
+        rl2_actor = ActorCritic(
+            env=env, input_size=21, config=config, actor_data=actor_data[1]
+        )
+    elif isinstance(config, SACConfig):
+        env = AMoD(
+            beta=config.beta[config.city],
+            scenario=scenario,
             config=config,
-            json_file=str(config.json_file),
-            sd=config.seed,
-            demand_ratio=config.demand_ratio,
-            json_hr=config.json_hr,
-            json_tstep=config.json_tstep,
             actor_data=actor_data,
         )
-
-    env = AMoD(
-        scenario=scenario, beta=config.beta, actor_data=actor_data, config=config
-    )
-    # Initialize A2C-GNN
-    rl1_actor = ActorCritic(
-        env=env, input_size=21, config=config, actor_data=actor_data[0]
-    )
-    rl2_actor = ActorCritic(
-        env=env, input_size=21, config=config, actor_data=actor_data[1]
-    )
+        # Initialise SAC
+        rl1_actor = SAC(
+            env=env,
+            config=config,
+            actor_data=actor_data[0],
+            input_size=13,
+            hidden_size=config.hidden_size,
+            p_lr=config.p_lr,
+            q_lr=config.q_lr,
+            alpha=config.alpha,
+            batch_size=config.batch_size,
+            use_automatic_entropy_tuning=False,
+            clip=config.clip,
+            critic_version=config.critic_version,
+        )
+        rl2_actor = SAC(
+            env=env,
+            config=config,
+            actor_data=actor_data[1],
+            input_size=13,
+            hidden_size=config.hidden_size,
+            p_lr=config.p_lr,
+            q_lr=config.q_lr,
+            alpha=config.alpha,
+            batch_size=config.batch_size,
+            use_automatic_entropy_tuning=False,
+            clip=config.clip,
+            critic_version=config.critic_version,
+        )
+    else:
+        raise ValueError("Asger er gay. PS. Config fejl igen.")
 
     models = [rl1_actor, rl2_actor]
     episode_length = config.max_steps  # set episode length
@@ -261,10 +318,11 @@ def main(config: A2CConfig):
 
 
 if __name__ == "__main__":
-    config = args_to_config()
+    config = SAC_args_to_config()
     config.wandb_mode = "disabled"
     # config.test = True
     config.max_episodes = 3
+    config.tf = 3
     # config.json_file = None
     # config.grid_size_x = 2
     # config.grid_size_y = 3

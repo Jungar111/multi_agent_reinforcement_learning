@@ -306,7 +306,7 @@ class SAC(nn.Module):
         self.device = device
         self.path = None
         self.act_dim = env.nregion
-
+        self.config = config
         self.actor_data = actor_data
 
         # SAC parameters

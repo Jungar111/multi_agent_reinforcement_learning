@@ -14,7 +14,7 @@ class A2CConfig(BaseModel):
     seed: int
     demand_ratio: float
     json_hr: int
-    json_tsetp: int
+    json_tstep: int
     beta: float
     test: bool
     directory: str
@@ -72,6 +72,9 @@ class SACConfig(BaseModel):
     checkpoint_path: str
     clip: int
 
+    tf: int = 10000
+    total_number_of_cars: int = 1408
+    wandb_mode: str = "online"
     grid_size_x: int = 2
     grid_size_y: int = 4
     path: str = "scenario_nyc_brooklyn"

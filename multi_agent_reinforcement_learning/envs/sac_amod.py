@@ -10,7 +10,7 @@ import numpy as np
 from multi_agent_reinforcement_learning.data_models.actor_data import (
     ActorData,
     # GraphState,
-    # PaxStepInfo,
+    PaxStepInfo,
 )
 from multi_agent_reinforcement_learning.envs.sac_scenario import Scenario
 
@@ -38,7 +38,7 @@ class AMoD:
         self.G = scenario.G
         # Road Graph: node - region, edge - connection of regions, node attr: 'accInit', edge attr: 'time'
         self.demandTime = self.scenario.demandTime
-        self.rebTime = self.scenario.rebTime
+        self.rebTime = self.scenario.reb_time
         self.time = 0  # current time
         self.tf = scenario.tf  # final time
         self.demand = defaultdict(dict)  # demand
@@ -78,7 +78,6 @@ class AMoD:
                 actor.graph_state.dacc[n] = defaultdict(float)
 
         self.beta = beta * scenario.tstep
-        t = self.time
         for actor in actor_data:
             actor.flow.served_demand = defaultdict(dict)
             for i, j in actor.flow.served_demand:
@@ -86,18 +85,15 @@ class AMoD:
                 actor.flow.reb_flow[i, j] = defaultdict(float)
                 actor.flow.pax_flow[i, j] = defaultdict(float)
 
+        t = self.time
         self.N = len(self.region)  # total number of cells
 
-        # add the initialization of info here
-        self.info = dict.fromkeys(
-            ["revenue", "served_demand", "rebalancing_cost", "operating_cost"], 0
-        )
-        self.reward = 0
-        # observation: current vehicle distribution, time, future arrivals, demand
-        self.obs = (self.acc, self.time, self.dacc, self.demand)
-
     def matching(
-        self, CPLEXPATH=None, PATH="", directory="saved_files", platform="linux"
+        self,
+        CPLEXPATH: str = None,
+        PATH: str = "",
+        directory: str = "saved_files",
+        platform: str = "linux",
     ):
         t = self.time
         demandAttr = [
@@ -173,9 +169,8 @@ class AMoD:
         self.info["operating_cost"] = 0  # initialize operating cost
         self.info["revenue"] = 0
         self.info["rebalancing_cost"] = 0
-        if (
-            paxAction is None
-        ):  # default matching algorithm used if isMatching is True, matching method
+        if paxAction is None:
+            # default matching algorithm used if isMatching is True, matching method
             # will need the information of self.acc[t+1], therefore this part cannot be put forward
             paxAction = self.matching(
                 CPLEXPATH=CPLEXPATH, directory=directory, PATH=PATH, platform=platform
@@ -281,49 +276,41 @@ class AMoD:
         ext_done = [done] * self.nregion
         return self.obs, self.reward, done, self.info, self.ext_reward, ext_done
 
-    def reset(self):
-        # reset the episode
-        self.acc = defaultdict(dict)
-        self.dacc = defaultdict(dict)
-        self.rebFlow = defaultdict(dict)
-        self.paxFlow = defaultdict(dict)
+    def reset(self) -> T.List[ActorData]:
+        """Reset the episode."""
+        for actor in self.actor_data:
+            actor.info = PaxStepInfo()
+            actor.rewards.reb_reward = 0
+            actor.rewards.pax_reward = 0
+            actor.graph_state.acc = defaultdict(dict)
+            actor.graph_state.dacc = defaultdict(dict)
+            actor.graph_state.demand = defaultdict(dict)
+            actor.flow.reb_flow = defaultdict(dict)
+            actor.flow.pax_flow = defaultdict(dict)
+            for i, j in self.demand:
+                actor.flow.served_demand[i, j] = defaultdict(float)
+
+            for i, j in self.G.edges:
+                actor.flow.reb_flow[i, j] = defaultdict(float)
+                actor.flow.pax_flow[i, j] = defaultdict(float)
+
+            for n in self.G:
+                actor.graph_state.acc[n][0] = self.G.nodes[n][f"acc_init_{actor.name}"]
+                actor.graph_state.dacc[n] = defaultdict(float)
+
+            tripAttr = self.scenario.get_random_demand(reset=True)
+            # trip attribute (origin, destination, time of request, demand, price)
+            for i, j, t, d, p in tripAttr:
+                self.demand[i, j][t] = d
+                self.price[i, j][t] = p
+
+            actor.graph_state.demand = defaultdict(dict)
+
         self.edges = []
         for i in self.G:
             self.edges.append((i, i))
             for e in self.G.out_edges(i):
                 self.edges.append(e)
         self.edges = list(set(self.edges))
-        self.demand = defaultdict(dict)  # demand
-        self.price = defaultdict(dict)  # price
-        tripAttr = self.scenario.get_random_demand(reset=True)
-        self.regionDemand = defaultdict(dict)
-        for (
-            i,
-            j,
-            t,
-            d,
-            p,
-        ) in (
-            tripAttr
-        ):  # trip attribute (origin, destination, time of request, demand, price)
-            self.demand[i, j][t] = d
-            self.price[i, j][t] = p
-            if t not in self.regionDemand[i]:
-                self.regionDemand[i][t] = 0
-            else:
-                self.regionDemand[i][t] += d
 
         self.time = 0
-        for i, j in self.G.edges:
-            self.rebFlow[i, j] = defaultdict(float)
-            self.paxFlow[i, j] = defaultdict(float)
-        for n in self.G:
-            self.acc[n][0] = self.G.nodes[n]["accInit"]
-            self.dacc[n] = defaultdict(float)
-        t = self.time
-        for i, j in self.demand:
-            self.servedDemand[i, j] = defaultdict(float)
-        # TODO: define states here
-        self.obs = (self.acc, self.time, self.dacc, self.demand)
-        self.reward = 0
-        return self.obs

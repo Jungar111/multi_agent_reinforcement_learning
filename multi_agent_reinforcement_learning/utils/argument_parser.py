@@ -36,7 +36,7 @@ def parse_arguments():
         "--json_hr", type=int, default=7, metavar="S", help="json_hr (default: 7)"
     )
     parser.add_argument(
-        "--json_tsetp",
+        "--json_tstep",
         type=int,
         default=3,
         metavar="S",

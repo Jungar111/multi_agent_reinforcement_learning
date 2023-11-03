@@ -9,8 +9,8 @@ from tqdm import trange
 # import wandb
 
 import numpy as np
-from multi_agent_reinforcement_learning.envs.sac_amod import AMoD
-from multi_agent_reinforcement_learning.envs.sac_scenario import Scenario
+from multi_agent_reinforcement_learning.envs.amod import AMoD
+from multi_agent_reinforcement_learning.envs.scenario import Scenario
 from multi_agent_reinforcement_learning.algos.sac import SAC
 from multi_agent_reinforcement_learning.algos.sac_reb_flow_solver import solveRebFlow
 from multi_agent_reinforcement_learning.utils.minor_utils import dictsum
@@ -45,10 +45,10 @@ def main(config: SACConfig):
             actor_data=actor_data,
         )
         env = AMoD(
-            scenario,
             beta=config.beta[config.city],
             scenario=scenario,
             config=config,
+            actor_data=actor_data,
         )
         # Timehorizon T=6 (K in paper)
         parser = GNNParser(env, T=6, json_file=f"data/scenario_{config.city}.json")
@@ -83,7 +83,7 @@ def main(config: SACConfig):
             critic_version=config.critic_version,
         )
 
-        models = [sac_rl1_actor, sac_rl2_actor].to_device()
+        models = [sac_rl1_actor, sac_rl2_actor]
         # model = SAC(
         #     env=env,
         #     config=config,
@@ -121,22 +121,22 @@ def main(config: SACConfig):
             o = None
             rebreward = None
             action_rl = None
+            pax_reward = 0
             while not done:
                 # take matching step (Step 1 in paper)
                 if step > 0:
                     obs1 = copy.deepcopy(o)
 
-                obs, paxreward, done, info, _, _ = env.pax_step(
-                    CPLEXPATH=config.cplex_path,
-                    PATH=config.path,
-                    directory=config.directory,
+                actor_data, done = env.pax_step(
+                    cplex_path=config.cplex_path,
+                    path=config.path,
                 )
 
                 o = parser.parse_obs(obs=obs)
-                episode_reward += paxreward
+                episode_reward += pax_reward
                 if step > 0:
                     # store transition in memroy
-                    rl_reward = paxreward + rebreward
+                    rl_reward = pax_reward + rebreward
                     model.replay_buffer.store(
                         obs1, action_rl, config.rew_scale * rl_reward, o
                     )
@@ -252,14 +252,14 @@ def main(config: SACConfig):
             pax_reward = 0
             while not done:
                 # take matching step (Step 1 in paper)
-                obs, paxreward, done, info, _, _ = env.pax_step(
+                obs, pax_reward, done, info, _, _ = env.pax_step(
                     CPLEXPATH=config.cplexpath,
                     PATH=config.path,
                     directory=config.directory,
                 )
 
-                episode_reward += paxreward
-                pax_reward += paxreward
+                episode_reward += pax_reward
+                pax_reward += pax_reward
                 # use GNN-RL policy (Step 2 in paper)
                 o = parser.parse_obs(obs=obs)
                 action_rl = model.select_action(o, deterministic=True)
