@@ -30,6 +30,7 @@ class A2CConfig(BaseModel):
     total_number_of_cars: int = 1408
     wandb_mode: str = "online"
     gamma: float = 0.97
+    path: str = "scenario_nyc4x4"
     json_file: T.Optional[Path] = Path("data", "scenario_nyc4x4.json")
     log_interval: int = 10
 

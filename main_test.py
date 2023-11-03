@@ -58,7 +58,8 @@ def _train_loop(
         for step in range(episode_length):
             # take matching step (Step 1 in paper)
             actor_data, done = env.pax_step(
-                cplex_path=config.cplex_path, path="scenario_nyc4"
+                cplex_path=config.cplex_path,
+                path=config.path,
             )
             for actor in models:
                 actor.actor_data.model_log.reward += actor.actor_data.rewards.pax_reward
@@ -89,7 +90,7 @@ def _train_loop(
 
             # solve minimum rebalancing distance problem (Step 3 in paper)
 
-            solveRebFlow(env, "scenario_nyc4", config.cplex_path)
+            solveRebFlow(env, config.path, config.cplex_path)
 
             actor_data, done = env.reb_step()
 
@@ -137,7 +138,7 @@ def _train_loop(
             ):
                 for model in models:
                     model.save_checkpoint(
-                        path=f"./{config.directory}/ckpt/nyc4/a2c_gnn_{model.actor_data.name}.pth"
+                        path=f"./{config.directory}/ckpt/{config.path}/a2c_gnn_{model.actor_data.name}.pth"
                     )
                     best_reward = sum(
                         [model.actor_data.model_log.reward for model in models]
@@ -284,10 +285,10 @@ def main(config: A2CConfig):
     else:
         # Load pre-trained model
         rl1_actor.load_checkpoint(
-            path=f"./{config.directory}/ckpt/nyc4/a2c_gnn_RL_1_big_run.pth"
+            path=f"./{config.directory}/ckpt/{config.path}/a2c_gnn_{rl1_actor.actor_data.name}.pth"
         )
         rl2_actor.load_checkpoint(
-            path=f"./{config.directory}/ckpt/nyc4/a2c_gnn_RL_2_big_run.pth"
+            path=f"./{config.directory}/ckpt/{config.path}/a2c_gnn_{rl2_actor.actor_data.name}.pth"
         )
 
         test_episodes = 1
@@ -322,7 +323,6 @@ if __name__ == "__main__":
     config.wandb_mode = "disabled"
     # config.test = True
     config.max_episodes = 3
-    config.tf = 3
     # config.json_file = None
     # config.grid_size_x = 2
     # config.grid_size_y = 3
