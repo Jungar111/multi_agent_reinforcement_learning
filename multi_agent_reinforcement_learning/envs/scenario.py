@@ -27,7 +27,7 @@ class Scenario:
         fix_price: bool = True,
         alpha: float = 0.2,
         json_file: T.Optional[str] = None,
-        json_hr: int = 7,
+        json_hr: int = 19,
         json_tstep: int = 3,
         varying_time: bool = False,
         json_regions=None,

@@ -2,6 +2,7 @@
 from __future__ import print_function
 
 from datetime import datetime
+import json
 import typing as T
 import numpy as np
 
@@ -40,6 +41,10 @@ def _train_loop(
     Used both for testing and training, by setting training.
     """
     best_reward = -np.inf
+    data = None
+    if env.config.json_file is not None:
+        with open(env.config.json_file) as json_file:
+            data = json.load(json_file)
     epochs = trange(n_episodes)
     for i_episode in epochs:
         for model in models:
@@ -47,7 +52,11 @@ def _train_loop(
         env.reset()  # initialize environment
 
         all_actions = np.zeros(
-            (len(models), episode_length, config.grid_size_x * config.grid_size_y)
+            (
+                len(models),
+                episode_length,
+                np.max(list(models[0].actor_data.flow.pax_flow.keys())) + 1,
+            )
         )
 
         for step in range(episode_length):
@@ -64,7 +73,9 @@ def _train_loop(
                 model.train_log.reward += model.actor_data.rewards.pax_reward
                 actions.append(
                     model.select_action(
-                        model.actor_data.graph_state, probabilistic=training
+                        obs=model.actor_data.graph_state,
+                        probabilistic=training,
+                        data=data,
                     )
                 )
 
@@ -189,8 +200,8 @@ def main(config: A2CConfig):
             json_file=str(config.json_file),
             sd=config.seed,
             demand_ratio=config.demand_ratio,
-            json_hr=config.json_hr,
-            json_tstep=config.json_tstep,
+            json_hr=config.json_hr[config.city],
+            json_tstep=config.json_tsetp,
             actor_data=actor_data,
         )
 

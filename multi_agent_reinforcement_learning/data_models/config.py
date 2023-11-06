@@ -34,6 +34,11 @@ class A2CConfig(BaseModel):
     json_file: T.Optional[Path] = Path("data", "scenario_nyc4x4.json")
     log_interval: int = 10
 
+    json_hr: T.Dict[str, int] = {
+        "nyc_brooklyn": 19,
+        "nyc4x4": 7,
+    }
+
     @validator("tf", pre=True)
     @classmethod
     def check_tf(cls, value):

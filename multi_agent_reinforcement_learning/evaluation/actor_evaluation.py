@@ -50,7 +50,12 @@ class ActorEvaluator:
         """Plot average distribution for the actors."""
         fig, ax = plt.subplots(1, len(actions))
         for idx, model in enumerate(models):
-            actor_actions = actions[idx, :, :].reshape(T, 4, 4)
+            if actions[idx, :, :].shape[1] < 16:
+                actor_actons = np.pad(
+                    actions[idx, :, :],
+                    pad_width=((0, 0), (0, 16 - actions[idx, :, :].shape[1])),
+                )
+            actor_actions = actor_actons.resize(T, 4, 4)
             for i in range(4):
                 for j in range(4):
                     ax[idx].text(

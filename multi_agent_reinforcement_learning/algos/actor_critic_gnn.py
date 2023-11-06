@@ -8,7 +8,6 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from torch import nn
-import typing as T
 from torch.distributions import Dirichlet
 from multi_agent_reinforcement_learning.data_models.actor_data import (
     ActorData,
@@ -25,6 +24,7 @@ from multi_agent_reinforcement_learning.algos.sac_gnn_parser import (
 )
 from multi_agent_reinforcement_learning.data_models.config import A2CConfig, SACConfig
 from multi_agent_reinforcement_learning.data_models.actor_critic_data import SavedAction
+import typing as T
 
 
 class ActorCritic(nn.Module):
@@ -76,7 +76,7 @@ class ActorCritic(nn.Module):
         self.rewards = []
         self.to(self.config.device)
 
-    def forward(self, obs: GraphState, jitter: float = 1e-20):
+    def forward(self, data: T.Optional[T.Dict], obs: GraphState, jitter: float = 1e-20):
         """Forward of both actor and critic in the current enviorenment defined by data.
 
         softplus used on the actor along with 'jitter'.
@@ -85,7 +85,7 @@ class ActorCritic(nn.Module):
         returns: concentration, value
         """
         # parse raw environment data in model format
-        x = self.parse_obs(obs).to(self.config.device)
+        x = self.parse_obs(obs, data).to(self.config.device)
 
         # actor: computes concentration parameters of a Dirichlet distribution
         a_out = self.actor(x)
@@ -95,7 +95,7 @@ class ActorCritic(nn.Module):
         value = self.critic(x)
         return concentration, value
 
-    def parse_obs(self, obs: GraphState):
+    def parse_obs(self, obs: GraphState, data: T.Optional[T.Dict]):
         """Parse observations.
 
         state: current state of the enviorenment
@@ -105,14 +105,16 @@ class ActorCritic(nn.Module):
 
         return state
 
-    def select_action(self, obs: GraphState, probabilistic: bool):
+    def select_action(
+        self, obs: GraphState, data: T.Optional[T.Dict], probabilistic: bool
+    ):
         """Select an action based on the distribution of the vehicles with Dirichlet.
 
         Saves the log of the new action along with the value computed by the critic
         obs: observation of the current distribution of vehicles.
         return: List of the next actions
         """
-        concentration, value = self.forward(obs)
+        concentration, value = self.forward(obs=obs, data=data)
 
         if probabilistic:
             m = Dirichlet(concentration)

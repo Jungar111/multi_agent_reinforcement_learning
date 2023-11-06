@@ -4,11 +4,11 @@ import torch
 from torch_geometric.data import Data
 from torch_geometric.utils import grid
 from multi_agent_reinforcement_learning.data_models.actor_data import (
-    ActorData,
     GraphState,
 )
 from multi_agent_reinforcement_learning.data_models.config import A2CConfig
 from multi_agent_reinforcement_learning.envs.amod import AMoD
+import typing as T
 
 
 class GNNParser:
@@ -32,7 +32,7 @@ class GNNParser:
         if config.json_file is None:
             self.demand_input = self.env.scenario.demand_input2
 
-    def parse_obs(self, actor_data: ActorData, obs: GraphState):
+    def parse_obs(self, data: T.Optional[T.Dict], obs: GraphState, config: A2CConfig):
         """Parse observations.
 
         Return the data object called 'data' which is used in the Actors and critc forward pass.
@@ -79,6 +79,18 @@ class GNNParser:
             .T
         )
         # Define width and height of the grid.
-        edge_index, _ = grid(height=self.grid_size_x, width=self.grid_size_y)
+        if config.json_file is not None and "4x4" not in str(config.json_file):
+            edge_index = torch.vstack(
+                (
+                    torch.tensor([edge["i"] for edge in data["topology_graph"]]).view(
+                        1, -1
+                    ),
+                    torch.tensor([edge["j"] for edge in data["topology_graph"]]).view(
+                        1, -1
+                    ),
+                )
+            ).long()
+        else:
+            edge_index, _ = grid(height=self.grid_size_x, width=self.grid_size_y)
         data = Data(x, edge_index)
         return data
