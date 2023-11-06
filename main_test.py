@@ -8,6 +8,7 @@ import numpy as np
 from tqdm import trange
 
 import wandb
+import copy
 from multi_agent_reinforcement_learning.algos.actor_critic_gnn import ActorCritic
 from multi_agent_reinforcement_learning.algos.reb_flow_solver import solveRebFlow
 from multi_agent_reinforcement_learning.data_models.actor_data import ActorData
@@ -58,8 +59,12 @@ def _train_loop(
                 np.max(list(models[0].actor_data.flow.pax_flow.keys())) + 1,
             )
         )
+        o = [None, None]
+        actions = None
 
         for step in range(episode_length):
+            if step > 0:
+                obs_old = copy.deepcopy(o)
             # take matching step (Step 1 in paper)
             actor_data, done = env.pax_step(
                 cplex_path=config.cplex_path,
@@ -68,6 +73,22 @@ def _train_loop(
             for actor in models:
                 actor.actor_data.model_log.reward += actor.actor_data.rewards.pax_reward
             # use GNN-RL policy (Step 2 in paper)
+            for idx, model in enumerate(models):
+                o[idx] = model.obs_parser.parse_obs(obs=actor_data[idx].graph_state)
+
+            if step > 0:
+                # store transition in memroy
+                for idx, model in enumerate(models):
+                    pax_and_reb_reward = (
+                        model.actor_data.rewards.pax_reward
+                        + model.actor_data.rewards.reb_reward
+                    )
+                    model.replay_buffer.store(
+                        obs_old[idx],
+                        actions[idx],
+                        config.rew_scale * pax_and_reb_reward,
+                        o[idx],
+                    )
 
             actions = []
             for model in models:
@@ -121,6 +142,14 @@ def _train_loop(
             # stop episode if terminating conditions are met
             if done:
                 break
+            # Training loop
+            if i_episode > 10:
+                # sample from memory and update model
+                for model in models:
+                    batch = model.replay_buffer.sample_batch(
+                        config.batch_size, norm=False
+                    )
+                    model.update(data=batch)
 
         # TODO What to do about training?
         # if training:
@@ -158,7 +187,7 @@ def _train_loop(
             return all_actions
 
 
-def main(config: A2CConfig):
+def main(config: SACConfig):
     """Run main training loop."""
     logger.info("Running main loop.")
 
@@ -325,7 +354,7 @@ def main(config: A2CConfig):
 
 if __name__ == "__main__":
     config = SAC_args_to_config()
-    # config.wandb_mode = "disabled"
+    config.wandb_mode = "disabled"
     # config.test = True
     # config.max_episodes = 10000
     # config.json_file = None
