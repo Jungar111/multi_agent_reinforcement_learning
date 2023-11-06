@@ -52,7 +52,11 @@ def _train_loop(
         env.reset()  # initialize environment
 
         all_actions = np.zeros(
-            (len(models), episode_length, config.grid_size_x * config.grid_size_y)
+            (
+                len(models),
+                episode_length,
+                np.max(list(models[0].actor_data.flow.pax_flow.keys())) + 1,
+            )
         )
 
         for step in range(episode_length):
@@ -118,10 +122,11 @@ def _train_loop(
             if done:
                 break
 
-        if training:
-            # perform on-policy backprop
-            for model in models:
-                model.training_step()
+        # TODO What to do about training?
+        # if training:
+        #     # perform on-policy backprop
+        #     for model in models:
+        #         model.training_step()
 
         # Send current statistics to screen
         epochs.set_description(
@@ -320,9 +325,9 @@ def main(config: A2CConfig):
 
 if __name__ == "__main__":
     config = SAC_args_to_config()
-    config.wandb_mode = "disabled"
+    # config.wandb_mode = "disabled"
     # config.test = True
-    config.max_episodes = 3
+    # config.max_episodes = 10000
     # config.json_file = None
     # config.grid_size_x = 2
     # config.grid_size_y = 3

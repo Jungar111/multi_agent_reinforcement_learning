@@ -73,7 +73,7 @@ class SACConfig(BaseModel):
     checkpoint_path: str
     clip: int
 
-    tf: int = 10000
+    tf: int = 20
     total_number_of_cars: int = 1408
     wandb_mode: str = "online"
     grid_size_x: int = 2

@@ -327,7 +327,7 @@ class SAC(nn.Module):
         self.clip = clip
 
         # Parser
-        self.obs_parser = SACGNNParser(self.env)
+        self.obs_parser = SACGNNParser(self.env, T=6, json_file=self.config.json_file)
 
         # conservative Q learning parameters
         self.num_random = 10
