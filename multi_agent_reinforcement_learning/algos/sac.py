@@ -5,10 +5,10 @@ import torch.nn.functional as F
 from torch.distributions import Dirichlet
 from torch_geometric.data import Data, Batch
 from torch_geometric.nn import GCNConv
-from multi_agent_reinforcement_learning.algos.sac_reb_flow_solver import solveRebFlow
+from multi_agent_reinforcement_learning.algos.reb_flow_solver import solveRebFlow
 from multi_agent_reinforcement_learning.utils.minor_utils import dictsum
 from multi_agent_reinforcement_learning.data_models.config import SACConfig
-from multi_agent_reinforcement_learning.envs.sac_amod import AMoD
+from multi_agent_reinforcement_learning.envs.amod import AMoD
 from multi_agent_reinforcement_learning.data_models.logs import ModelLog
 from multi_agent_reinforcement_learning.algos.sac_gnn_parser import (
     GNNParser as SACGNNParser,

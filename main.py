@@ -65,7 +65,7 @@ def _train_loop(
             done = env.pax_step(
                 model_data_pairs=model_data_pairs,
                 cplex_path=config.cplex_path,
-                path="scenario_nyc4",
+                path=config.path,
             )
             for model_data_pair in model_data_pairs:
                 model_data_pair.actor_data.model_log.reward += (
@@ -107,7 +107,7 @@ def _train_loop(
 
             solveRebFlow(
                 env,
-                "scenario_nyc4",
+                config.path,
                 config.cplex_path,
                 model_data_pairs=model_data_pairs,
             )
@@ -170,7 +170,7 @@ def _train_loop(
             ):
                 for model_data_pair in model_data_pairs:
                     model_data_pair.model.save_checkpoint(
-                        path=f"./{config.directory}/ckpt/nyc4/a2c_gnn_{model_data_pair.actor_data.name}.pth"
+                        path=f"./{config.directory}/ckpt/{config.path}/a2c_gnn_{model_data_pair.actor_data.name}.pth"
                     )
                     best_reward = sum(
                         [
@@ -275,10 +275,10 @@ def main(config: A2CConfig):
     else:
         # Load pre-trained model
         rl1_actor.load_checkpoint(
-            path=f"./{config.directory}/ckpt/nyc4/a2c_gnn_RL_1_big_run.pth"
+            path=f"./{config.directory}/ckpt/{config.path}/a2c_gnn_RL_1_big_run.pth"
         )
         rl2_actor.load_checkpoint(
-            path=f"./{config.directory}/ckpt/nyc4/a2c_gnn_RL_2_big_run.pth"
+            path=f"./{config.directory}/ckpt/{config.path}/a2c_gnn_RL_2_big_run.pth"
         )
 
         test_episodes = 1
@@ -311,7 +311,7 @@ if __name__ == "__main__":
     config = args_to_config()
     config.wandb_mode = "disabled"
     # config.test = True
-    config.max_episodes = 3
+    config.max_episodes = 11
     # config.json_file = None
     # config.grid_size_x = 2
     # config.grid_size_y = 3

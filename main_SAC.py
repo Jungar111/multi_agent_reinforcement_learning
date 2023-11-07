@@ -282,5 +282,5 @@ def main(config: SACConfig):
 
 if __name__ == "__main__":
     config = args_to_config()
-    config.max_episodes = 10000
+    config.max_episodes = 11
     main(config)
