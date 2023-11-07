@@ -404,12 +404,9 @@ class SAC(nn.Module):
         state = self.obs_parser.parse_obs(obs)
         return state
 
-    def select_action(
-        self, data, deterministic: bool = False, probabilistic: bool = False
-    ):
-        data_obs = self.parse_obs(data)
+    def select_action(self, data, deterministic=False):
         with torch.no_grad():
-            a, _ = self.actor(data_obs.x, data_obs.edge_index, deterministic)
+            a, _ = self.actor(data.x, data.edge_index, deterministic)
         a = a.squeeze(-1)
         a = a.detach().cpu().numpy()[0]
         return list(a)

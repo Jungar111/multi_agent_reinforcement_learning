@@ -13,7 +13,7 @@ from multi_agent_reinforcement_learning.algos.actor_critic_gnn import ActorCriti
 from multi_agent_reinforcement_learning.algos.reb_flow_solver import solveRebFlow
 from multi_agent_reinforcement_learning.data_models.actor_data import ActorData
 from multi_agent_reinforcement_learning.data_models.model_data_pair import ModelDataPair
-from multi_agent_reinforcement_learning.data_models.config import Config
+from multi_agent_reinforcement_learning.data_models.config import A2CConfig
 from multi_agent_reinforcement_learning.data_models.logs import ModelLog
 from multi_agent_reinforcement_learning.envs.amod import AMoD
 from multi_agent_reinforcement_learning.envs.scenario import Scenario
@@ -192,7 +192,7 @@ def _train_loop(
             return all_actions
 
 
-def main(config: Config):
+def main(config: A2CConfig):
     """Run main training loop."""
     logger.info("Running main loop.")
 
@@ -236,7 +236,7 @@ def main(config: Config):
             sd=config.seed,
             demand_ratio=config.demand_ratio,
             json_hr=config.json_hr[config.city],
-            json_tstep=config.json_tsetp,
+            json_tstep=config.json_tstep,
             actor_data=actor_data,
         )
 
@@ -309,9 +309,9 @@ def main(config: Config):
 
 if __name__ == "__main__":
     config = args_to_config()
-    # config.wandb_mode = "disabled"
+    config.wandb_mode = "disabled"
     # config.test = True
-    # config.max_episodes = 3
+    config.max_episodes = 3
     # config.json_file = None
     # config.grid_size_x = 2
     # config.grid_size_y = 3
