@@ -11,6 +11,7 @@ from multi_agent_reinforcement_learning.utils.minor_utils import dictsum
 from multi_agent_reinforcement_learning.utils.init_logger import init_logger
 from multi_agent_reinforcement_learning.algos.sac_gnn_parser import GNNParser
 from multi_agent_reinforcement_learning.utils.sac_argument_parser import args_to_config
+from multi_agent_reinforcement_learning.data_models.city_enum import City
 from multi_agent_reinforcement_learning.data_models.config import SACConfig
 from multi_agent_reinforcement_learning.data_models.actor_data import ActorData
 from multi_agent_reinforcement_learning.data_models.model_data_pair import ModelDataPair
@@ -281,6 +282,7 @@ def main(config: SACConfig):
 
 
 if __name__ == "__main__":
-    config = args_to_config()
+    city = City.shenzhen
+    config = args_to_config(city)
     config.max_episodes = 11
     main(config)

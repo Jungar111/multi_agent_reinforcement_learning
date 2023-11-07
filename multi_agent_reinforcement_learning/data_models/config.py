@@ -24,7 +24,6 @@ class BaseConfig(BaseModel):
     device: torch.device
     grid_size_x: int
     grid_size_y: int
-    n_regions: int
     tf: int
     total_number_of_cars: int
     wandb_mode: str = "online"

@@ -312,7 +312,7 @@ def main(config: BaseConfig):
 
 
 if __name__ == "__main__":
-    city = City.new_york
+    city = City.brooklyn
     config = args_to_config(city)
     config.wandb_mode = "disabled"
     # config.test = True
