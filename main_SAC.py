@@ -282,7 +282,7 @@ def main(config: SACConfig):
 
 
 if __name__ == "__main__":
-    city = City.shenzhen
+    city = City.brooklyn
     config = args_to_config(city)
     config.max_episodes = 11
     main(config)

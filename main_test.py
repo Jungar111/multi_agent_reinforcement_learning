@@ -20,9 +20,8 @@ from multi_agent_reinforcement_learning.envs.amod import AMoD
 from multi_agent_reinforcement_learning.envs.scenario import Scenario
 
 # from multi_agent_reinforcement_learning.utils.argument_parser import args_to_config
-from multi_agent_reinforcement_learning.utils.sac_argument_parser import (
-    args_to_config as SAC_args_to_config,
-)
+from multi_agent_reinforcement_learning.utils.sac_argument_parser import args_to_config
+from multi_agent_reinforcement_learning.data_models.city_enum import City
 from multi_agent_reinforcement_learning.utils.init_logger import init_logger
 from multi_agent_reinforcement_learning.utils.minor_utils import dictsum
 from multi_agent_reinforcement_learning.utils.setup_grid import setup_dummy_grid
@@ -259,8 +258,8 @@ def main(config: SACConfig):
                 config=config,
                 json_file=str(config.json_file),
                 sd=config.seed,
-                demand_ratio=config.demand_ratio,
-                json_hr=config.json_hr,
+                demand_ratio=config.demand_ratio[config.city],
+                json_hr=config.json_hr[config.city],
                 json_tstep=config.json_tstep,
                 actor_data=actor_data,
             )
@@ -279,7 +278,10 @@ def main(config: SACConfig):
 
     if isinstance(config, A2CConfig):
         env = AMoD(
-            scenario=scenario, beta=config.beta, actor_data=actor_data, config=config
+            scenario=scenario,
+            beta=config.beta[config.city],
+            actor_data=actor_data,
+            config=config,
         )
         # Initialize A2C-GNN
         rl1_actor = ActorCritic(
@@ -384,8 +386,10 @@ def main(config: SACConfig):
 
 
 if __name__ == "__main__":
-    config = SAC_args_to_config()
-    # config.wandb_mode = "disabled"
+    city = City.brooklyn
+    config = args_to_config(city)
+    config.wandb_mode = "disabled"
+    config.max_episodes = 11
     # config.test = True
     # config.max_episodes = 10000
     # config.json_file = None
