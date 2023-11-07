@@ -49,7 +49,7 @@ class BaseConfig(BaseModel):
         "washington_dc": 0.5,
         "nyc_brooklyn": 0.5,
         "shenzhen_downtown_west": 0.5,
-        "nyc4x4": 2.0,
+        "nyc4x4": 0.5,
     }
 
 

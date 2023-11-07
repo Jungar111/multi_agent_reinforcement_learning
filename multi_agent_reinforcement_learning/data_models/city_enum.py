@@ -7,3 +7,4 @@ class City(Enum):
     brooklyn = "nyc_brooklyn"
     shenzhen = "shenzhen_downtown_west"
     san_francisco = "san_francisco"
+    rome = "rome"
