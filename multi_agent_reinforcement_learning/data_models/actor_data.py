@@ -62,10 +62,10 @@ class CplexData:
 class ActorData:
     name: str
     no_cars: int
-    graph_state: GraphState = GraphState()
-    actions: Actions = Actions()
-    flow: Flow = Flow()
-    model_log: ModelLog = ModelLog()
-    rewards: Rewards = Rewards()
-    info: PaxStepInfo = PaxStepInfo()
-    cplex_data: CplexData = CplexData()
+    graph_state: GraphState = field(default_factory=GraphState)
+    actions: Actions = field(default_factory=Actions)
+    flow: Flow = field(default_factory=Flow)
+    model_log: ModelLog = field(default_factory=ModelLog)
+    rewards: Rewards = field(default_factory=Rewards)
+    info: PaxStepInfo = field(default_factory=PaxStepInfo)
+    cplex_data: CplexData = field(default_factory=CplexData)
