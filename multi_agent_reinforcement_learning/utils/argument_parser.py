@@ -3,8 +3,10 @@
 import argparse
 import platform
 import torch
+from multi_agent_reinforcement_learning.data_models.city_enum import City
 
 from multi_agent_reinforcement_learning.data_models.config import A2CConfig
+from pathlib import Path
 
 
 def parse_arguments():
@@ -26,28 +28,11 @@ def parse_arguments():
         "--seed", type=int, default=10, metavar="S", help="random seed (default: 10)"
     )
     parser.add_argument(
-        "--demand_ratio",
-        type=float,
-        default=0.5,
-        metavar="S",
-        help="demand_ratio (default: 0.5)",
-    )
-    parser.add_argument(
-        "--json_hr", type=int, default=7, metavar="S", help="json_hr (default: 7)"
-    )
-    parser.add_argument(
         "--json_tstep",
         type=int,
         default=3,
         metavar="S",
         help="minutes per timestep (default: 3min)",
-    )
-    parser.add_argument(
-        "--beta",
-        type=float,
-        default=0.5,
-        metavar="S",
-        help="cost of rebalancing (default: 0.5)",
     )
 
     # Model parameters
@@ -98,11 +83,17 @@ def parse_arguments():
     return args
 
 
-def args_to_config():
+def args_to_config(city: City):
     """Convert args to Pydantic model."""
     args = parse_arguments()
-    return A2CConfig(**vars(args))
+    return A2CConfig(
+        **vars(args),
+        city=city.value,
+        path=f"scenario_{city.value}",
+        json_file=Path("data", f"{city.value}.json"),
+    )
 
 
 if __name__ == "__main__":
-    print(args_to_config())
+    city = City.new_york
+    print(args_to_config(city))

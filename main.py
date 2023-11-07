@@ -12,7 +12,8 @@ import wandb
 from multi_agent_reinforcement_learning.algos.actor_critic_gnn import ActorCritic
 from multi_agent_reinforcement_learning.algos.reb_flow_solver import solveRebFlow
 from multi_agent_reinforcement_learning.data_models.actor_data import ActorData
-from multi_agent_reinforcement_learning.data_models.config import A2CConfig
+from multi_agent_reinforcement_learning.data_models.city_enum import City
+from multi_agent_reinforcement_learning.data_models.config import BaseConfig
 from multi_agent_reinforcement_learning.data_models.logs import ModelLog
 from multi_agent_reinforcement_learning.envs.amod import AMoD
 from multi_agent_reinforcement_learning.envs.scenario import Scenario
@@ -158,7 +159,7 @@ def _train_loop(
             return all_actions
 
 
-def main(config: A2CConfig):
+def main(config: BaseConfig):
     """Run main training loop."""
     logger.info("Running main loop.")
 
@@ -272,7 +273,8 @@ def main(config: A2CConfig):
 
 
 if __name__ == "__main__":
-    config = args_to_config()
+    city = City.new_york
+    config = args_to_config(city)
     config.wandb_mode = "disabled"
     # config.test = True
     config.max_episodes = 3
