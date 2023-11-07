@@ -135,6 +135,7 @@ def _train_loop(
         )
 
         # Checkpoint best performing model
+        logging_dict = {}
         if training:
             if (
                 sum([model.actor_data.model_log.reward for model in models])
@@ -147,11 +148,11 @@ def _train_loop(
                     best_reward = sum(
                         [model.actor_data.model_log.reward for model in models]
                     )
-                    wandb.log({"Best Reward": best_reward})
+                    logging_dict.update({"Best Reward": best_reward})
         # Log KPIs on weights and biases
-
         for model in models:
-            wandb.log({**model.actor_data.model_log.dict(model.actor_data.name)})
+            logging_dict.update(model.actor_data.model_log.dict(model.actor_data.name))
+        wandb.log(logging_dict)
 
         if not training:
             return all_actions
@@ -271,8 +272,8 @@ def main(config: Config):
 
 if __name__ == "__main__":
     config = args_to_config()
-    config.wandb_mode = "disabled"
-    config.test = True
+    # config.wandb_mode = "disabled"
+    # config.test = True
     # config.max_episodes = 3
     # config.json_file = None
     # config.grid_size_x = 2
