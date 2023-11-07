@@ -200,10 +200,10 @@ def main(config: Config):
 
     actor_data = [
         ActorData(
-            name="RL_1_fms",
+            name="RL_1",
             no_cars=config.total_number_of_cars - advesary_number_of_cars,
         ),
-        ActorData(name="RL_2_fms", no_cars=advesary_number_of_cars),
+        ActorData(name="RL_2", no_cars=advesary_number_of_cars),
     ]
 
     wandb_config_log = {**vars(config)}

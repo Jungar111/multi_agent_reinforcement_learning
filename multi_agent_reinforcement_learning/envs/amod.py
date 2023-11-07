@@ -10,6 +10,7 @@ import numpy as np
 from multi_agent_reinforcement_learning.data_models.actor_data import (
     ActorData,
     PaxStepInfo,
+    GraphState,
 )
 from multi_agent_reinforcement_learning.envs.scenario import Scenario
 from multi_agent_reinforcement_learning.utils.minor_utils import mat2str
@@ -270,26 +271,11 @@ class AMoD:
                 )
 
             # for acc, the time index would be t+1, but for demand, the time index would be t
-            # actor.model_data_pair.actor_data.graph_state = GraphState(
-            #     self.time,
-            #     actor.model_data_pair.actor_data.graph_state.demand,
-            #     actor.model_data_pair.actor_data.graph_state.acc,
-            #     actor.model_data_pair.actor_data.graph_state.dacc,
-            #     actor.model_data_pair.actor_data.graph_state.unmet_demand,
-            # )
-            model_data_pair.actor_data.graph_state.time = self.time
-            model_data_pair.actor_data.graph_state.demand = (
-                model_data_pair.actor_data.graph_state.demand
-            )
-            model_data_pair.actor_data.graph_state.acc = (
-                model_data_pair.actor_data.graph_state.acc
-            )
-            model_data_pair.actor_data.graph_state.dacc = (
-                model_data_pair.actor_data.graph_state.dacc
-            )
-
-            model_data_pair.actor_data.rewards.pax_reward = max(
-                0, model_data_pair.actor_data.rewards.pax_reward
+            model_data_pair.actor_data.graph_state = GraphState(
+                self.time,
+                model_data_pair.actor_data.graph_state.demand,
+                model_data_pair.actor_data.graph_state.acc,
+                model_data_pair.actor_data.graph_state.dacc,
             )
 
         # if passenger is executed first
