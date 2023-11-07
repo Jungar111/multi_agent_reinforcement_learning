@@ -5,10 +5,10 @@ import torch.nn.functional as F
 from torch.distributions import Dirichlet
 from torch_geometric.data import Data, Batch
 from torch_geometric.nn import GCNConv
-from multi_agent_reinforcement_learning.algos.sac_reb_flow_solver import solveRebFlow
+from multi_agent_reinforcement_learning.algos.reb_flow_solver import solveRebFlow
 from multi_agent_reinforcement_learning.utils.minor_utils import dictsum
 from multi_agent_reinforcement_learning.data_models.config import SACConfig
-from multi_agent_reinforcement_learning.envs.sac_amod import AMoD
+from multi_agent_reinforcement_learning.envs.amod import AMoD
 from multi_agent_reinforcement_learning.data_models.logs import ModelLog
 from multi_agent_reinforcement_learning.algos.sac_gnn_parser import (
     GNNParser as SACGNNParser,
@@ -404,12 +404,9 @@ class SAC(nn.Module):
         state = self.obs_parser.parse_obs(obs)
         return state
 
-    def select_action(
-        self, data, deterministic: bool = False, probabilistic: bool = False
-    ):
-        data_obs = self.parse_obs(data)
+    def select_action(self, data, deterministic=False):
         with torch.no_grad():
-            a, _ = self.actor(data_obs.x, data_obs.edge_index, deterministic)
+            a, _ = self.actor(data.x, data.edge_index, deterministic)
         a = a.squeeze(-1)
         a = a.detach().cpu().numpy()[0]
         return list(a)
