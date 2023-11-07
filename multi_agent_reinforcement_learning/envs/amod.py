@@ -9,13 +9,13 @@ from copy import deepcopy
 import numpy as np
 from multi_agent_reinforcement_learning.data_models.actor_data import (
     ActorData,
-    GraphState,
     PaxStepInfo,
+    GraphState,
 )
 from multi_agent_reinforcement_learning.envs.scenario import Scenario
-
 from multi_agent_reinforcement_learning.utils.minor_utils import mat2str
-from multi_agent_reinforcement_learning.data_models.config import A2CConfig
+from multi_agent_reinforcement_learning.data_models.config import SACConfig
+from multi_agent_reinforcement_learning.data_models.model_data_pair import ModelDataPair
 
 
 class AMoD:
@@ -26,7 +26,7 @@ class AMoD:
         self,
         actor_data: T.List[ActorData],
         scenario: Scenario,
-        config: A2CConfig,
+        config: SACConfig,
         beta: float = 0.2,
     ):
         """Initialise env.
@@ -36,7 +36,6 @@ class AMoD:
         """
         # updated to take scenario and beta (cost for rebalancing) as input
         self.config = config
-        self.actor_data = actor_data
         self.scenario = deepcopy(
             scenario
         )  # I changed it to deep copy so that the scenario input is not modified by env
@@ -154,11 +153,12 @@ class AMoD:
     # pax step
     def pax_step(
         self,
+        model_data_pairs: T.List[ModelDataPair],
         pax_action: T.Optional[list] = None,
         cplex_path: T.Optional[str] = None,
         path: str = "",
         platform: str = "linux",
-    ) -> T.Tuple[T.List[ActorData], bool]:
+    ) -> bool:
         """Take one pax step.
 
         paxAction: Passenger actions for timestep
@@ -166,20 +166,21 @@ class AMoD:
         """
         t = self.time
 
-        for data in self.actor_data:
-            data.info = PaxStepInfo()
-            data.rewards.pax_reward = 0
+        for model_data_pair in model_data_pairs:
+            model_data_pair.actor_data.info = PaxStepInfo()
+            model_data_pair.actor_data.rewards.pax_reward = 0
 
         # Distributing customers stochastic given presence in area.
         for (origin, dest), area_demand in self.demand.items():
             no_customers = area_demand[t]
             cars_in_area_for_each_company = [
-                int(data.graph_state.acc[origin][t]) for data in self.actor_data
+                int(model_data_pair.actor_data.graph_state.acc[origin][t])
+                for model_data_pair in model_data_pairs
             ]
 
             if sum(cars_in_area_for_each_company) < no_customers:
-                for idx, data in enumerate(self.actor_data):
-                    data.graph_state.demand[origin, dest][
+                for idx, model_data_pair in enumerate(model_data_pairs):
+                    model_data_pair.actor_data.graph_state.demand[origin, dest][
                         t
                     ] = cars_in_area_for_each_company[idx]
             else:
@@ -191,95 +192,111 @@ class AMoD:
                     cars_in_area_for_each_company, no_customers
                 )
                 for idx, demand in enumerate(demand_distribution_to_actors):
-                    self.actor_data[idx].graph_state.demand[origin, dest][t] = demand
+                    model_data_pairs[idx].actor_data.graph_state.demand[origin, dest][
+                        t
+                    ] = demand
 
         self.ext_reward = np.zeros(self.nregion)
         for i in self.region:
-            for actor in self.actor_data:
-                actor.graph_state.acc[i][t + 1] = actor.graph_state.acc[i][t]
+            for model_data_pair in model_data_pairs:
+                model_data_pair.actor_data.graph_state.acc[i][
+                    t + 1
+                ] = model_data_pair.actor_data.graph_state.acc[i][t]
 
         if pax_action is None:
             # default matching algorithm used if isMatching is True, matching method will need the
             # information of self.acc[t+1], therefore this part cannot be put forward
-            for actor in self.actor_data:
-                actor.actions.pax_action = self.matching(
+            for model_data_pair in model_data_pairs:
+                model_data_pair.actor_data.actions.pax_action = self.matching(
                     CPLEXPATH=cplex_path,
                     PATH=path,
                     platform=platform,
-                    demand=actor.graph_state.demand,
-                    acc=actor.graph_state.acc,
-                    name=actor.name,
+                    demand=model_data_pair.actor_data.graph_state.demand,
+                    acc=model_data_pair.actor_data.graph_state.acc,
+                    name=model_data_pair.actor_data.name,
                 )
 
-        for actor in self.actor_data:
+        for model_data_pair in model_data_pairs:
             # serving passengers, if vehicle is in same section
             for k in range(len(self.edges)):
                 i, j = self.edges[k]
                 if (
-                    (i, j) not in actor.graph_state.demand
-                    or t not in actor.graph_state.demand[i, j]
-                    or actor.actions.pax_action[k] < 1e-3
+                    (i, j) not in model_data_pair.actor_data.graph_state.demand
+                    or t not in model_data_pair.actor_data.graph_state.demand[i, j]
+                    or model_data_pair.actor_data.actions.pax_action[k] < 1e-3
                 ):
                     continue
                 # I moved the min operator above, since we want paxFlow to be consistent with paxAction
-                actor.actions.pax_action[k] = min(
-                    actor.graph_state.acc[i][t + 1], actor.actions.pax_action[k]
+                model_data_pair.actor_data.actions.pax_action[k] = min(
+                    model_data_pair.actor_data.graph_state.acc[i][t + 1],
+                    model_data_pair.actor_data.actions.pax_action[k],
                 )
                 assert (
-                    actor.actions.pax_action[k] < actor.graph_state.acc[i][t + 1] + 1e-3
+                    model_data_pair.actor_data.actions.pax_action[k]
+                    < model_data_pair.actor_data.graph_state.acc[i][t + 1] + 1e-3
                 )
                 # define servedDemand as the current passenger action
-                actor.flow.served_demand[i, j][t] = actor.actions.pax_action[k]
-                actor.flow.pax_flow[i, j][
+                model_data_pair.actor_data.flow.served_demand[i, j][
+                    t
+                ] = model_data_pair.actor_data.actions.pax_action[k]
+                model_data_pair.actor_data.flow.pax_flow[i, j][
                     t + self.demand_time[i, j][t]
-                ] = actor.actions.pax_action[k]
-                actor.info.operating_cost += (
-                    self.demand_time[i, j][t] * self.beta * actor.actions.pax_action[k]
+                ] = model_data_pair.actor_data.actions.pax_action[k]
+                model_data_pair.actor_data.info.operating_cost += (
+                    self.demand_time[i, j][t]
+                    * self.beta
+                    * model_data_pair.actor_data.actions.pax_action[k]
                 )
                 # define the cost of picking of the current passenger
-                actor.graph_state.acc[i][t + 1] -= actor.actions.pax_action[k]
+                model_data_pair.actor_data.graph_state.acc[i][
+                    t + 1
+                ] -= model_data_pair.actor_data.actions.pax_action[k]
                 # Add to served_demand
-                actor.info.served_demand += actor.flow.served_demand[i, j][t]
-                actor.graph_state.dacc[j][
-                    t + self.demand_time[i, j][t]
-                ] += actor.flow.pax_flow[i, j][t + self.demand_time[i, j][t]]
-                # add to reward
-                actor.rewards.pax_reward += actor.actions.pax_action[k] * (
-                    self.price[i, j][t] - self.demand_time[i, j][t] * self.beta
+                model_data_pair.actor_data.info.served_demand += (
+                    model_data_pair.actor_data.flow.served_demand[i, j][t]
                 )
-                actor.info.revenue += actor.actions.pax_action[k] * (
-                    self.price[i, j][t]
+                model_data_pair.actor_data.graph_state.dacc[j][
+                    t + self.demand_time[i, j][t]
+                ] += model_data_pair.actor_data.flow.pax_flow[i, j][
+                    t + self.demand_time[i, j][t]
+                ]
+                # add to reward
+                model_data_pair.actor_data.rewards.pax_reward += (
+                    model_data_pair.actor_data.actions.pax_action[k]
+                    * (self.price[i, j][t] - self.demand_time[i, j][t] * self.beta)
+                )
+                model_data_pair.actor_data.info.revenue += (
+                    model_data_pair.actor_data.actions.pax_action[k]
+                    * (self.price[i, j][t])
                 )
 
             # for acc, the time index would be t+1, but for demand, the time index would be t
-            actor.graph_state = GraphState(
+            model_data_pair.actor_data.graph_state = GraphState(
                 self.time,
-                actor.graph_state.demand,
-                actor.graph_state.acc,
-                actor.graph_state.dacc,
+                model_data_pair.actor_data.graph_state.demand,
+                model_data_pair.actor_data.graph_state.acc,
+                model_data_pair.actor_data.graph_state.dacc,
             )
-
-            actor.rewards.pax_reward = max(0, actor.rewards.pax_reward)
 
         # if passenger is executed first
         done = False
-        return self.actor_data, done
+        return done
 
-    def reb_step(self) -> T.Tuple[T.List[ActorData], bool]:
+    def reb_step(self, model_data_pairs: T.List[ModelDataPair]) -> bool:
         """Take on reb step, Adjusting costs, reward.
 
         rebAction: the action of rebalancing
         returns: self.obs, self.reward, done, self.info
         """
         t = self.time
-        for actor in self.actor_data:
+        for model_data_pair in model_data_pairs:
             # reward is calculated from before this to the
             # next rebalancing, we may also have two rewards,
             # one for pax matching and one for rebalancing
-            actor.rewards.reb_reward = 0
+            model_data_pair.actor_data.rewards.reb_reward = 0
 
         # rebalancing loop
-        for actor in self.actor_data:
+        for model_data_pair in model_data_pairs:
             for k in range(len(self.edges)):
                 i, j = self.edges[k]
                 if (i, j) not in self.G.edges:
@@ -287,76 +304,95 @@ class AMoD:
                 # TODO: add check for actions respecting constraints? e.g. sum of all action[k] starting in "i" <=
                 # self.acc[i][t+1] (in addition to our agent action method)
                 # update the number of vehicles
-                actor.actions.reb_action[k] = min(
-                    actor.graph_state.acc[i][t + 1], actor.actions.reb_action[k]
+                model_data_pair.actor_data.actions.reb_action[k] = min(
+                    model_data_pair.actor_data.graph_state.acc[i][t + 1],
+                    model_data_pair.actor_data.actions.reb_action[k],
                 )
-                actor.flow.reb_flow[i, j][
+                model_data_pair.actor_data.flow.reb_flow[i, j][
                     t + self.reb_time[i, j][t]
-                ] = actor.actions.reb_action[k]
-                actor.graph_state.acc[i][t + 1] -= actor.actions.reb_action[k]
-                actor.graph_state.dacc[j][
+                ] = model_data_pair.actor_data.actions.reb_action[k]
+                model_data_pair.actor_data.graph_state.acc[i][
+                    t + 1
+                ] -= model_data_pair.actor_data.actions.reb_action[k]
+                model_data_pair.actor_data.graph_state.dacc[j][
                     t + self.reb_time[i, j][t]
-                ] += actor.flow.reb_flow[i, j][t + self.reb_time[i, j][t]]
+                ] += model_data_pair.actor_data.flow.reb_flow[i, j][
+                    t + self.reb_time[i, j][t]
+                ]
 
                 reb_cost = (
-                    self.reb_time[i, j][t] * self.beta * actor.actions.reb_action[k]
+                    self.reb_time[i, j][t]
+                    * self.beta
+                    * model_data_pair.actor_data.actions.reb_action[k]
                 )
 
-                actor.info.rebalancing_cost += reb_cost
-                actor.info.operating_cost += reb_cost
-                actor.rewards.reb_reward -= reb_cost
+                model_data_pair.actor_data.info.rebalancing_cost += reb_cost
+                model_data_pair.actor_data.info.operating_cost += reb_cost
+                model_data_pair.actor_data.rewards.reb_reward -= reb_cost
                 self.ext_reward[i] -= reb_cost
 
         # arrival for the next time step, executed in the last state of a time step
         # this makes the code slightly different from the previous version, where the following codes are executed
         # between matching and rebalancing
-        for actor in self.actor_data:
+        for model_data_pair in model_data_pairs:
             for k in range(len(self.edges)):
                 # this means that after pax arrived, vehicles can only be rebalanced in the next time step, let me
                 # know if you have different opinion
                 i, j = self.edges[k]
-                if (i, j) in actor.flow.reb_flow and t in actor.flow.reb_flow[i, j]:
-                    actor.graph_state.acc[j][t + 1] += actor.flow.reb_flow[i, j][t]
-                if (i, j) in actor.flow.pax_flow and t in actor.flow.pax_flow[i, j]:
-                    actor.graph_state.acc[j][t + 1] += actor.flow.pax_flow[i, j][t]
+                if (
+                    (i, j) in model_data_pair.actor_data.flow.reb_flow
+                    and t in model_data_pair.actor_data.flow.reb_flow[i, j]
+                ):
+                    model_data_pair.actor_data.graph_state.acc[j][
+                        t + 1
+                    ] += model_data_pair.actor_data.flow.reb_flow[i, j][t]
+                if (
+                    (i, j) in model_data_pair.actor_data.flow.pax_flow
+                    and t in model_data_pair.actor_data.flow.pax_flow[i, j]
+                ):
+                    model_data_pair.actor_data.graph_state.acc[j][
+                        t + 1
+                    ] += model_data_pair.actor_data.flow.pax_flow[i, j][t]
 
         self.time += 1
 
-        for actor in self.actor_data:
-            actor.obs = (
-                actor.graph_state.acc,
+        for model_data_pair in model_data_pairs:
+            model_data_pair.actor_data.obs = (
+                model_data_pair.actor_data.graph_state.acc,
                 self.time,
-                actor.graph_state.dacc,
-                actor.graph_state.demand,
+                model_data_pair.actor_data.graph_state.dacc,
+                model_data_pair.actor_data.graph_state.demand,
             )
 
         for i, j in self.G.edges:
             self.G.edges[i, j]["time"] = self.reb_time[i, j][self.time]
         done = self.tf == t + 1  # if the episode is completed
         # ext_done = [done] * self.nregion
-        return self.actor_data, done
+        return done
 
-    def reset(self) -> T.List[ActorData]:
+    def reset(self, model_data_pairs: T.List[ModelDataPair]):
         """Reset the episode."""
-        for actor in self.actor_data:
-            actor.info = PaxStepInfo()
-            actor.rewards.reb_reward = 0
-            actor.rewards.pax_reward = 0
-            actor.graph_state.acc = defaultdict(dict)
-            actor.graph_state.dacc = defaultdict(dict)
-            actor.graph_state.demand = defaultdict(dict)
-            actor.flow.reb_flow = defaultdict(dict)
-            actor.flow.pax_flow = defaultdict(dict)
+        for model_data_pair in model_data_pairs:
+            model_data_pair.actor_data.info = PaxStepInfo()
+            model_data_pair.actor_data.rewards.reb_reward = 0
+            model_data_pair.actor_data.rewards.pax_reward = 0
+            model_data_pair.actor_data.graph_state.acc = defaultdict(dict)
+            model_data_pair.actor_data.graph_state.dacc = defaultdict(dict)
+            model_data_pair.actor_data.graph_state.demand = defaultdict(dict)
+            model_data_pair.actor_data.flow.reb_flow = defaultdict(dict)
+            model_data_pair.actor_data.flow.pax_flow = defaultdict(dict)
             for i, j in self.demand:
-                actor.flow.served_demand[i, j] = defaultdict(float)
+                model_data_pair.actor_data.flow.served_demand[i, j] = defaultdict(float)
 
             for i, j in self.G.edges:
-                actor.flow.reb_flow[i, j] = defaultdict(float)
-                actor.flow.pax_flow[i, j] = defaultdict(float)
+                model_data_pair.actor_data.flow.reb_flow[i, j] = defaultdict(float)
+                model_data_pair.actor_data.flow.pax_flow[i, j] = defaultdict(float)
 
             for n in self.G:
-                actor.graph_state.acc[n][0] = self.G.nodes[n][f"acc_init_{actor.name}"]
-                actor.graph_state.dacc[n] = defaultdict(float)
+                model_data_pair.actor_data.graph_state.acc[n][0] = self.G.nodes[n][
+                    f"acc_init_{model_data_pair.actor_data.name}"
+                ]
+                model_data_pair.actor_data.graph_state.dacc[n] = defaultdict(float)
 
             tripAttr = self.scenario.get_random_demand(reset=True)
             # trip attribute (origin, destination, time of request, demand, price)
@@ -364,7 +400,7 @@ class AMoD:
                 self.demand[i, j][t] = d
                 self.price[i, j][t] = p
 
-            actor.graph_state.demand = defaultdict(dict)
+            model_data_pair.actor_data.graph_state.demand = defaultdict(dict)
 
         self.edges = []
         for i in self.G:

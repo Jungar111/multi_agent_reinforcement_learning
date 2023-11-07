@@ -14,6 +14,7 @@ from multi_agent_reinforcement_learning.algos.reb_flow_solver import solveRebFlo
 from multi_agent_reinforcement_learning.data_models.actor_data import ActorData
 from multi_agent_reinforcement_learning.data_models.city_enum import City
 from multi_agent_reinforcement_learning.data_models.config import BaseConfig
+from multi_agent_reinforcement_learning.data_models.model_data_pair import ModelDataPair
 from multi_agent_reinforcement_learning.data_models.logs import ModelLog
 from multi_agent_reinforcement_learning.envs.amod import AMoD
 from multi_agent_reinforcement_learning.envs.scenario import Scenario
@@ -25,14 +26,14 @@ from multi_agent_reinforcement_learning.evaluation.actor_evaluation import (
     ActorEvaluator,
 )
 
+
 logger = init_logger()
 
 
 def _train_loop(
     n_episodes: int,
-    actor_data: T.List[ActorData],
     env: AMoD,
-    models: T.List[ActorCritic],
+    model_data_pairs: T.List[ModelDataPair],
     n_actions: int,
     episode_length: int,
     training: bool = True,
@@ -48,33 +49,39 @@ def _train_loop(
             data = json.load(json_file)
     epochs = trange(n_episodes)
     for i_episode in epochs:
-        for model in models:
-            model.actor_data.model_log = ModelLog()
-        env.reset()  # initialize environment
+        for model_data_pair in model_data_pairs:
+            model_data_pair.actor_data.model_log = ModelLog()
+        env.reset(model_data_pairs=model_data_pairs)  # initialize environment
 
         all_actions = np.zeros(
             (
-                len(models),
+                len(model_data_pairs),
                 episode_length,
-                np.max(list(models[0].actor_data.flow.pax_flow.keys())) + 1,
+                np.max(list(model_data_pairs[0].actor_data.flow.pax_flow.keys())) + 1,
             )
         )
 
         for step in range(episode_length):
             # take matching step (Step 1 in paper)
-            actor_data, done = env.pax_step(
-                cplex_path=config.cplex_path, path="scenario_nyc4"
+            done = env.pax_step(
+                model_data_pairs=model_data_pairs,
+                cplex_path=config.cplex_path,
+                path="scenario_nyc4",
             )
-            for actor in models:
-                actor.actor_data.model_log.reward += actor.actor_data.rewards.pax_reward
+            for model_data_pair in model_data_pairs:
+                model_data_pair.actor_data.model_log.reward += (
+                    model_data_pair.actor_data.rewards.pax_reward
+                )
             # use GNN-RL policy (Step 2 in paper)
 
             actions = []
-            for model in models:
-                model.train_log.reward += model.actor_data.rewards.pax_reward
+            for idx, model_data_pair in enumerate(model_data_pairs):
+                model_data_pair.model.train_log.reward += (
+                    model_data_pair.actor_data.rewards.pax_reward
+                )
                 actions.append(
-                    model.select_action(
-                        obs=model.actor_data.graph_state,
+                    model_data_pair.model.select_action(
+                        obs=model_data_pair.actor_data.graph_state,
                         probabilistic=training,
                         data=data,
                     )
@@ -82,43 +89,57 @@ def _train_loop(
 
             for idx, action in enumerate(actions):
                 # transform sample from Dirichlet into actual vehicle counts (i.e. (x1*x2*..*xn)*num_vehicles)
-                models[idx].actor_data.flow.desired_acc = {
+                model_data_pairs[idx].actor_data.flow.desired_acc = {
                     env.region[i]: int(
                         action[i]
-                        * dictsum(actor_data[idx].graph_state.acc, env.time + 1)
+                        * dictsum(
+                            model_data_pairs[idx].actor_data.graph_state.acc,
+                            env.time + 1,
+                        )
                     )
                     for i in range(n_actions)
                 }
 
                 all_actions[idx, step, :] = list(
-                    models[idx].actor_data.flow.desired_acc.values()
+                    model_data_pairs[idx].actor_data.flow.desired_acc.values()
                 )
 
             # solve minimum rebalancing distance problem (Step 3 in paper)
 
-            solveRebFlow(env, "scenario_nyc4", config.cplex_path)
+            solveRebFlow(
+                env,
+                "scenario_nyc4",
+                config.cplex_path,
+                model_data_pairs=model_data_pairs,
+            )
 
-            actor_data, done = env.reb_step()
+            done = env.reb_step(model_data_pairs=model_data_pairs)
 
-            for model in models:
-                model.train_log.reward += model.actor_data.rewards.reb_reward
+            for model_data_pair in model_data_pairs:
+                model_data_pair.model.train_log.reward += (
+                    model_data_pair.actor_data.rewards.reb_reward
+                )
             # track performance over episode
-            for model in models:
-                model.actor_data.model_log.reward += model.actor_data.rewards.reb_reward
-                model.actor_data.model_log.served_demand += (
-                    model.actor_data.info.served_demand
+            for model_data_pair in model_data_pairs:
+                model_data_pair.actor_data.model_log.reward += (
+                    model_data_pair.actor_data.rewards.reb_reward
                 )
-                model.actor_data.model_log.rebalancing_cost += (
-                    model.actor_data.info.rebalancing_cost
+                model_data_pair.actor_data.model_log.served_demand += (
+                    model_data_pair.actor_data.info.served_demand
                 )
-                model.rewards.append(
-                    model.actor_data.rewards.pax_reward
-                    + model.actor_data.rewards.reb_reward
+                model_data_pair.actor_data.model_log.rebalancing_cost += (
+                    model_data_pair.actor_data.info.rebalancing_cost
+                )
+                model_data_pair.model.rewards.append(
+                    model_data_pair.actor_data.rewards.pax_reward
+                    + model_data_pair.actor_data.rewards.reb_reward
                 )
 
-                model.train_log.served_demand += model.actor_data.info.served_demand
-                model.train_log.rebalancing_cost += (
-                    model.actor_data.info.rebalancing_cost
+                model_data_pair.model.train_log.served_demand += (
+                    model_data_pair.actor_data.info.served_demand
+                )
+                model_data_pair.model.train_log.rebalancing_cost += (
+                    model_data_pair.actor_data.info.rebalancing_cost
                 )
             # stop episode if terminating conditions are met
             if done:
@@ -126,34 +147,47 @@ def _train_loop(
 
         if training:
             # perform on-policy backprop
-            for model in models:
-                model.training_step()
+            for model_data_pair in model_data_pairs:
+                model_data_pair.model.training_step()
 
         # Send current statistics to screen
         epochs.set_description(
-            f"Episode {i_episode+1} | Reward: {actor_data[0].model_log.reward:.2f} |"
-            f"ServedDemand: {actor_data[0].model_log.served_demand:.2f} "
-            f"| Reb. Cost: {actor_data[0].model_log.rebalancing_cost:.2f}"
+            f"Episode {i_episode+1} | Reward: {model_data_pairs[0].actor_data.model_log.reward:.2f} |"
+            f"ServedDemand: {model_data_pairs[0].actor_data.model_log.served_demand:.2f} "
+            f"| Reb. Cost: {model_data_pairs[0].actor_data.model_log.rebalancing_cost:.2f}"
         )
 
         # Checkpoint best performing model
+        logging_dict = {}
         if training:
-            if (
-                sum([model.actor_data.model_log.reward for model in models])
+            if (  # TODO fix
+                sum(
+                    [
+                        model_data_pair.actor_data.model_log.reward
+                        for model_data_pair in model_data_pairs
+                    ]
+                )
                 > best_reward
             ):
-                for model in models:
-                    model.save_checkpoint(
-                        path=f"./{config.directory}/ckpt/nyc4/a2c_gnn_{model.actor_data.name}.pth"
+                for model_data_pair in model_data_pairs:
+                    model_data_pair.model.save_checkpoint(
+                        path=f"./{config.directory}/ckpt/nyc4/a2c_gnn_{model_data_pair.actor_data.name}.pth"
                     )
                     best_reward = sum(
-                        [model.actor_data.model_log.reward for model in models]
+                        [
+                            model_data_pair.actor_data.model_log.reward
+                            for model_data_pair in model_data_pairs
+                        ]
                     )
-                    wandb.log({"Best Reward": best_reward})
+                    logging_dict.update({"Best Reward": best_reward})
         # Log KPIs on weights and biases
-
-        for model in models:
-            wandb.log({**model.actor_data.model_log.dict(model.actor_data.name)})
+        for model_data_pair in model_data_pairs:
+            logging_dict.update(
+                model_data_pair.actor_data.model_log.dict(
+                    model_data_pair.actor_data.name
+                )
+            )
+        wandb.log(logging_dict)
 
         if not training:
             return all_actions
@@ -167,14 +201,15 @@ def main(config: BaseConfig):
 
     actor_data = [
         ActorData(
-            name="RL_1", no_cars=config.total_number_of_cars - advesary_number_of_cars
+            name="RL_1",
+            no_cars=config.total_number_of_cars - advesary_number_of_cars,
         ),
         ActorData(name="RL_2", no_cars=advesary_number_of_cars),
     ]
 
     wandb_config_log = {**vars(config)}
     for actor in actor_data:
-        wandb_config_log[f"no_cars_{actor.name}"] = actor.no_cars
+        wandb_config_log[f"test_{actor.name}"] = actor.no_cars
 
     wandb.init(
         mode=config.wandb_mode,
@@ -217,20 +252,22 @@ def main(config: BaseConfig):
         env=env, input_size=21, config=config, actor_data=actor_data[1]
     )
 
-    models = [rl1_actor, rl2_actor]
+    model_data_pairs = [
+        ModelDataPair(rl1_actor, actor_data[0]),
+        ModelDataPair(rl2_actor, actor_data[1]),
+    ]
     episode_length = config.max_steps  # set episode length
     n_actions = len(env.region)
 
     if not config.test:
         train_episodes = config.max_episodes  # set max number of training episodes
-        for model in models:
-            model.train()
+        for model_data_pair in model_data_pairs:
+            model_data_pair.model.train()
 
         _train_loop(
             train_episodes,
-            actor_data,
             env,
-            models,
+            model_data_pairs,
             n_actions,
             episode_length,
             training=True,
@@ -250,9 +287,8 @@ def main(config: BaseConfig):
 
         all_actions = _train_loop(
             test_episodes,
-            actor_data,
             env,
-            models,
+            model_data_pairs,
             n_actions,
             episode_length,
             training=False,
@@ -262,7 +298,7 @@ def main(config: BaseConfig):
         actor_evaluator.plot_average_distribution(
             actions=np.array(all_actions),
             T=episode_length,
-            models=models,
+            models=model_data_pairs,
         )
 
         # actor_evaluator.plot_distribution_at_time_step_t(
@@ -277,7 +313,7 @@ if __name__ == "__main__":
     config = args_to_config(city)
     config.wandb_mode = "disabled"
     # config.test = True
-    config.max_episodes = 3
+    # config.max_episodes = 3
     # config.json_file = None
     # config.grid_size_x = 2
     # config.grid_size_y = 3
