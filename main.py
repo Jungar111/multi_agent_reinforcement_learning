@@ -201,7 +201,7 @@ def main(config: A2CConfig):
             sd=config.seed,
             demand_ratio=config.demand_ratio,
             json_hr=config.json_hr[config.city],
-            json_tstep=config.json_tsetp,
+            json_tstep=config.json_tstep,
             actor_data=actor_data,
         )
 
@@ -273,9 +273,9 @@ def main(config: A2CConfig):
 
 if __name__ == "__main__":
     config = args_to_config()
-    config.wandb_mode = "disabled"
+    # config.wandb_mode = "disabled"
     # config.test = True
-    config.max_episodes = 3
+    config.max_episodes = 6
     # config.json_file = None
     # config.grid_size_x = 2
     # config.grid_size_y = 3

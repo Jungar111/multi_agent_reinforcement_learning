@@ -101,7 +101,7 @@ class ActorCritic(nn.Module):
         state: current state of the enviorenment
         returns: state
         """
-        state = self.obs_parser.parse_obs(obs=obs, actor_data=self.actor_data)
+        state = self.obs_parser.parse_obs(obs=obs, data=data, config=self.config)
 
         return state
 

@@ -13,7 +13,6 @@ class A2CConfig(BaseModel):
     cplex_path: str
     seed: int
     demand_ratio: float
-    json_hr: int
     json_tstep: int
     beta: float
     test: bool
@@ -22,6 +21,7 @@ class A2CConfig(BaseModel):
     max_steps: int
     no_cuda: bool
     render: bool = True
+    city: str = "nyc4x4"
     device: torch.device
     grid_size_x: int = 4
     grid_size_y: int = 4
