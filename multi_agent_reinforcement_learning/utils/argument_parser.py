@@ -90,7 +90,7 @@ def args_to_config(city: City):
         **vars(args),
         city=city.value,
         path=f"scenario_{city.value}",
-        json_file=Path("data", f"{city.value}.json"),
+        json_file=Path("data", f"scenario_{city.value}.json"),
     )
 
 

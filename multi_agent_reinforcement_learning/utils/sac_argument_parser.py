@@ -3,8 +3,11 @@
 import torch
 import argparse
 import platform
+from multi_agent_reinforcement_learning.data_models.city_enum import City
 
 from multi_agent_reinforcement_learning.data_models.config import SACConfig
+
+from pathlib import Path
 
 
 def parse_arguments():
@@ -112,12 +115,6 @@ def parse_arguments():
         help="learning rate for Q networks (default: 4e-3)",
     )
     parser.add_argument(
-        "--city",
-        type=str,
-        default="nyc_brooklyn",
-        help="city to train on",
-    )
-    parser.add_argument(
         "--rew_scale",
         type=float,
         default=0.1,
@@ -140,7 +137,12 @@ def parse_arguments():
     return args
 
 
-def args_to_config():
+def args_to_config(city: City):
     """Convert args to pydantic model."""
     args = parse_arguments()
-    return SACConfig(**vars(args))
+    return SACConfig(
+        **vars(args),
+        city=city.value,
+        path=f"scenario_{city.value}",
+        json_file=Path("data", f"scenario_{city.value}.json"),
+    )

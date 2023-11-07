@@ -22,7 +22,11 @@ from multi_agent_reinforcement_learning.algos.gnn_parser import GNNParser
 from multi_agent_reinforcement_learning.algos.sac_gnn_parser import (
     GNNParser as SACGNNParser,
 )
-from multi_agent_reinforcement_learning.data_models.config import A2CConfig, SACConfig
+from multi_agent_reinforcement_learning.data_models.config import (
+    A2CConfig,
+    BaseConfig,
+    SACConfig,
+)
 from multi_agent_reinforcement_learning.data_models.actor_critic_data import SavedAction
 import typing as T
 
@@ -36,7 +40,7 @@ class ActorCritic(nn.Module):
         env: AMoD,
         actor_data: ActorData,
         input_size: int,
-        config: T.Union[A2CConfig, SACConfig],
+        config: BaseConfig,
         eps: float = np.finfo(np.float32).eps.item(),
     ):
         """Init method for A2C. Sets up the desired attributes including.

@@ -235,14 +235,17 @@ def main(config: BaseConfig):
             config=config,
             json_file=str(config.json_file),
             sd=config.seed,
-            demand_ratio=config.demand_ratio,
+            demand_ratio=config.demand_ratio[config.city],
             json_hr=config.json_hr[config.city],
-            json_tstep=config.json_tsetp,
+            json_tstep=config.json_tstep,
             actor_data=actor_data,
         )
 
     env = AMoD(
-        scenario=scenario, beta=config.beta, actor_data=actor_data, config=config
+        scenario=scenario,
+        beta=config.beta[config.city],
+        actor_data=actor_data,
+        config=config,
     )
     # Initialize A2C-GNN
     rl1_actor = ActorCritic(

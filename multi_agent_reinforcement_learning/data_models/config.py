@@ -9,6 +9,8 @@ class BaseConfig(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True, validate_assignment=True)
 
     city: str
+    path: str
+    json_file: T.Optional[Path]
     cplex_path: str
     seed: int
     json_tstep: int
@@ -27,9 +29,6 @@ class BaseConfig(BaseModel):
     total_number_of_cars: int
     wandb_mode: str = "online"
     gamma: float = 0.97
-
-    path: str
-    json_file: T.Optional[Path]
 
     demand_ratio: T.Dict[str, float] = {
         "san_francisco": 2.0,
@@ -77,7 +76,7 @@ class A2CConfig(BaseConfig):
         return value
 
 
-class SACConfig(BaseModel):
+class SACConfig(BaseConfig):
     """Config class for the SAC implementation."""
 
     test: bool
@@ -95,5 +94,3 @@ class SACConfig(BaseModel):
     total_number_of_cars: int = 1408
     grid_size_x: int = 2
     grid_size_y: int = 4
-    path: str = "scenario_nyc_brooklyn"
-    json_file: T.Optional[Path] = Path("data", "scenario_nyc_brooklyn.json")
