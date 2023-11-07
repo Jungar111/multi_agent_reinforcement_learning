@@ -12,6 +12,7 @@ import copy
 from multi_agent_reinforcement_learning.algos.actor_critic_gnn import ActorCritic
 from multi_agent_reinforcement_learning.algos.reb_flow_solver import solveRebFlow
 from multi_agent_reinforcement_learning.data_models.actor_data import ActorData
+from multi_agent_reinforcement_learning.data_models.model_data_pair import ModelDataPair
 from multi_agent_reinforcement_learning.algos.sac import SAC
 from multi_agent_reinforcement_learning.data_models.config import A2CConfig, SACConfig
 from multi_agent_reinforcement_learning.data_models.logs import ModelLog
@@ -34,9 +35,8 @@ logger = init_logger()
 
 def _train_loop(
     n_episodes: int,
-    actor_data: T.List[ActorData],
+    model_data_pairs: T.List[ModelDataPair],
     env: AMoD,
-    models: T.List[ActorCritic],
     n_actions: int,
     episode_length: int,
     training: bool = True,
@@ -48,15 +48,15 @@ def _train_loop(
     best_reward = -np.inf
     epochs = trange(n_episodes)
     for i_episode in epochs:
-        for model in models:
-            model.actor_data.model_log = ModelLog()
-        env.reset()  # initialize environment
+        for model_data_pair in model_data_pairs:
+            model_data_pair.actor_data.model_log = ModelLog()
+        env.reset(model_data_pairs)  # initialize environment
 
         all_actions = np.zeros(
             (
-                len(models),
+                len(model_data_pairs),
                 episode_length,
-                np.max(list(models[0].actor_data.flow.pax_flow.keys())) + 1,
+                np.max(list(model_data_pairs[0].actor_data.flow.pax_flow.keys())) + 1,
             )
         )
         o = [None, None]
@@ -66,24 +66,29 @@ def _train_loop(
             if step > 0:
                 obs_old = copy.deepcopy(o)
             # take matching step (Step 1 in paper)
-            actor_data, done = env.pax_step(
+            done = env.pax_step(
                 cplex_path=config.cplex_path,
                 path=config.path,
+                model_data_pairs=model_data_pairs,
             )
-            for actor in models:
-                actor.actor_data.model_log.reward += actor.actor_data.rewards.pax_reward
+            for model_data_pair in model_data_pairs:
+                model_data_pair.actor_data.model_log.reward += (
+                    model_data_pair.actor_data.rewards.pax_reward
+                )
             # use GNN-RL policy (Step 2 in paper)
-            for idx, model in enumerate(models):
-                o[idx] = model.obs_parser.parse_obs(obs=actor_data[idx].graph_state)
+            for idx, model_data_pair in enumerate(model_data_pairs):
+                o[idx] = model_data_pair.model.obs_parser.parse_obs(
+                    obs=model_data_pair.actor_data.graph_state
+                )
 
             if step > 0:
                 # store transition in memroy
-                for idx, model in enumerate(models):
+                for idx, model_data_pair in enumerate(model_data_pairs):
                     pax_and_reb_reward = (
-                        model.actor_data.rewards.pax_reward
-                        + model.actor_data.rewards.reb_reward
+                        model_data_pair.actor_data.rewards.pax_reward
+                        + model_data_pair.actor_data.rewards.reb_reward
                     )
-                    model.replay_buffer.store(
+                    model_data_pair.model.replay_buffer.store(
                         obs_old[idx],
                         actions[idx],
                         config.rew_scale * pax_and_reb_reward,
@@ -91,53 +96,64 @@ def _train_loop(
                     )
 
             actions = []
-            for model in models:
-                model.train_log.reward += model.actor_data.rewards.pax_reward
+            for idx, model_data_pair in enumerate(model_data_pairs):
+                model_data_pair.model.train_log.reward += (
+                    model_data_pair.actor_data.rewards.pax_reward
+                )
                 actions.append(
-                    model.select_action(
-                        model.actor_data.graph_state, probabilistic=training
-                    )
+                    model_data_pair.model.select_action(o[idx], deterministic=training)
                 )
 
             for idx, action in enumerate(actions):
                 # transform sample from Dirichlet into actual vehicle counts (i.e. (x1*x2*..*xn)*num_vehicles)
-                models[idx].actor_data.flow.desired_acc = {
+                model_data_pairs[idx].actor_data.flow.desired_acc = {
                     env.region[i]: int(
                         action[i]
-                        * dictsum(actor_data[idx].graph_state.acc, env.time + 1)
+                        * dictsum(
+                            model_data_pairs[idx].actor_data.graph_state.acc,
+                            env.time + 1,
+                        )
                     )
                     for i in range(n_actions)
                 }
 
                 all_actions[idx, step, :] = list(
-                    models[idx].actor_data.flow.desired_acc.values()
+                    model_data_pairs[idx].actor_data.flow.desired_acc.values()
                 )
 
             # solve minimum rebalancing distance problem (Step 3 in paper)
 
-            solveRebFlow(env, config.path, config.cplex_path)
+            solveRebFlow(
+                env, config.path, config.cplex_path, model_data_pairs=model_data_pairs
+            )
 
-            actor_data, done = env.reb_step()
+            done = env.reb_step(model_data_pairs=model_data_pairs)
 
-            for model in models:
-                model.train_log.reward += model.actor_data.rewards.reb_reward
+            for model_data_pair in model_data_pairs:
+                model_data_pair.model.train_log.reward += (
+                    model_data_pair.actor_data.rewards.reb_reward
+                )
             # track performance over episode
-            for model in models:
-                model.actor_data.model_log.reward += model.actor_data.rewards.reb_reward
-                model.actor_data.model_log.served_demand += (
-                    model.actor_data.info.served_demand
+            for model_data_pair in model_data_pairs:
+                model_data_pair.actor_data.model_log.reward += (
+                    model_data_pair.actor_data.rewards.reb_reward
                 )
-                model.actor_data.model_log.rebalancing_cost += (
-                    model.actor_data.info.rebalancing_cost
+                model_data_pair.actor_data.model_log.served_demand += (
+                    model_data_pair.actor_data.info.served_demand
                 )
-                model.rewards.append(
-                    model.actor_data.rewards.pax_reward
-                    + model.actor_data.rewards.reb_reward
+                model_data_pair.actor_data.model_log.rebalancing_cost += (
+                    model_data_pair.actor_data.info.rebalancing_cost
+                )
+                model_data_pair.model.rewards.append(
+                    model_data_pair.actor_data.rewards.pax_reward
+                    + model_data_pair.actor_data.rewards.reb_reward
                 )
 
-                model.train_log.served_demand += model.actor_data.info.served_demand
-                model.train_log.rebalancing_cost += (
-                    model.actor_data.info.rebalancing_cost
+                model_data_pair.model.train_log.served_demand += (
+                    model_data_pair.actor_data.info.served_demand
+                )
+                model_data_pair.model.train_log.rebalancing_cost += (
+                    model_data_pair.actor_data.info.rebalancing_cost
                 )
             # stop episode if terminating conditions are met
             if done:
@@ -145,11 +161,11 @@ def _train_loop(
             # Training loop
             if i_episode > 10:
                 # sample from memory and update model
-                for model in models:
-                    batch = model.replay_buffer.sample_batch(
+                for model_data_pair in model_data_pairs:
+                    batch = model_data_pair.model.replay_buffer.sample_batch(
                         config.batch_size, norm=False
                     )
-                    model.update(data=batch)
+                    model_data_pair.model.update(data=batch)
 
         # TODO What to do about training?
         # if training:
@@ -159,29 +175,43 @@ def _train_loop(
 
         # Send current statistics to screen
         epochs.set_description(
-            f"Episode {i_episode+1} | Reward: {actor_data[0].model_log.reward:.2f} |"
-            f"ServedDemand: {actor_data[0].model_log.served_demand:.2f} "
-            f"| Reb. Cost: {actor_data[0].model_log.rebalancing_cost:.2f}"
+            f"Episode {i_episode+1} | Reward: {model_data_pairs[0].actor_data.model_log.reward:.2f} |"
+            f"ServedDemand: {model_data_pairs[0].actor_data.model_log.served_demand:.2f} "
+            f"| Reb. Cost: {model_data_pairs[0].actor_data.model_log.rebalancing_cost:.2f}"
         )
 
         # Checkpoint best performing model
+        logging_dict = {}
         if training:
             if (
-                sum([model.actor_data.model_log.reward for model in models])
+                sum(
+                    [
+                        model_data_pair.actor_data.model_log.reward
+                        for model_data_pair in model_data_pairs
+                    ]
+                )
                 > best_reward
             ):
-                for model in models:
-                    model.save_checkpoint(
-                        path=f"./{config.directory}/ckpt/{config.path}/a2c_gnn_{model.actor_data.name}.pth"
+                for model_data_pair in model_data_pairs:
+                    model_data_pair.model.save_checkpoint(
+                        path=f"./{config.directory}/ckpt/{config.path}/a2c_gnn_{model_data_pair.actor_data.name}.pth"
                     )
                     best_reward = sum(
-                        [model.actor_data.model_log.reward for model in models]
+                        [
+                            model_data_pair.actor_data.model_log.reward
+                            for model_data_pair in model_data_pairs
+                        ]
                     )
-                    wandb.log({"Best Reward": best_reward})
-        # Log KPIs on weights and biases
+                    logging_dict.update({"Best Reward": best_reward})
+            # Log KPIs on weights and biases
+            for model_data_pair in model_data_pairs:
+                logging_dict.update(
+                    model_data_pair.actor_data.model_log.dict(
+                        model_data_pair.actor_data.name
+                    )
+                )
 
-        for model in models:
-            wandb.log({**model.actor_data.model_log.dict(model.actor_data.name)})
+            wandb.log(logging_dict)
 
         if not training:
             return all_actions
@@ -297,20 +327,22 @@ def main(config: SACConfig):
     else:
         raise ValueError("Asger er gay. PS. Config fejl igen.")
 
-    models = [rl1_actor, rl2_actor]
+    model_data_pairs = [
+        ModelDataPair(rl1_actor, actor_data[0]),
+        ModelDataPair(rl2_actor, actor_data[1]),
+    ]
     episode_length = config.max_steps  # set episode length
     n_actions = len(env.region)
 
     if not config.test:
         train_episodes = config.max_episodes  # set max number of training episodes
-        for model in models:
-            model.train()
+        for model_data_pair in model_data_pairs:
+            model_data_pair.model.train()
 
         _train_loop(
             train_episodes,
-            actor_data,
+            model_data_pairs,
             env,
-            models,
             n_actions,
             episode_length,
             training=True,
@@ -330,9 +362,8 @@ def main(config: SACConfig):
 
         all_actions = _train_loop(
             test_episodes,
-            actor_data,
+            model_data_pairs,
             env,
-            models,
             n_actions,
             episode_length,
             training=False,
@@ -342,7 +373,7 @@ def main(config: SACConfig):
         actor_evaluator.plot_average_distribution(
             actions=np.array(all_actions),
             T=episode_length,
-            models=models,
+            models=model_data_pairs,
         )
 
         # actor_evaluator.plot_distribution_at_time_step_t(
