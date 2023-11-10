@@ -131,8 +131,6 @@ def main(config: SACConfig):
                 for idx, model in enumerate(model_data_pairs):
                     o[idx] = parser.parse_obs(model.actor_data.graph_state)
                     episode_reward[idx] += model.actor_data.rewards.pax_reward
-
-                for idx, model in enumerate(model_data_pairs):
                     if step > 0:
                         # store transition in memory
                         rl_reward = (
@@ -145,7 +143,12 @@ def main(config: SACConfig):
                             config.rew_scale * rl_reward,
                             o[idx],
                         )
+                    # TODO:A2C code
+                    model.actor_data.model_log.reward += (
+                        model.actor_data.rewards.pax_reward
+                    )
                     action_rl = model.model.select_action(o[idx])
+
                 for idx, model in enumerate(model_data_pairs):
                     # transform sample from Dirichlet into actual vehicle counts (i.e. (x1*x2*..*xn)*num_vehicles)
                     model.actor_data.flow.desired_acc = {
@@ -172,19 +175,9 @@ def main(config: SACConfig):
                 for model in model_data_pairs:
                     episode_served_demand += model.actor_data.info.served_demand
                     episode_rebalancing_cost += model.actor_data.info.rebalancing_cost
-                step += 1
-                for model in model_data_pairs:
-                    if i_episode > 10:
-                        # sample from memory and update model
-                        batch = model.model.replay_buffer.sample_batch(
-                            config.batch_size, norm=False
-                        )
-                        model.model.update(data=batch)
 
+                # track performance over episode
                 for model_data_pair in model_data_pairs:
-                    model_data_pair.actor_data.model_log.reward += (
-                        model_data_pair.actor_data.rewards.pax_reward
-                    )
                     model_data_pair.actor_data.model_log.reward += (
                         model_data_pair.actor_data.rewards.reb_reward
                     )
@@ -194,6 +187,18 @@ def main(config: SACConfig):
                     model_data_pair.actor_data.model_log.rebalancing_cost += (
                         model_data_pair.actor_data.info.rebalancing_cost
                     )
+                    model_data_pair.model.rewards.append(
+                        model_data_pair.actor_data.rewards.pax_reward
+                        + model_data_pair.actor_data.rewards.reb_reward
+                    )
+                step += 1
+                for model in model_data_pairs:
+                    if i_episode > 10:
+                        # sample from memory and update model
+                        batch = model.model.replay_buffer.sample_batch(
+                            config.batch_size, norm=False
+                        )
+                        model.model.update(data=batch)
 
             epochs.set_description(
                 f"Episode {i_episode+1} | "
