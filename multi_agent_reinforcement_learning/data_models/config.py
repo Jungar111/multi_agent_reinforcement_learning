@@ -90,6 +90,6 @@ class SACConfig(BaseConfig):
     clip: int
 
     tf: int = 20
-    total_number_of_cars: int = 1408
+    total_number_of_cars: int = 1500
     grid_size_x: int = 2
     grid_size_y: int = 4

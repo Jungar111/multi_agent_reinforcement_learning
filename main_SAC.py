@@ -324,5 +324,5 @@ def main(config: SACConfig):
 if __name__ == "__main__":
     city = City.brooklyn
     config = args_to_config(city)
-    config.max_episodes = 11
+    config.max_episodes = 1000
     main(config)
