@@ -1,8 +1,9 @@
 """Main file for the SAC implementation for the project."""
 from __future__ import print_function
 from tqdm import trange
-
-# import numpy as np
+import numpy as np
+import wandb
+from datetime import datetime
 from multi_agent_reinforcement_learning.envs.amod import AMoD
 from multi_agent_reinforcement_learning.envs.scenario import Scenario
 from multi_agent_reinforcement_learning.algos.sac import SAC
@@ -10,6 +11,7 @@ from multi_agent_reinforcement_learning.algos.reb_flow_solver import solveRebFlo
 from multi_agent_reinforcement_learning.utils.minor_utils import dictsum
 from multi_agent_reinforcement_learning.utils.init_logger import init_logger
 from multi_agent_reinforcement_learning.algos.sac_gnn_parser import GNNParser
+from multi_agent_reinforcement_learning.data_models.logs import ModelLog
 from multi_agent_reinforcement_learning.utils.sac_argument_parser import args_to_config
 from multi_agent_reinforcement_learning.data_models.city_enum import City
 from multi_agent_reinforcement_learning.data_models.config import SACConfig
@@ -29,6 +31,14 @@ def main(config: SACConfig):
         ),
         ActorData(name="RL_2", no_cars=advesary_number_of_cars),
     ]
+
+    wandb.init(
+        mode=config.wandb_mode,
+        project="master2023",
+        name=f"train_log ({datetime.now().strftime('%Y-%m-%d %H:%M')})",
+    )
+
+    logging_dict = {}
     if not config.test:
         """Run main training loop."""
         logger.info("Running main training loop for SAC.")
@@ -85,13 +95,20 @@ def main(config: SACConfig):
         train_episodes = config.max_episodes
         # T = config.max_steps
         epochs = trange(train_episodes)
-        # best_reward = -np.inf
+        best_reward = -np.inf
         # best_reward_test = -np.inf
+
+        wandb_config_log = {**vars(config)}
+        for model in model_data_pairs:
+            wandb_config_log[f"test_{model.actor_data.name}"] = model.actor_data.no_cars
 
         for model_data_pair in model_data_pairs:
             model_data_pair.model.train()
 
         for i_episode in epochs:
+            for model_data_pair in model_data_pairs:
+                model_data_pair.actor_data.model_log = ModelLog()
+
             env.reset(model_data_pairs)  # initialize environment
             episode_reward = [0, 0]
             episode_served_demand = 0
@@ -114,6 +131,7 @@ def main(config: SACConfig):
                 for idx, model in enumerate(model_data_pairs):
                     o[idx] = parser.parse_obs(model.actor_data.graph_state)
                     episode_reward[idx] += model.actor_data.rewards.pax_reward
+
                 for idx, model in enumerate(model_data_pairs):
                     if step > 0:
                         # store transition in memory
@@ -162,6 +180,21 @@ def main(config: SACConfig):
                             config.batch_size, norm=False
                         )
                         model.model.update(data=batch)
+
+                for model_data_pair in model_data_pairs:
+                    model_data_pair.actor_data.model_log.reward += (
+                        model_data_pair.actor_data.rewards.pax_reward
+                    )
+                    model_data_pair.actor_data.model_log.reward += (
+                        model_data_pair.actor_data.rewards.reb_reward
+                    )
+                    model_data_pair.actor_data.model_log.served_demand += (
+                        model_data_pair.actor_data.info.served_demand
+                    )
+                    model_data_pair.actor_data.model_log.rebalancing_cost += (
+                        model_data_pair.actor_data.info.rebalancing_cost
+                    )
+
             epochs.set_description(
                 f"Episode {i_episode+1} | "
                 f"Reward_0: {episode_reward[0]:.2f} | "
@@ -170,14 +203,21 @@ def main(config: SACConfig):
                 f"Reb. Cost: {episode_rebalancing_cost:.2f}"
             )
             # Checkpoint best performing model
-            # if episode_reward >= best_reward:
-            #     model.save_checkpoint(
-            #         path=f"saved_files/ckpt/{config.path}/{config.checkpoint_path}_sample.pth"
-            #     )
-            #     best_reward = episode_reward
-            # model.save_checkpoint(
-            #     path=f"saved_files/ckpt/{config.path}/{config.checkpoint_path}_running.pth"
-            # )
+            if np.sum(episode_reward) >= best_reward:
+                for model in model_data_pairs:
+                    model.model.save_checkpoint(
+                        path=f"saved_files/ckpt/{config.path}/{config.checkpoint_path}_sample.pth"
+                    )
+                best_reward = np.sum(episode_reward)
+                logging_dict.update({"Best Reward": best_reward})
+
+            for model_data_pair in model_data_pairs:
+                logging_dict.update(
+                    model_data_pair.actor_data.model_log.dict(
+                        model_data_pair.actor_data.name
+                    )
+                )
+            wandb.log(logging_dict)
             # if i_episode % 10 == 0:
             #     (
             #         test_reward,
