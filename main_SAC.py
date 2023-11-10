@@ -116,7 +116,7 @@ def main(config: SACConfig):
             done = False
             step = 0
             o = [None, None]
-            action_rl = None
+            action_rl = [None, None]
             obs_list = [None, None]
             while not done:
                 # take matching step (Step 1 in paper)
@@ -139,21 +139,21 @@ def main(config: SACConfig):
                         )
                         model.model.replay_buffer.store(
                             obs_list[idx],
-                            action_rl,
+                            action_rl[idx],
                             config.rew_scale * rl_reward,
                             o[idx],
                         )
-                    # TODO:A2C code
+                    # Log pax_reward
                     model.actor_data.model_log.reward += (
                         model.actor_data.rewards.pax_reward
                     )
-                    action_rl = model.model.select_action(o[idx])
+                    action_rl[idx] = model.model.select_action(o[idx])
 
                 for idx, model in enumerate(model_data_pairs):
                     # transform sample from Dirichlet into actual vehicle counts (i.e. (x1*x2*..*xn)*num_vehicles)
                     model.actor_data.flow.desired_acc = {
                         env.region[i]: int(
-                            action_rl[i]
+                            action_rl[idx][i]
                             * dictsum(model.actor_data.graph_state.acc, env.time + 1)
                         )
                         for i in range(len(env.region))
