@@ -24,6 +24,9 @@ class GraphState:
     dacc: defaultdict[T.Tuple[int, int], T.Dict[int, float]] = field(
         default_factory=lambda: defaultdict(dict)
     )
+    price: defaultdict[T.Tuple[int, int], T.Dict[int, float]] = field(
+        default_factory=lambda: defaultdict(dict)
+    )
 
 
 @dataclass
