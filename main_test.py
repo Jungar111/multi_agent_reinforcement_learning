@@ -14,12 +14,17 @@ from multi_agent_reinforcement_learning.algos.reb_flow_solver import solveRebFlo
 from multi_agent_reinforcement_learning.data_models.actor_data import ActorData
 from multi_agent_reinforcement_learning.data_models.model_data_pair import ModelDataPair
 from multi_agent_reinforcement_learning.algos.sac import SAC
-from multi_agent_reinforcement_learning.data_models.config import A2CConfig, SACConfig
+from multi_agent_reinforcement_learning.data_models.config import (
+    A2CConfig,
+    BaseConfig,
+    SACConfig,
+)
 from multi_agent_reinforcement_learning.data_models.logs import ModelLog
 from multi_agent_reinforcement_learning.envs.amod import AMoD
 from multi_agent_reinforcement_learning.envs.scenario import Scenario
 
 # from multi_agent_reinforcement_learning.utils.argument_parser import args_to_config
+
 from multi_agent_reinforcement_learning.utils.sac_argument_parser import args_to_config
 from multi_agent_reinforcement_learning.data_models.city_enum import City
 from multi_agent_reinforcement_learning.utils.init_logger import init_logger
@@ -216,7 +221,7 @@ def _train_loop(
             return all_actions
 
 
-def main(config: SACConfig):
+def main(config: BaseConfig):
     """Run main training loop."""
     logger.info("Running main loop.")
 
@@ -224,9 +229,10 @@ def main(config: SACConfig):
 
     actor_data = [
         ActorData(
-            name="RL_1", no_cars=config.total_number_of_cars - advesary_number_of_cars
+            name="RL_1_sac",
+            no_cars=config.total_number_of_cars - advesary_number_of_cars,
         ),
-        ActorData(name="RL_2", no_cars=advesary_number_of_cars),
+        ActorData(name="RL_2_sac", no_cars=advesary_number_of_cars),
     ]
 
     wandb_config_log = {**vars(config)}
@@ -238,7 +244,7 @@ def main(config: SACConfig):
         project="master2023",
         name=f"test_log ({datetime.now().strftime('%Y-%m-%d %H:%M')})"
         if config.test
-        else f"train_log ({datetime.now().strftime('%Y-%m-%d %H:%M')})",
+        else f"train_log SAC ({datetime.now().strftime('%Y-%m-%d %H:%M')})",
         config=wandb_config_log,
     )
 
@@ -388,8 +394,8 @@ def main(config: SACConfig):
 if __name__ == "__main__":
     city = City.brooklyn
     config = args_to_config(city)
-    config.wandb_mode = "disabled"
-    config.max_episodes = 11
+    # config.wandb_mode = "disabled"
+    config.max_episodes = 16000
     # config.test = True
     # config.max_episodes = 10000
     # config.json_file = None

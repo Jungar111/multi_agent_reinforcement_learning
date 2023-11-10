@@ -124,6 +124,7 @@ def _train_loop(
                 model_data_pair.actor_data.model_log.reward += (
                     model_data_pair.actor_data.rewards.reb_reward
                 )
+                logger.info(model_data_pair.actor_data.rewards.reb_reward)
                 model_data_pair.actor_data.model_log.served_demand += (
                     model_data_pair.actor_data.info.served_demand
                 )
@@ -201,10 +202,10 @@ def main(config: BaseConfig):
 
     actor_data = [
         ActorData(
-            name="RL_1",
+            name="RL_1 testing pax",
             no_cars=config.total_number_of_cars - advesary_number_of_cars,
         ),
-        ActorData(name="RL_2", no_cars=advesary_number_of_cars),
+        ActorData(name="RL_2 testing pax", no_cars=advesary_number_of_cars),
     ]
 
     wandb_config_log = {**vars(config)}
