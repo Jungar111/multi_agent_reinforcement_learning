@@ -27,7 +27,7 @@ class Scenario:
         fix_price: bool = True,
         alpha: float = 0.2,
         json_file: T.Optional[str] = None,
-        json_hr: int = 7,
+        json_hr: int = 19,
         json_tstep: int = 3,
         varying_time: bool = False,
         json_regions=None,
@@ -44,7 +44,6 @@ class Scenario:
         alpha: parameter for uniform distribution of demand levels - [1-alpha, 1+alpha] * demand_input
         """
         self.sd = sd
-        self.actor_data = actor_data
         if sd != None:
             np.random.seed(self.sd)
         # simulate enviorienment when json is none.
@@ -78,7 +77,7 @@ class Scenario:
                         + abs(i % self.N1 - j % self.N1)
                     ) * grid_travel_time
 
-            for actor in self.actor_data:
+            for actor in actor_data:
                 for n in self.G.nodes:
                     self.G.nodes[n][f"acc_init_{actor.name}"] = int(
                         actor.no_cars // len(self.G.nodes)
@@ -262,7 +261,7 @@ class Scenario:
                         for t in range(0, self.tf + 1):
                             self.reb_time[o, d][t] = max(int(round(rt / json_tstep)), 1)
 
-            for actor in self.actor_data:
+            for actor in actor_data:
                 for item in data["totalAcc"]:
                     hr = item["hour"]
                     if hr == json_hr + int(round(json_tstep / 2 * self.tf / 60)):

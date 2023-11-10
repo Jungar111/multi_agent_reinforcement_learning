@@ -4,14 +4,15 @@ A2C:
     Advantage Actor Critic algorithm using a GNN parametrization for both Actor and Critic.
 """
 
-import typing as T
-
 import numpy as np
 import torch
 import torch.nn.functional as F
 from torch import nn
 from torch.distributions import Dirichlet
-from multi_agent_reinforcement_learning.data_models.actor_data import ActorData
+from multi_agent_reinforcement_learning.data_models.actor_data import (
+    ActorData,
+    GraphState,
+)
 from multi_agent_reinforcement_learning.data_models.logs import ModelLog
 
 from multi_agent_reinforcement_learning.envs.amod import AMoD
@@ -20,6 +21,7 @@ from multi_agent_reinforcement_learning.algos.gnn_critic import GNNCritic
 from multi_agent_reinforcement_learning.algos.gnn_parser import GNNParser
 from multi_agent_reinforcement_learning.data_models.config import Config
 from multi_agent_reinforcement_learning.data_models.actor_critic_data import SavedAction
+import typing as T
 
 
 class ActorCritic(nn.Module):
@@ -51,13 +53,11 @@ class ActorCritic(nn.Module):
         self.actor_data = actor_data
         self.train_log = ModelLog()
 
-        self.actor = GNNActor(
-            self.input_size, self.hidden_size, device=self.config.device
-        ).to(self.config.device)
-
-        self.critic = GNNCritic(self.input_size, self.hidden_size).to(
+        self.actor = GNNActor(self.input_size, device=self.config.device).to(
             self.config.device
         )
+
+        self.critic = GNNCritic(self.input_size).to(self.config.device)
         self.obs_parser = GNNParser(self.env, self.config)
 
         self.optimizers = self.configure_optimizers()
@@ -67,7 +67,7 @@ class ActorCritic(nn.Module):
         self.rewards = []
         self.to(self.config.device)
 
-    def forward(self, obs: T.Tuple[dict, int, dict, dict], jitter: float = 1e-20):
+    def forward(self, data: T.Optional[T.Dict], obs: GraphState, jitter: float = 1e-20):
         """Forward of both actor and critic in the current enviorenment defined by data.
 
         softplus used on the actor along with 'jitter'.
@@ -76,7 +76,7 @@ class ActorCritic(nn.Module):
         returns: concentration, value
         """
         # parse raw environment data in model format
-        x = self.parse_obs(obs).to(self.config.device)
+        x = self.parse_obs(obs, data).to(self.config.device)
 
         # actor: computes concentration parameters of a Dirichlet distribution
         a_out, price = self.actor(x)
@@ -88,23 +88,25 @@ class ActorCritic(nn.Module):
         value = self.critic(x)
         return concentration, price, value
 
-    def parse_obs(self, obs: T.Tuple[dict, int, dict, dict]):
+    def parse_obs(self, obs: GraphState, data: T.Optional[T.Dict]):
         """Parse observations.
 
         state: current state of the enviorenment
         returns: state
         """
-        state = self.obs_parser.parse_obs(obs=obs, actor_data=self.actor_data)
+        state = self.obs_parser.parse_obs(obs=obs, data=data, config=self.config)
         return state
 
-    def select_action(self, obs: T.Tuple[dict, int, dict, dict], probabilistic: bool):
+    def select_action(
+        self, obs: GraphState, data: T.Optional[T.Dict], probabilistic: bool
+    ):
         """Select an action based on the distribution of the vehicles with Dirichlet.
 
         Saves the log of the new action along with the value computed by the critic
         obs: observation of the current distribution of vehicles.
         return: List of the next actions
         """
-        concentration, price, value = self.forward(obs)
+        concentration, price, value = self.forward(obs=obs, data=data)
 
         if probabilistic:
             m = Dirichlet(concentration)

@@ -30,8 +30,14 @@ class Config(BaseModel):
     total_number_of_cars: int = 1408
     wandb_mode: str = "online"
     gamma: float = 0.97
-    json_file: T.Optional[Path] = Path("data", "scenario_nyc4x4.json")
+    json_file: T.Optional[Path] = Path("data", "scenario_nyc_brooklyn.json")
+    city: str = "nyc_brooklyn"
     log_interval: int = 10
+
+    json_hr: T.Dict[str, int] = {
+        "nyc_brooklyn": 19,
+        "nyc4x4": 7,
+    }
 
     @validator("tf", pre=True)
     @classmethod

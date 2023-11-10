@@ -9,7 +9,7 @@ from torch_geometric.nn import GCNConv
 class GNNCritic(nn.Module):
     """Critic parametrizing the value function estimator V(s_t)."""
 
-    def __init__(self, in_channels: int, out_channels: int):
+    def __init__(self, in_channels: int):
         """Init method for GNNCritic.
 
         Defines the architecture of the network which is different form the actor network.
