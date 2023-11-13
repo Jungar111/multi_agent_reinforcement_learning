@@ -58,11 +58,12 @@ class ActorEvaluator:
         norm = plt.cm.colors.Normalize(vmin=0, vmax=np.max(max_values_for_cbar))
         sc = plt.cm.ScalarMappable(norm=norm)
         fig, ax = plt.subplots(1, len(actions))
+        no_grids = actions[0, :, :].shape[1]
         for idx, model in enumerate(model_data_pairs):
-            if actions[idx, :, :].shape[1] < 16:
+            if no_grids < 16:
                 actor_actons = np.pad(
                     actions[idx, :, :],
-                    pad_width=((0, 0), (0, 16 - actions[idx, :, :].shape[1])),
+                    pad_width=((0, 0), (0, 16 - no_grids)),
                 )
             actor_actions = actor_actons.reshape(T, 4, 4)
             for i in range(4):
@@ -77,13 +78,23 @@ class ActorEvaluator:
                                     ].values()
                                 )
                             )
-                            for k in range(16)
+                            for k in range(no_grids)
+                        ]
+                    ).sum()
+                    unmet_demand_from_grid = np.array(
+                        [
+                            np.array(
+                                list(
+                                    model.actor_data.unmet_demand[i * 4 + j, k].values()
+                                )
+                            )
+                            for k in range(no_grids)
                         ]
                     ).sum()
                     ax[idx].text(
                         j,
                         i,
-                        demand_from_grid.round(2),
+                        f"{demand_from_grid.round(2)}/{unmet_demand_from_grid.round(2)}",
                         color="White",
                     )
             ax[idx].matshow(actor_actions.mean(axis=0), norm=norm)
