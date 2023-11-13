@@ -76,9 +76,6 @@ def _train_loop(
 
             actions = []
             for idx, model_data_pair in enumerate(model_data_pairs):
-                model_data_pair.model.train_log.reward += (
-                    model_data_pair.actor_data.rewards.pax_reward
-                )
                 actions.append(
                     model_data_pair.model.select_action(
                         obs=model_data_pair.actor_data.graph_state,
@@ -115,10 +112,6 @@ def _train_loop(
 
             done = env.reb_step(model_data_pairs=model_data_pairs)
 
-            for model_data_pair in model_data_pairs:
-                model_data_pair.model.train_log.reward += (
-                    model_data_pair.actor_data.rewards.reb_reward
-                )
             # track performance over episode
             for model_data_pair in model_data_pairs:
                 model_data_pair.actor_data.model_log.reward += (
@@ -136,12 +129,6 @@ def _train_loop(
                     + model_data_pair.actor_data.rewards.reb_reward
                 )
 
-                model_data_pair.model.train_log.served_demand += (
-                    model_data_pair.actor_data.info.served_demand
-                )
-                model_data_pair.model.train_log.rebalancing_cost += (
-                    model_data_pair.actor_data.info.rebalancing_cost
-                )
             # stop episode if terminating conditions are met
             if done:
                 break
@@ -161,7 +148,7 @@ def _train_loop(
         # Checkpoint best performing model
         logging_dict = {}
         if training:
-            if (  # TODO fix
+            if (
                 sum(
                     [
                         model_data_pair.actor_data.model_log.reward
