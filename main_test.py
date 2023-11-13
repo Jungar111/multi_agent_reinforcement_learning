@@ -1,40 +1,46 @@
 """Main file for project."""
 from __future__ import print_function
-from pathlib import Path
 
 from datetime import datetime
-import json
 import typing as T
-
 import numpy as np
+
 from tqdm import trange
 
 import wandb
+import copy
 from multi_agent_reinforcement_learning.algos.actor_critic_gnn import ActorCritic
 from multi_agent_reinforcement_learning.algos.reb_flow_solver import solveRebFlow
 from multi_agent_reinforcement_learning.data_models.actor_data import ActorData
-from multi_agent_reinforcement_learning.data_models.city_enum import City
-from multi_agent_reinforcement_learning.data_models.config import BaseConfig
 from multi_agent_reinforcement_learning.data_models.model_data_pair import ModelDataPair
+from multi_agent_reinforcement_learning.algos.sac import SAC
+from multi_agent_reinforcement_learning.data_models.config import (
+    A2CConfig,
+    BaseConfig,
+    SACConfig,
+)
 from multi_agent_reinforcement_learning.data_models.logs import ModelLog
 from multi_agent_reinforcement_learning.envs.amod import AMoD
 from multi_agent_reinforcement_learning.envs.scenario import Scenario
-from multi_agent_reinforcement_learning.evaluation.actor_evaluation import (
-    ActorEvaluator,
-)
-from multi_agent_reinforcement_learning.utils.argument_parser import args_to_config
+
+# from multi_agent_reinforcement_learning.utils.argument_parser import args_to_config
+
+from multi_agent_reinforcement_learning.utils.sac_argument_parser import args_to_config
+from multi_agent_reinforcement_learning.data_models.city_enum import City
 from multi_agent_reinforcement_learning.utils.init_logger import init_logger
 from multi_agent_reinforcement_learning.utils.minor_utils import dictsum
 from multi_agent_reinforcement_learning.utils.setup_grid import setup_dummy_grid
-
+from multi_agent_reinforcement_learning.evaluation.actor_evaluation import (
+    ActorEvaluator,
+)
 
 logger = init_logger()
 
 
 def _train_loop(
     n_episodes: int,
-    env: AMoD,
     model_data_pairs: T.List[ModelDataPair],
+    env: AMoD,
     n_actions: int,
     episode_length: int,
     training: bool = True,
@@ -44,18 +50,11 @@ def _train_loop(
     Used both for testing and training, by setting training.
     """
     best_reward = -np.inf
-    data = None
-    if env.config.json_file is not None:
-        with open(env.config.json_file) as json_file:
-            data = json.load(json_file)
     epochs = trange(n_episodes)
-    episode_mean_price = {
-        model_data_pair.actor_data.name: [] for model_data_pair in model_data_pairs
-    }
     for i_episode in epochs:
         for model_data_pair in model_data_pairs:
             model_data_pair.actor_data.model_log = ModelLog()
-        env.reset(model_data_pairs=model_data_pairs)  # initialize environment
+        env.reset(model_data_pairs)  # initialize environment
 
         all_actions = np.zeros(
             (
@@ -64,45 +63,50 @@ def _train_loop(
                 np.max(list(model_data_pairs[0].actor_data.flow.pax_flow.keys())) + 1,
             )
         )
+        o = [None, None]
+        actions = None
 
         for step in range(episode_length):
+            if step > 0:
+                obs_old = copy.deepcopy(o)
             # take matching step (Step 1 in paper)
             done = env.pax_step(
-                model_data_pairs=model_data_pairs,
                 cplex_path=config.cplex_path,
                 path=config.path,
+                model_data_pairs=model_data_pairs,
             )
             for model_data_pair in model_data_pairs:
                 model_data_pair.actor_data.model_log.reward += (
                     model_data_pair.actor_data.rewards.pax_reward
                 )
             # use GNN-RL policy (Step 2 in paper)
+            for idx, model_data_pair in enumerate(model_data_pairs):
+                o[idx] = model_data_pair.model.obs_parser.parse_obs(
+                    obs=model_data_pair.actor_data.graph_state
+                )
+
+            if step > 0:
+                # store transition in memroy
+                for idx, model_data_pair in enumerate(model_data_pairs):
+                    pax_and_reb_reward = (
+                        model_data_pair.actor_data.rewards.pax_reward
+                        + model_data_pair.actor_data.rewards.reb_reward
+                    )
+                    model_data_pair.model.replay_buffer.store(
+                        obs_old[idx],
+                        actions[idx],
+                        config.rew_scale * pax_and_reb_reward,
+                        o[idx],
+                    )
 
             actions = []
-            prices = []
             for idx, model_data_pair in enumerate(model_data_pairs):
                 model_data_pair.model.train_log.reward += (
                     model_data_pair.actor_data.rewards.pax_reward
                 )
-                action, price = model_data_pair.model.select_action(
-                    obs=model_data_pair.actor_data.graph_state,
-                    probabilistic=training,
-                    data=data,
+                actions.append(
+                    model_data_pair.model.select_action(o[idx], deterministic=training)
                 )
-                actions.append(action)
-                prices.append(price)
-
-                # @TODO please optimise this. Must be very slow.
-                num_cells = config.grid_size_y * config.grid_size_y
-                for i in range(num_cells):
-                    for j in range(num_cells):
-                        model_data_pair.actor_data.graph_state.price[i, j][
-                            step + 1
-                        ] = price[i][j]
-
-                actions.append(action)
-                prices.append(price)
-                episode_mean_price[model_data_pair.actor_data.name].append(price.mean())
 
             for idx, action in enumerate(actions):
                 # transform sample from Dirichlet into actual vehicle counts (i.e. (x1*x2*..*xn)*num_vehicles)
@@ -124,10 +128,7 @@ def _train_loop(
             # solve minimum rebalancing distance problem (Step 3 in paper)
 
             solveRebFlow(
-                env,
-                config.path,
-                config.cplex_path,
-                model_data_pairs=model_data_pairs,
+                env, config.path, config.cplex_path, model_data_pairs=model_data_pairs
             )
 
             done = env.reb_step(model_data_pairs=model_data_pairs)
@@ -141,7 +142,6 @@ def _train_loop(
                 model_data_pair.actor_data.model_log.reward += (
                     model_data_pair.actor_data.rewards.reb_reward
                 )
-                logger.info(model_data_pair.actor_data.rewards.reb_reward)
                 model_data_pair.actor_data.model_log.served_demand += (
                     model_data_pair.actor_data.info.served_demand
                 )
@@ -162,11 +162,20 @@ def _train_loop(
             # stop episode if terminating conditions are met
             if done:
                 break
+            # Training loop
+            if i_episode > 10:
+                # sample from memory and update model
+                for model_data_pair in model_data_pairs:
+                    batch = model_data_pair.model.replay_buffer.sample_batch(
+                        config.batch_size, norm=False
+                    )
+                    model_data_pair.model.update(data=batch)
 
-        if training:
-            # perform on-policy backprop
-            for model_data_pair in model_data_pairs:
-                model_data_pair.model.training_step()
+        # TODO What to do about training?
+        # if training:
+        #     # perform on-policy backprop
+        #     for model in models:
+        #         model.training_step()
 
         # Send current statistics to screen
         epochs.set_description(
@@ -178,7 +187,7 @@ def _train_loop(
         # Checkpoint best performing model
         logging_dict = {}
         if training:
-            if (  # TODO fix
+            if (
                 sum(
                     [
                         model_data_pair.actor_data.model_log.reward
@@ -198,14 +207,15 @@ def _train_loop(
                         ]
                     )
                     logging_dict.update({"Best Reward": best_reward})
-        # Log KPIs on weights and biases
-        for model_data_pair in model_data_pairs:
-            logging_dict.update(
-                model_data_pair.actor_data.model_log.dict(
-                    model_data_pair.actor_data.name
+            # Log KPIs on weights and biases
+            for model_data_pair in model_data_pairs:
+                logging_dict.update(
+                    model_data_pair.actor_data.model_log.dict(
+                        model_data_pair.actor_data.name
+                    )
                 )
-            )
-        wandb.log(logging_dict)
+
+            wandb.log(logging_dict)
 
         if not training:
             return all_actions
@@ -219,22 +229,22 @@ def main(config: BaseConfig):
 
     actor_data = [
         ActorData(
-            name="RL_1_with_price",
+            name="RL_1_sac",
             no_cars=config.total_number_of_cars - advesary_number_of_cars,
         ),
-        ActorData(name="RL_2_with_price", no_cars=advesary_number_of_cars),
+        ActorData(name="RL_2_sac", no_cars=advesary_number_of_cars),
     ]
 
     wandb_config_log = {**vars(config)}
     for actor in actor_data:
-        wandb_config_log[f"test_{actor.name}"] = actor.no_cars
+        wandb_config_log[f"no_cars_{actor.name}"] = actor.no_cars
 
     wandb.init(
         mode=config.wandb_mode,
         project="master2023",
         name=f"test_log ({datetime.now().strftime('%Y-%m-%d %H:%M')})"
         if config.test
-        else f"train_log ({datetime.now().strftime('%Y-%m-%d %H:%M')})",
+        else f"train_log SAC ({datetime.now().strftime('%Y-%m-%d %H:%M')})",
         config=wandb_config_log,
     )
 
@@ -249,29 +259,81 @@ def main(config: BaseConfig):
             actor_data=actor_data,
         )
     else:
-        scenario = Scenario(
+        if isinstance(config, A2CConfig):
+            scenario = Scenario(
+                config=config,
+                json_file=str(config.json_file),
+                sd=config.seed,
+                demand_ratio=config.demand_ratio[config.city],
+                json_hr=config.json_hr[config.city],
+                json_tstep=config.json_tstep,
+                actor_data=actor_data,
+            )
+        elif isinstance(config, SACConfig):
+            scenario = Scenario(
+                config=config,
+                json_file=str(config.json_file),
+                sd=config.seed,
+                demand_ratio=config.demand_ratio[config.city],
+                json_hr=config.json_hr[config.city],
+                json_tstep=config.json_tstep,
+                actor_data=actor_data,
+            )
+        else:
+            raise ValueError("Asger is über gay, ps. config error.")
+
+    if isinstance(config, A2CConfig):
+        env = AMoD(
+            scenario=scenario,
+            beta=config.beta[config.city],
+            actor_data=actor_data,
             config=config,
-            json_file=str(config.json_file),
-            sd=config.seed,
-            demand_ratio=config.demand_ratio[config.city],
-            json_hr=config.json_hr[config.city],
-            json_tstep=config.json_tstep,
+        )
+        # Initialize A2C-GNN
+        rl1_actor = ActorCritic(
+            env=env, input_size=21, config=config, actor_data=actor_data[0]
+        )
+        rl2_actor = ActorCritic(
+            env=env, input_size=21, config=config, actor_data=actor_data[1]
+        )
+    elif isinstance(config, SACConfig):
+        env = AMoD(
+            beta=config.beta[config.city],
+            scenario=scenario,
+            config=config,
             actor_data=actor_data,
         )
-
-    env = AMoD(
-        scenario=scenario,
-        beta=config.beta[config.city],
-        actor_data=actor_data,
-        config=config,
-    )
-    # Initialize A2C-GNN
-    rl1_actor = ActorCritic(
-        env=env, input_size=21, config=config, actor_data=actor_data[0]
-    )
-    rl2_actor = ActorCritic(
-        env=env, input_size=21, config=config, actor_data=actor_data[1]
-    )
+        # Initialise SAC
+        rl1_actor = SAC(
+            env=env,
+            config=config,
+            actor_data=actor_data[0],
+            input_size=13,
+            hidden_size=config.hidden_size,
+            p_lr=config.p_lr,
+            q_lr=config.q_lr,
+            alpha=config.alpha,
+            batch_size=config.batch_size,
+            use_automatic_entropy_tuning=False,
+            clip=config.clip,
+            critic_version=config.critic_version,
+        )
+        rl2_actor = SAC(
+            env=env,
+            config=config,
+            actor_data=actor_data[1],
+            input_size=13,
+            hidden_size=config.hidden_size,
+            p_lr=config.p_lr,
+            q_lr=config.q_lr,
+            alpha=config.alpha,
+            batch_size=config.batch_size,
+            use_automatic_entropy_tuning=False,
+            clip=config.clip,
+            critic_version=config.critic_version,
+        )
+    else:
+        raise ValueError("Asger er gay. PS. Config fejl igen.")
 
     model_data_pairs = [
         ModelDataPair(rl1_actor, actor_data[0]),
@@ -287,35 +349,20 @@ def main(config: BaseConfig):
 
         _train_loop(
             train_episodes,
-            env,
             model_data_pairs,
+            env,
             n_actions,
             episode_length,
             training=True,
         )
 
-        ckpt_paths = [
-            str(
-                Path(
-                    "saved_files",
-                    "ckpt",
-                    "nyc4",
-                    f"a2c_gnn_{model_data_pair.actor_data.name}.pth",
-                )
-            )
-            for model_data_pair in model_data_pairs
-        ]
-
-        for ckpt_path in ckpt_paths:
-            wandb.save(ckpt_path)
-
     else:
         # Load pre-trained model
         rl1_actor.load_checkpoint(
-            path=f"./{config.directory}/ckpt/{config.path}/a2c_gnn_RL_1_big_run.pth"
+            path=f"./{config.directory}/ckpt/{config.path}/a2c_gnn_{rl1_actor.actor_data.name}.pth"
         )
         rl2_actor.load_checkpoint(
-            path=f"./{config.directory}/ckpt/{config.path}/a2c_gnn_RL_2_big_run.pth"
+            path=f"./{config.directory}/ckpt/{config.path}/a2c_gnn_{rl2_actor.actor_data.name}.pth"
         )
 
         test_episodes = 1
@@ -323,8 +370,8 @@ def main(config: BaseConfig):
 
         all_actions = _train_loop(
             test_episodes,
-            env,
             model_data_pairs,
+            env,
             n_actions,
             episode_length,
             training=False,
@@ -347,9 +394,10 @@ def main(config: BaseConfig):
 if __name__ == "__main__":
     city = City.brooklyn
     config = args_to_config(city)
-    config.wandb_mode = "disabled"
+    # config.wandb_mode = "disabled"
+    config.max_episodes = 16000
     # config.test = True
-    config.max_episodes = 11
+    # config.max_episodes = 10000
     # config.json_file = None
     # config.grid_size_x = 2
     # config.grid_size_y = 3

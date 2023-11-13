@@ -6,7 +6,7 @@ from torch_geometric.utils import grid
 from multi_agent_reinforcement_learning.data_models.actor_data import (
     GraphState,
 )
-from multi_agent_reinforcement_learning.data_models.config import Config
+from multi_agent_reinforcement_learning.data_models.config import A2CConfig
 from multi_agent_reinforcement_learning.envs.amod import AMoD
 import typing as T
 
@@ -17,7 +17,7 @@ class GNNParser:
     def __init__(
         self,
         env: AMoD,
-        config: Config,
+        config: A2CConfig,
         T: int = 10,
         scale_factor: float = 0.01,
     ):
@@ -32,7 +32,7 @@ class GNNParser:
         if config.json_file is None:
             self.demand_input = self.env.scenario.demand_input2
 
-    def parse_obs(self, data: T.Optional[T.Dict], obs: GraphState, config: Config):
+    def parse_obs(self, data: T.Optional[T.Dict], obs: GraphState, config: A2CConfig):
         """Parse observations.
 
         Return the data object called 'data' which is used in the Actors and critc forward pass.

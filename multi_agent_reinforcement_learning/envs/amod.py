@@ -14,7 +14,7 @@ from multi_agent_reinforcement_learning.data_models.actor_data import (
 )
 from multi_agent_reinforcement_learning.envs.scenario import Scenario
 from multi_agent_reinforcement_learning.utils.minor_utils import mat2str
-from multi_agent_reinforcement_learning.data_models.config import Config
+from multi_agent_reinforcement_learning.data_models.config import BaseConfig
 from multi_agent_reinforcement_learning.data_models.model_data_pair import ModelDataPair
 
 
@@ -26,7 +26,7 @@ class AMoD:
         self,
         actor_data: T.List[ActorData],
         scenario: Scenario,
-        config: Config,
+        config: BaseConfig,
         beta: float = 0.2,
     ):
         """Initialise env.
