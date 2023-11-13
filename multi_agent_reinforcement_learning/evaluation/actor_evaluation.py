@@ -5,6 +5,7 @@ import typing as T
 import numpy as np
 
 from multi_agent_reinforcement_learning.algos.actor_critic_gnn import ActorCritic
+from multi_agent_reinforcement_learning.data_models.model_data_pair import ModelDataPair
 
 
 class ActorEvaluator:
@@ -45,27 +46,34 @@ class ActorEvaluator:
         self,
         actions: np.ndarray,
         T: int,
-        models: T.List[ActorCritic],
+        model_data_pairs: T.List[ModelDataPair],
     ):
         """Plot average distribution for the actors."""
         fig, ax = plt.subplots(1, len(actions))
-        for idx, model in enumerate(models):
+        for idx, model_data_pair in enumerate(model_data_pairs):
+            actor_actions = actions
             if actions[idx, :, :].shape[1] < 16:
-                actor_actons = np.pad(
+                actor_actions = np.pad(
                     actions[idx, :, :],
                     pad_width=((0, 0), (0, 16 - actions[idx, :, :].shape[1])),
                 )
-            actor_actions = actor_actons.resize(T, 4, 4)
+            actor_actions = actor_actions.resize(T, 4, 4)
             for i in range(4):
                 for j in range(4):
                     ax[idx].text(
                         i,
                         j,
-                        np.mean(list(model.actor_data.demand[j, i].values())).round(2),
+                        np.mean(
+                            list(
+                                model_data_pair.actor_data.graph_state.demand[
+                                    j, i
+                                ].values()
+                            )
+                        ).round(2),
                         color="red",
                     )
             pos = ax[idx].matshow(actor_actions.mean(axis=0))
             fig.colorbar(pos, ax=ax[idx])
-            ax[idx].set_title(f"Actor: {model.actor_data.name}")
+            ax[idx].set_title(f"Actor: {model_data_pair.actor_data.name}")
 
         plt.show()

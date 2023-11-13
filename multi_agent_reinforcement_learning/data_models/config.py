@@ -69,11 +69,6 @@ class A2CConfig(BaseConfig):
             raise ValueError("tf must be at least 10. WE THINK! Depends on grid size.")
         return value
 
-    @validator("n_regions")
-    def update_n_regions(cls, value, values):
-        value = values.grid_size_x * values.grid_size_y
-        return value
-
 
 class SACConfig(BaseConfig):
     """Config class for the SAC implementation."""

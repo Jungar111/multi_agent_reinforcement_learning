@@ -152,7 +152,8 @@ class AMoD:
 
     def distribute_hypergeometric(
         self,
-        distribution_in_area_for_actor: T.List[T.Union[int, float]],
+        model_data_pairs: T.List[ModelDataPair],
+        cars_in_area_for_each_company: T.List[T.Union[int, float]],
         no_customers: int,
         origin: int,
         dest: int,
@@ -163,13 +164,16 @@ class AMoD:
         demand_distribution_to_actors = np.random.Generator(
             np.random.PCG64(self.config.seed)
         ).multivariate_hypergeometric(
-            np.array(distribution_in_area_for_actor), no_customers
+            np.array(cars_in_area_for_each_company), no_customers
         )
         for idx, demand in enumerate(demand_distribution_to_actors):
-            self.actor_data[idx].demand[origin, dest][t] = demand
+            model_data_pairs[idx].actor_data.graph_state.demand[origin, dest][
+                t
+            ] = demand
 
     def distribute_based_on_price(
         self,
+        model_data_pairs: T.List[ModelDataPair],
         price: T.List[float],
         no_customers: int,
         origin: int,
@@ -186,7 +190,9 @@ class AMoD:
                 cars_in_area_for_each_company[actor_idx],
                 chosen_company.get(actor_idx, 0),
             )
-            self.actor_data[actor_idx].demand[origin, dest][t] = no_cars
+            model_data_pairs[actor_idx].actor_data.graph_state.demand[origin, dest][
+                t
+            ] = no_cars
             actor_full[actor_idx] = {
                 "full": no_cars == cars_in_area_for_each_company[actor_idx],
                 "excess": chosen_company.get(actor_idx, 0)
@@ -196,9 +202,13 @@ class AMoD:
         for actor_idx, data in actor_full.items():
             if data["full"]:
                 if actor_idx == 0:
-                    self.actor_data[1].demand[origin, dest][t] += data["excess"]
+                    model_data_pairs[1].actor_data.graph_state.demand[origin, dest][
+                        t
+                    ] += data["excess"]
                 if actor_idx == 1:
-                    self.actor_data[0].demand[origin, dest][t] += data["excess"]
+                    model_data_pairs[0].actor_data.graph_state.demand[origin, dest][
+                        t
+                    ] += data["excess"]
 
     # pax step
     def pax_step(
@@ -234,9 +244,12 @@ class AMoD:
                         t
                     ] = cars_in_area_for_each_company[idx]
             else:
-                prices = [actor.price[origin, dest][t] for actor in self.actor_data]
-                self.distribute_based_on_price(
-                    price=prices,
+                # prices = [
+                #     model_data_pair.actor_data.graph_state.price[origin, dest][t]
+                #     for model_data_pair in model_data_pairs
+                # ]
+                self.distribute_hypergeometric(
+                    model_data_pairs=model_data_pairs,
                     no_customers=no_customers,
                     cars_in_area_for_each_company=cars_in_area_for_each_company,
                     origin=origin,

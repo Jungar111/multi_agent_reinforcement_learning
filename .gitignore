@@ -179,3 +179,4 @@ images/
 data/
 saved_files/
 wandb/
+.vscode/

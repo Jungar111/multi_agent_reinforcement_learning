@@ -5,6 +5,7 @@ from pathlib import Path
 from datetime import datetime
 import json
 import typing as T
+import pandas as pd
 
 import numpy as np
 from tqdm import trange
@@ -45,9 +46,17 @@ def _train_loop(
     """
     best_reward = -np.inf
     data = None
+    df = None
+    mean_price = 20
+    price_dict = {}
     if env.config.json_file is not None:
         with open(env.config.json_file) as json_file:
             data = json.load(json_file)
+
+        df = pd.DataFrame(data["demand"])
+        mean_price = df.price.mean()
+        price_dict = df.groupby(["origin", "destination"]).price.mean().to_dict()
+
     epochs = trange(n_episodes)
     episode_mean_price = {
         model_data_pair.actor_data.name: [] for model_data_pair in model_data_pairs
@@ -81,24 +90,18 @@ def _train_loop(
             actions = []
             prices = []
             for idx, model_data_pair in enumerate(model_data_pairs):
-                model_data_pair.model.train_log.reward += (
-                    model_data_pair.actor_data.rewards.pax_reward
-                )
                 action, price = model_data_pair.model.select_action(
                     obs=model_data_pair.actor_data.graph_state,
                     probabilistic=training,
                     data=data,
                 )
-                actions.append(action)
-                prices.append(price)
 
                 # @TODO please optimise this. Must be very slow.
-                num_cells = config.grid_size_y * config.grid_size_y
-                for i in range(num_cells):
-                    for j in range(num_cells):
+                for i in range(config.n_regions):
+                    for j in range(config.n_regions):
                         model_data_pair.actor_data.graph_state.price[i, j][
                             step + 1
-                        ] = price[i][j]
+                        ] = price[i, j] + price_dict.get((i, j), mean_price)
 
                 actions.append(action)
                 prices.append(price)
@@ -132,16 +135,11 @@ def _train_loop(
 
             done = env.reb_step(model_data_pairs=model_data_pairs)
 
-            for model_data_pair in model_data_pairs:
-                model_data_pair.model.train_log.reward += (
-                    model_data_pair.actor_data.rewards.reb_reward
-                )
             # track performance over episode
             for model_data_pair in model_data_pairs:
                 model_data_pair.actor_data.model_log.reward += (
                     model_data_pair.actor_data.rewards.reb_reward
                 )
-                logger.info(model_data_pair.actor_data.rewards.reb_reward)
                 model_data_pair.actor_data.model_log.served_demand += (
                     model_data_pair.actor_data.info.served_demand
                 )
@@ -153,12 +151,6 @@ def _train_loop(
                     + model_data_pair.actor_data.rewards.reb_reward
                 )
 
-                model_data_pair.model.train_log.served_demand += (
-                    model_data_pair.actor_data.info.served_demand
-                )
-                model_data_pair.model.train_log.rebalancing_cost += (
-                    model_data_pair.actor_data.info.rebalancing_cost
-                )
             # stop episode if terminating conditions are met
             if done:
                 break
@@ -199,11 +191,14 @@ def _train_loop(
                     )
                     logging_dict.update({"Best Reward": best_reward})
         # Log KPIs on weights and biases
-        for model_data_pair in model_data_pairs:
+        for idx, model_data_pair in enumerate(model_data_pairs):
             logging_dict.update(
                 model_data_pair.actor_data.model_log.dict(
                     model_data_pair.actor_data.name
                 )
+            )
+            logging_dict.update(
+                {f"{model_data_pair.actor_data.name}_mean_price": prices[idx].mean()}
             )
         wandb.log(logging_dict)
 
@@ -266,12 +261,8 @@ def main(config: BaseConfig):
         config=config,
     )
     # Initialize A2C-GNN
-    rl1_actor = ActorCritic(
-        env=env, input_size=21, config=config, actor_data=actor_data[0]
-    )
-    rl2_actor = ActorCritic(
-        env=env, input_size=21, config=config, actor_data=actor_data[1]
-    )
+    rl1_actor = ActorCritic(env=env, input_size=21, config=config)
+    rl2_actor = ActorCritic(env=env, input_size=21, config=config)
 
     model_data_pairs = [
         ModelDataPair(rl1_actor, actor_data[0]),
@@ -334,7 +325,7 @@ def main(config: BaseConfig):
         actor_evaluator.plot_average_distribution(
             actions=np.array(all_actions),
             T=episode_length,
-            models=model_data_pairs,
+            model_data_pairs=model_data_pairs,
         )
 
         # actor_evaluator.plot_distribution_at_time_step_t(
@@ -347,9 +338,10 @@ def main(config: BaseConfig):
 if __name__ == "__main__":
     city = City.brooklyn
     config = args_to_config(city)
-    config.wandb_mode = "disabled"
+    # config.wandb_mode = "disabled"
+    config.n_regions = 14
     # config.test = True
-    config.max_episodes = 11
+    config.max_episodes = 1000
     # config.json_file = None
     # config.grid_size_x = 2
     # config.grid_size_y = 3
