@@ -92,7 +92,7 @@ class ActorEvaluator:
                         ]
                     ).sum()
                     ax[idx].text(
-                        j,
+                        j - 0.3,
                         i,
                         f"{demand_from_grid.round(2)}/{unmet_demand_from_grid.round(2)}",
                         color="White",
@@ -100,6 +100,7 @@ class ActorEvaluator:
             ax[idx].matshow(actor_actions.mean(axis=0), norm=norm)
             ax[idx].set_title(f"Actor: {model.actor_data.name}")
         fig.subplots_adjust(right=0.8)
-        fig.colorbar(sc, ax=ax.ravel().tolist())
+        fig.supxlabel("Total demand / total unmet demand", fontsize=12)
+        fig.colorbar(sc, ax=ax.ravel().tolist(), label="Mean # of cars departing from")
 
         plt.show()
