@@ -2,10 +2,10 @@
 from __future__ import print_function
 from pathlib import Path
 
-from datetime import datetime
 import json
 import typing as T
 import pandas as pd
+from datetime import datetime
 
 import numpy as np
 from tqdm import trange
@@ -16,8 +16,8 @@ from multi_agent_reinforcement_learning.algos.reb_flow_solver import solveRebFlo
 from multi_agent_reinforcement_learning.data_models.actor_data import ActorData
 from multi_agent_reinforcement_learning.data_models.city_enum import City
 from multi_agent_reinforcement_learning.data_models.config import BaseConfig
-from multi_agent_reinforcement_learning.data_models.model_data_pair import ModelDataPair
 from multi_agent_reinforcement_learning.data_models.logs import ModelLog
+from multi_agent_reinforcement_learning.data_models.model_data_pair import ModelDataPair
 from multi_agent_reinforcement_learning.envs.amod import AMoD
 from multi_agent_reinforcement_learning.envs.scenario import Scenario
 from multi_agent_reinforcement_learning.evaluation.actor_evaluation import (
@@ -27,7 +27,6 @@ from multi_agent_reinforcement_learning.utils.argument_parser import args_to_con
 from multi_agent_reinforcement_learning.utils.init_logger import init_logger
 from multi_agent_reinforcement_learning.utils.minor_utils import dictsum
 from multi_agent_reinforcement_learning.utils.setup_grid import setup_dummy_grid
-
 
 logger = init_logger()
 
@@ -94,6 +93,13 @@ def _train_loop(
                     obs=model_data_pair.actor_data.graph_state,
                     probabilistic=training,
                     data=data,
+                )
+                actions.append(
+                    model_data_pair.model.select_action(
+                        obs=model_data_pair.actor_data.graph_state,
+                        probabilistic=training,
+                        data=data,
+                    )
                 )
 
                 # @TODO please optimise this. Must be very slow.
@@ -170,7 +176,7 @@ def _train_loop(
         # Checkpoint best performing model
         logging_dict = {}
         if training:
-            if (  # TODO fix
+            if (
                 sum(
                     [
                         model_data_pair.actor_data.model_log.reward
@@ -217,7 +223,11 @@ def main(config: BaseConfig):
             name="RL_1_with_price",
             no_cars=config.total_number_of_cars - advesary_number_of_cars,
         ),
-        ActorData(name="RL_2_with_price", no_cars=advesary_number_of_cars),
+        ActorData(
+            name="RL_1_a2c",
+            no_cars=config.total_number_of_cars - advesary_number_of_cars,
+        ),
+        ActorData(name="RL_2_a2c", no_cars=advesary_number_of_cars),
     ]
 
     wandb_config_log = {**vars(config)}
@@ -340,8 +350,9 @@ if __name__ == "__main__":
     config = args_to_config(city)
     # config.wandb_mode = "disabled"
     config.n_regions = 14
-    # config.test = True
     config.max_episodes = 1000
+    # config.test = True
+    # config.max_episodes = 11
     # config.json_file = None
     # config.grid_size_x = 2
     # config.grid_size_y = 3

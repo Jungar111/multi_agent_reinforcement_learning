@@ -243,6 +243,9 @@ class AMoD:
                     model_data_pair.actor_data.graph_state.demand[origin, dest][
                         t
                     ] = cars_in_area_for_each_company[idx]
+                    model_data_pair.actor_data.unmet_demand[origin, dest][
+                        t
+                    ] = no_customers - sum(cars_in_area_for_each_company)
             else:
                 # prices = [
                 #     model_data_pair.actor_data.graph_state.price[origin, dest][t]
@@ -256,6 +259,11 @@ class AMoD:
                     dest=dest,
                     t=t,
                 )
+                for idx, demand in enumerate(cars_in_area_for_each_company):
+                    model_data_pairs[idx].actor_data.graph_state.demand[origin, dest][
+                        t
+                    ] = demand
+                    model_data_pairs[idx].actor_data.unmet_demand[origin, dest][t] = 0
 
         self.ext_reward = np.zeros(self.nregion)
         for i in self.region:

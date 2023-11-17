@@ -49,31 +49,58 @@ class ActorEvaluator:
         model_data_pairs: T.List[ModelDataPair],
     ):
         """Plot average distribution for the actors."""
+        max_values_for_cbar = np.array(
+            (
+                actions[0, :, :].mean(axis=0).max().astype(int),
+                actions[1, :, :].mean(axis=0).max().astype(int),
+            )
+        )
+        norm = plt.cm.colors.Normalize(vmin=0, vmax=np.max(max_values_for_cbar))
+        sc = plt.cm.ScalarMappable(norm=norm)
         fig, ax = plt.subplots(1, len(actions))
-        for idx, model_data_pair in enumerate(model_data_pairs):
-            actor_actions = actions
-            if actions[idx, :, :].shape[1] < 16:
-                actor_actions = np.pad(
+        no_grids = actions[0, :, :].shape[1]
+        for idx, model in enumerate(model_data_pairs):
+            if no_grids < 16:
+                actor_actons = np.pad(
                     actions[idx, :, :],
-                    pad_width=((0, 0), (0, 16 - actions[idx, :, :].shape[1])),
+                    pad_width=((0, 0), (0, 16 - no_grids)),
                 )
-            actor_actions = actor_actions.resize(T, 4, 4)
+            actor_actions = actor_actons.reshape(T, 4, 4)
             for i in range(4):
                 for j in range(4):
-                    ax[idx].text(
-                        i,
-                        j,
-                        np.mean(
-                            list(
-                                model_data_pair.actor_data.graph_state.demand[
-                                    j, i
-                                ].values()
+                    # Computes demand from i to all other grids
+                    demand_from_grid = np.array(
+                        [
+                            np.array(
+                                list(
+                                    model.actor_data.graph_state.demand[
+                                        i * 4 + j, k
+                                    ].values()
+                                )
                             )
-                        ).round(2),
-                        color="red",
+                            for k in range(no_grids)
+                        ]
+                    ).sum()
+                    unmet_demand_from_grid = np.array(
+                        [
+                            np.array(
+                                list(
+                                    model.actor_data.unmet_demand[i * 4 + j, k].values()
+                                )
+                            )
+                            for k in range(no_grids)
+                        ]
+                    ).sum()
+                    ax[idx].text(
+                        j - 0.3,
+                        i,
+                        f"{demand_from_grid.round(2)}/{unmet_demand_from_grid.round(2)}",
+                        color="White",
                     )
-            pos = ax[idx].matshow(actor_actions.mean(axis=0))
-            fig.colorbar(pos, ax=ax[idx])
-            ax[idx].set_title(f"Actor: {model_data_pair.actor_data.name}")
+            ax[idx].matshow(actor_actions.mean(axis=0), norm=norm)
+            ax[idx].set_title(f"Actor: {model.actor_data.name}")
+        fig.subplots_adjust(right=0.8)
+        fig.supxlabel("Total demand / total unmet demand", fontsize=12)
+        fig.colorbar(sc, ax=ax.ravel().tolist(), label="Mean # of cars departing from")
 
         plt.show()

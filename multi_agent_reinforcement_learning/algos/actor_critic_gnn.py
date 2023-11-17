@@ -65,7 +65,7 @@ class ActorCritic(nn.Module):
         elif isinstance(self.config, SACConfig):
             self.obs_parser = SACGNNParser(self.env)
         else:
-            raise ValueError("Asger is gay. Asger ville have sagt: Not a valid confag.")
+            raise ValueError("Not a valid config.")
 
         self.optimizers = self.configure_optimizers()
 
