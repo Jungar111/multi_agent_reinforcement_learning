@@ -48,19 +48,47 @@ class ActorEvaluator:
         models: T.List[ActorCritic],
     ):
         """Plot average distribution for the actors."""
+        max_values_for_cbar = np.array(
+            (
+                actions[0, :, :].mean(axis=0).max().astype(int),
+                actions[1, :, :].mean(axis=0).max().astype(int),
+            )
+        )
+        norm = plt.cm.colors.Normalize(vmin=0, vmax=np.max(max_values_for_cbar))
+        sc = plt.cm.ScalarMappable(norm=norm)
         fig, ax = plt.subplots(1, len(actions))
+
         for idx, model in enumerate(models):
-            actor_actions = actions[idx, :, :].reshape(T, 4, 4)
+            if actions[idx, :, :].shape[1] < 16:
+                actor_actons = np.pad(
+                    actions[idx, :, :],
+                    pad_width=((0, 0), (0, 16 - actions[idx, :, :].shape[1])),
+                )
+            actor_actions = actor_actons.resize(T, 4, 4)
             for i in range(4):
                 for j in range(4):
+                    # Computes demand from i to all other grids
+                    demand_from_grid = np.array(
+                        [
+                            np.array(
+                                list(
+                                    model.actor_data.graph_state.demand[
+                                        i * 4 + j, k
+                                    ].values()
+                                )
+                            )
+                            for k in range(16)
+                        ]
+                    ).sum()
                     ax[idx].text(
-                        i,
                         j,
-                        np.mean(list(model.actor_data.demand[j, i].values())).round(2),
-                        color="red",
+                        i,
+                        demand_from_grid.round(2),
+                        color="White",
                     )
-            pos = ax[idx].matshow(actor_actions.mean(axis=0))
-            fig.colorbar(pos, ax=ax[idx])
+            ax[idx].matshow(actor_actions.mean(axis=0), norm=norm)
             ax[idx].set_title(f"Actor: {model.actor_data.name}")
+        fig.subplots_adjust(right=0.8)
+        fig.colorbar(sc, ax=ax.ravel().tolist())
 
         plt.show()
