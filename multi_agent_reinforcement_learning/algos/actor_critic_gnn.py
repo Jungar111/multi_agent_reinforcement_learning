@@ -8,7 +8,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from torch import nn
-from torch.distributions import Dirichlet
+from torch.distributions import Dirichlet, LogNormal
 from multi_agent_reinforcement_learning.data_models.actor_data import (
     GraphState,
 )
@@ -86,14 +86,13 @@ class ActorCritic(nn.Module):
         x = self.parse_obs(obs, data).to(self.config.device)
 
         # actor: computes concentration parameters of a Dirichlet distribution
-        a_out, price = self.actor(x)
-        price = price.fill_diagonal_(0)
+        a_out, mu, std = self.actor(x)
 
         concentration = F.softplus(a_out).reshape(-1) + jitter
 
         # critic: estimates V(s_t)
         value = self.critic(x)
-        return concentration, price, value
+        return concentration, mu, std, value
 
     def parse_obs(self, obs: GraphState, data: T.Optional[T.Dict]):
         """Parse observations.
@@ -114,18 +113,21 @@ class ActorCritic(nn.Module):
         obs: observation of the current distribution of vehicles.
         return: List of the next actions
         """
-        concentration, price, value = self.forward(obs=obs, data=data)
+        concentration, mu, std, value = self.forward(obs=obs, data=data)
 
         if probabilistic:
             m = Dirichlet(concentration)
+            p = LogNormal(mu[0, 0], std[0, 0])
             action = m.sample()
+            price = p.sample()
             self.saved_actions.append(
                 SavedAction(log_prob=m.log_prob(action), value=value)
             )
         else:
             action = (concentration) / (concentration.sum() + 1e-20)
             action = action.detach()
-        return list(action.cpu().numpy()), price.detach().cpu().numpy()
+            price = price[0].detach()
+        return list(action.cpu().numpy()), price.cpu().numpy()
 
     def training_step(self):
         """Take one training step."""
@@ -141,7 +143,7 @@ class ActorCritic(nn.Module):
             R = r + self.config.gamma * R
             returns.insert(0, R)
 
-        returns = torch.tensor(returns)
+        returns = torch.tensor(np.array(returns)).to(self.config.device)
         returns = (returns - returns.mean()) / (
             returns.std() + self.eps
         )  # Standadize the returns object
@@ -150,7 +152,9 @@ class ActorCritic(nn.Module):
             advantage = R - saved_action.value.item()
 
             # calculate actor (policy) loss
-            policy_losses.append(-saved_action.log_prob * advantage)
+            policy_losses.append(
+                -saved_action.log_prob.to(self.config.device) * advantage
+            )
 
             # calculate critic (value) loss using L1 smooth loss
             value_losses.append(

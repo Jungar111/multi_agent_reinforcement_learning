@@ -4,7 +4,6 @@ from pathlib import Path
 
 import json
 import typing as T
-import pandas as pd
 from datetime import datetime
 
 import numpy as np
@@ -45,21 +44,11 @@ def _train_loop(
     """
     best_reward = -np.inf
     data = None
-    df = None
-    mean_price = 20
-    price_dict = {}
     if env.config.json_file is not None:
         with open(env.config.json_file) as json_file:
             data = json.load(json_file)
 
-        df = pd.DataFrame(data["demand"])
-        mean_price = df.price.mean()
-        price_dict = df.groupby(["origin", "destination"]).price.mean().to_dict()
-
     epochs = trange(n_episodes)
-    episode_mean_price = {
-        model_data_pair.actor_data.name: [] for model_data_pair in model_data_pairs
-    }
     for i_episode in epochs:
         for model_data_pair in model_data_pairs:
             model_data_pair.actor_data.model_log = ModelLog()
@@ -94,24 +83,11 @@ def _train_loop(
                     probabilistic=training,
                     data=data,
                 )
-                actions.append(
-                    model_data_pair.model.select_action(
-                        obs=model_data_pair.actor_data.graph_state,
-                        probabilistic=training,
-                        data=data,
-                    )
-                )
 
-                # @TODO please optimise this. Must be very slow.
-                for i in range(config.n_regions):
-                    for j in range(config.n_regions):
-                        model_data_pair.actor_data.graph_state.price[i, j][
-                            step + 1
-                        ] = price[i, j] + price_dict.get((i, j), mean_price)
+                model_data_pair.actor_data.graph_state.price[step + 1] = price
 
                 actions.append(action)
                 prices.append(price)
-                episode_mean_price[model_data_pair.actor_data.name].append(price.mean())
 
             for idx, action in enumerate(actions):
                 # transform sample from Dirichlet into actual vehicle counts (i.e. (x1*x2*..*xn)*num_vehicles)
@@ -168,9 +144,10 @@ def _train_loop(
 
         # Send current statistics to screen
         epochs.set_description(
-            f"Episode {i_episode+1} | Reward: {model_data_pairs[0].actor_data.model_log.reward:.2f} |"
-            f"ServedDemand: {model_data_pairs[0].actor_data.model_log.served_demand:.2f} "
-            f"| Reb. Cost: {model_data_pairs[0].actor_data.model_log.rebalancing_cost:.2f}"
+            f"Episode {i_episode+1} | Reward: {model_data_pairs[0].actor_data.model_log.reward:.2f} "
+            f"| ServedDemand: {model_data_pairs[0].actor_data.model_log.served_demand:.2f} "
+            f"| Reb. Cost: {model_data_pairs[0].actor_data.model_log.rebalancing_cost:.2f} "
+            f"| Mean price: {np.mean(list(model_data_pairs[0].actor_data.graph_state.price.values())):.2f} "
         )
 
         # Checkpoint best performing model
@@ -204,7 +181,11 @@ def _train_loop(
                 )
             )
             logging_dict.update(
-                {f"{model_data_pair.actor_data.name}_mean_price": prices[idx].mean()}
+                {
+                    f"{model_data_pair.actor_data.name}_mean_price": np.mean(
+                        list(model_data_pair.actor_data.graph_state.price.values())
+                    )
+                }
             )
         wandb.log(logging_dict)
 
@@ -224,10 +205,9 @@ def main(config: BaseConfig):
             no_cars=config.total_number_of_cars - advesary_number_of_cars,
         ),
         ActorData(
-            name="RL_1_a2c",
-            no_cars=config.total_number_of_cars - advesary_number_of_cars,
+            name="RL_2_with_price",
+            no_cars=advesary_number_of_cars,
         ),
-        ActorData(name="RL_2_a2c", no_cars=advesary_number_of_cars),
     ]
 
     wandb_config_log = {**vars(config)}
@@ -347,10 +327,10 @@ def main(config: BaseConfig):
 
 if __name__ == "__main__":
     city = City.brooklyn
-    config = args_to_config(city)
+    config = args_to_config(city, cuda=True)
     # config.wandb_mode = "disabled"
-    config.n_regions = 14
-    config.max_episodes = 1000
+    config.n_regions = 10
+    config.max_episodes = 10000
     # config.test = True
     # config.max_episodes = 11
     # config.json_file = None

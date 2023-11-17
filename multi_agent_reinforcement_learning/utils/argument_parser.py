@@ -9,7 +9,7 @@ from multi_agent_reinforcement_learning.data_models.config import A2CConfig
 from pathlib import Path
 
 
-def parse_arguments():
+def parse_arguments(cuda: bool):
     """Parse passed arguments."""
     cplex_path = ""
     if platform.system() == "Linux":
@@ -69,7 +69,7 @@ def parse_arguments():
         help="number of steps per episode (default: T=60)",
     )
     parser.add_argument(
-        "--no-cuda", type=bool, default=False, help="disables CUDA training"
+        "--no-cuda", type=bool, default=not cuda, help="disables CUDA training"
     )
 
     args = parser.parse_args()
@@ -83,9 +83,9 @@ def parse_arguments():
     return args
 
 
-def args_to_config(city: City):
+def args_to_config(city: City, cuda=False):
     """Convert args to Pydantic model."""
-    args = parse_arguments()
+    args = parse_arguments(cuda)
     return A2CConfig(
         **vars(args),
         city=city.value,
