@@ -10,7 +10,6 @@ import numpy as np
 from multi_agent_reinforcement_learning.data_models.actor_data import (
     ActorData,
     PaxStepInfo,
-    GraphState,
 )
 from multi_agent_reinforcement_learning.envs.scenario import Scenario
 from multi_agent_reinforcement_learning.utils.minor_utils import mat2str
@@ -174,13 +173,16 @@ class AMoD:
     def distribute_based_on_price(
         self,
         model_data_pairs: T.List[ModelDataPair],
-        price: T.List[float],
         no_customers: int,
         origin: int,
         dest: int,
         t: int,
         cars_in_area_for_each_company: T.List[int],
     ):
+        price = [
+            model_data_pair.actor_data.graph_state.price[t]
+            for model_data_pair in model_data_pairs
+        ]
         rand = np.random.dirichlet(1 / (np.array(price) + 1e-2), size=no_customers)
         values, counts = np.unique(np.argmax(rand, axis=1), return_counts=True)
         chosen_company = {val: co for val, co in zip(values, counts)}
@@ -251,7 +253,7 @@ class AMoD:
                 #     model_data_pair.actor_data.graph_state.price[origin, dest][t]
                 #     for model_data_pair in model_data_pairs
                 # ]
-                self.distribute_hypergeometric(
+                self.distribute_based_on_price(
                     model_data_pairs=model_data_pairs,
                     no_customers=no_customers,
                     cars_in_area_for_each_company=cars_in_area_for_each_company,
@@ -333,22 +335,26 @@ class AMoD:
                 model_data_pair.actor_data.rewards.pax_reward += (
                     model_data_pair.actor_data.actions.pax_action[k]
                     * (
-                        model_data_pair.actor_data.graph_state.price[i, j][t]
+                        model_data_pair.actor_data.graph_state.price[t]
                         - self.demand_time[i, j][t] * self.beta
                     )
                 )
                 model_data_pair.actor_data.info.revenue += (
                     model_data_pair.actor_data.actions.pax_action[k]
-                    * (model_data_pair.actor_data.graph_state.price[i, j][t])
+                    * (model_data_pair.actor_data.graph_state.price[t])
                 )
 
             # for acc, the time index would be t+1, but for demand, the time index would be t
-            model_data_pair.actor_data.graph_state = GraphState(
-                self.time,
-                model_data_pair.actor_data.graph_state.demand,
-                model_data_pair.actor_data.graph_state.acc,
-                model_data_pair.actor_data.graph_state.dacc,
-            )
+            # model_data_pair.actor_data.graph_state = GraphState(
+            #     model_data_pair.actor_data.graph_state.price,
+            #     self.time,
+            #     model_data_pair.actor_data.graph_state.demand,
+            #     model_data_pair.actor_data.graph_state.acc,
+            #     model_data_pair.actor_data.graph_state.dacc,
+            # )
+
+            # Update time
+            model_data_pair.actor_data.graph_state.time = self.time
 
         # if passenger is executed first
         done = False
@@ -470,7 +476,7 @@ class AMoD:
             # trip attribute (origin, destination, time of request, demand, price)
             for i, j, t, d, p in tripAttr:
                 self.demand[i, j][t] = d
-                model_data_pair.actor_data.graph_state.price[i, j][0] = p
+                model_data_pair.actor_data.graph_state.price[0] = p
 
             model_data_pair.actor_data.graph_state.demand = defaultdict(dict)
 

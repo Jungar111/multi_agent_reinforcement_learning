@@ -8,12 +8,13 @@ from multi_agent_reinforcement_learning.data_models.logs import ModelLog
 class PaxStepInfo:
     served_demand: int = 0
     operating_cost: int = 0
-    revenue: int = 0
+    revenue: float = 0
     rebalancing_cost: int = 0
 
 
 @dataclass
 class GraphState:
+    price: T.Dict[int, float]
     time: int = 0
     demand: defaultdict[T.Tuple[int, int], T.Dict[int, float]] = field(
         default_factory=lambda: defaultdict(dict)
@@ -24,15 +25,12 @@ class GraphState:
     dacc: defaultdict[T.Tuple[int, int], T.Dict[int, float]] = field(
         default_factory=lambda: defaultdict(dict)
     )
-    price: defaultdict[T.Tuple[int, int], T.Dict[int, float]] = field(
-        default_factory=lambda: defaultdict(dict)
-    )
 
 
 @dataclass
 class Actions:
-    reb_action: T.Optional[T.List[float]] = None
-    pax_action: T.Optional[T.List[int]] = None
+    reb_action: T.List[float] = field(default_factory=list)
+    pax_action: T.List[int] = field(default_factory=list)
 
 
 @dataclass
@@ -49,8 +47,8 @@ class Flow:
     pax_flow: defaultdict[T.Tuple[int, int], T.Dict[int, float]] = field(
         default_factory=lambda: defaultdict(dict)
     )
-    desired_acc: T.Optional[T.Dict[int, int]] = None
-    served_demand: defaultdict[T.Tuple[int, int], T.Dict[int, float]] = field(
+    desired_acc: T.Dict[int, int] = field(default_factory=dict)
+    served_demand: defaultdict[T.Tuple[int, int], T.Dict[int, int]] = field(
         default_factory=lambda: defaultdict(dict)
     )
 
@@ -65,10 +63,10 @@ class CplexData:
 class ActorData:
     name: str
     no_cars: int
+    graph_state: GraphState
     unmet_demand: defaultdict[T.Tuple[int, int], T.Dict[int, float]] = field(
         default_factory=lambda: defaultdict(dict)
     )
-    graph_state: GraphState = field(default_factory=GraphState)
     actions: Actions = field(default_factory=Actions)
     flow: Flow = field(default_factory=Flow)
     model_log: ModelLog = field(default_factory=ModelLog)
