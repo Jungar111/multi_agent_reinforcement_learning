@@ -1,3 +1,7 @@
+execute
+{
+  cplex.threads=4; // Number of cores on your CPU limits this.
+}
 tuple Edge{
   int i;
   int j;

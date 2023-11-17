@@ -10,16 +10,21 @@ import torch.nn.functional as F
 from torch import nn
 from torch.distributions import Dirichlet
 from multi_agent_reinforcement_learning.data_models.actor_data import (
-    ActorData,
     GraphState,
 )
-from multi_agent_reinforcement_learning.data_models.logs import ModelLog
 
 from multi_agent_reinforcement_learning.envs.amod import AMoD
 from multi_agent_reinforcement_learning.algos.gnn_actor import GNNActor
 from multi_agent_reinforcement_learning.algos.gnn_critic import GNNCritic
 from multi_agent_reinforcement_learning.algos.gnn_parser import GNNParser
-from multi_agent_reinforcement_learning.data_models.config import Config
+from multi_agent_reinforcement_learning.algos.sac_gnn_parser import (
+    GNNParser as SACGNNParser,
+)
+from multi_agent_reinforcement_learning.data_models.config import (
+    A2CConfig,
+    BaseConfig,
+    SACConfig,
+)
 from multi_agent_reinforcement_learning.data_models.actor_critic_data import SavedAction
 import typing as T
 
@@ -31,9 +36,8 @@ class ActorCritic(nn.Module):
     def __init__(
         self,
         env: AMoD,
-        actor_data: ActorData,
         input_size: int,
-        config: Config,
+        config: BaseConfig,
         eps: float = np.finfo(np.float32).eps.item(),
     ):
         """Init method for A2C. Sets up the desired attributes including.
@@ -50,15 +54,18 @@ class ActorCritic(nn.Module):
         self.hidden_size = input_size
         self.config = config
 
-        self.actor_data = actor_data
-        self.train_log = ModelLog()
-
         self.actor = GNNActor(self.input_size, device=self.config.device).to(
             self.config.device
         )
 
         self.critic = GNNCritic(self.input_size).to(self.config.device)
-        self.obs_parser = GNNParser(self.env, self.config)
+
+        if isinstance(self.config, A2CConfig):
+            self.obs_parser = GNNParser(self.env, self.config)
+        elif isinstance(self.config, SACConfig):
+            self.obs_parser = SACGNNParser(self.env)
+        else:
+            raise ValueError("Not a valid config.")
 
         self.optimizers = self.configure_optimizers()
 
@@ -72,7 +79,7 @@ class ActorCritic(nn.Module):
 
         softplus used on the actor along with 'jitter'.
         concentration: input for the Dirichlet distribution.
-        value: The objective value of the current state?
+        value: The objective value of the current state, given an action
         returns: concentration, value
         """
         # parse raw environment data in model format
@@ -93,6 +100,7 @@ class ActorCritic(nn.Module):
         returns: state
         """
         state = self.obs_parser.parse_obs(obs=obs, data=data, config=self.config)
+
         return state
 
     def select_action(

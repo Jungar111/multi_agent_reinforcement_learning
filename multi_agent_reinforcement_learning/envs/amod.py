@@ -14,7 +14,7 @@ from multi_agent_reinforcement_learning.data_models.actor_data import (
 )
 from multi_agent_reinforcement_learning.envs.scenario import Scenario
 from multi_agent_reinforcement_learning.utils.minor_utils import mat2str
-from multi_agent_reinforcement_learning.data_models.config import Config
+from multi_agent_reinforcement_learning.data_models.config import BaseConfig
 from multi_agent_reinforcement_learning.data_models.model_data_pair import ModelDataPair
 
 
@@ -26,7 +26,7 @@ class AMoD:
         self,
         actor_data: T.List[ActorData],
         scenario: Scenario,
-        config: Config,
+        config: BaseConfig,
         beta: float = 0.2,
     ):
         """Initialise env.
@@ -183,6 +183,9 @@ class AMoD:
                     model_data_pair.actor_data.graph_state.demand[origin, dest][
                         t
                     ] = cars_in_area_for_each_company[idx]
+                    model_data_pair.actor_data.unmet_demand[origin, dest][
+                        t
+                    ] = no_customers - sum(cars_in_area_for_each_company)
             else:
                 # PCG64 produces a random integer stream that the generator needs
                 # will always procuce same stream given seed
@@ -195,6 +198,7 @@ class AMoD:
                     model_data_pairs[idx].actor_data.graph_state.demand[origin, dest][
                         t
                     ] = demand
+                    model_data_pairs[idx].actor_data.unmet_demand[origin, dest][t] = 0
 
         self.ext_reward = np.zeros(self.nregion)
         for i in self.region:
