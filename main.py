@@ -1,11 +1,11 @@
 """Main file for project."""
 from __future__ import print_function
 
-from datetime import datetime
 import json
 import typing as T
-import numpy as np
+from datetime import datetime
 
+import numpy as np
 from tqdm import trange
 
 import wandb
@@ -14,18 +14,17 @@ from multi_agent_reinforcement_learning.algos.reb_flow_solver import solveRebFlo
 from multi_agent_reinforcement_learning.data_models.actor_data import ActorData
 from multi_agent_reinforcement_learning.data_models.city_enum import City
 from multi_agent_reinforcement_learning.data_models.config import BaseConfig
-from multi_agent_reinforcement_learning.data_models.model_data_pair import ModelDataPair
 from multi_agent_reinforcement_learning.data_models.logs import ModelLog
+from multi_agent_reinforcement_learning.data_models.model_data_pair import ModelDataPair
 from multi_agent_reinforcement_learning.envs.amod import AMoD
 from multi_agent_reinforcement_learning.envs.scenario import Scenario
+from multi_agent_reinforcement_learning.evaluation.actor_evaluation import (
+    ActorEvaluator,
+)
 from multi_agent_reinforcement_learning.utils.argument_parser import args_to_config
 from multi_agent_reinforcement_learning.utils.init_logger import init_logger
 from multi_agent_reinforcement_learning.utils.minor_utils import dictsum
 from multi_agent_reinforcement_learning.utils.setup_grid import setup_dummy_grid
-from multi_agent_reinforcement_learning.evaluation.actor_evaluation import (
-    ActorEvaluator,
-)
-
 
 logger = init_logger()
 
@@ -117,7 +116,6 @@ def _train_loop(
                 model_data_pair.actor_data.model_log.reward += (
                     model_data_pair.actor_data.rewards.reb_reward
                 )
-                logger.info(model_data_pair.actor_data.rewards.reb_reward)
                 model_data_pair.actor_data.model_log.served_demand += (
                     model_data_pair.actor_data.info.served_demand
                 )
@@ -189,10 +187,10 @@ def main(config: BaseConfig):
 
     actor_data = [
         ActorData(
-            name="RL_1 testing pax",
+            name="RL_1_a2c",
             no_cars=config.total_number_of_cars - advesary_number_of_cars,
         ),
-        ActorData(name="RL_2 testing pax", no_cars=advesary_number_of_cars),
+        ActorData(name="RL_2_a2c", no_cars=advesary_number_of_cars),
     ]
 
     wandb_config_log = {**vars(config)}
@@ -236,12 +234,8 @@ def main(config: BaseConfig):
         config=config,
     )
     # Initialize A2C-GNN
-    rl1_actor = ActorCritic(
-        env=env, input_size=21, config=config, actor_data=actor_data[0]
-    )
-    rl2_actor = ActorCritic(
-        env=env, input_size=21, config=config, actor_data=actor_data[1]
-    )
+    rl1_actor = ActorCritic(env=env, input_size=21, config=config)
+    rl2_actor = ActorCritic(env=env, input_size=21, config=config)
 
     model_data_pairs = [
         ModelDataPair(rl1_actor, actor_data[0]),
@@ -302,9 +296,9 @@ def main(config: BaseConfig):
 if __name__ == "__main__":
     city = City.brooklyn
     config = args_to_config(city)
-    config.wandb_mode = "disabled"
+    # config.wandb_mode = "disabled"
     # config.test = True
-    config.max_episodes = 11
+    # config.max_episodes = 11
     # config.json_file = None
     # config.grid_size_x = 2
     # config.grid_size_y = 3

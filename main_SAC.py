@@ -1,26 +1,29 @@
 """Main file for the SAC implementation for the project."""
 from __future__ import print_function
-from tqdm import trange
-import numpy as np
-import wandb
+
+import copy
 from datetime import datetime
-from multi_agent_reinforcement_learning.envs.amod import AMoD
-from multi_agent_reinforcement_learning.envs.scenario import Scenario
-from multi_agent_reinforcement_learning.algos.sac import SAC
+
+import numpy as np
+from tqdm import trange
+
+import wandb
 from multi_agent_reinforcement_learning.algos.reb_flow_solver import solveRebFlow
-from multi_agent_reinforcement_learning.utils.minor_utils import dictsum
-from multi_agent_reinforcement_learning.utils.init_logger import init_logger
+from multi_agent_reinforcement_learning.algos.sac import SAC
 from multi_agent_reinforcement_learning.algos.sac_gnn_parser import GNNParser
-from multi_agent_reinforcement_learning.data_models.logs import ModelLog
-from multi_agent_reinforcement_learning.utils.sac_argument_parser import args_to_config
+from multi_agent_reinforcement_learning.data_models.actor_data import ActorData
 from multi_agent_reinforcement_learning.data_models.city_enum import City
 from multi_agent_reinforcement_learning.data_models.config import SACConfig
-from multi_agent_reinforcement_learning.data_models.actor_data import ActorData
+from multi_agent_reinforcement_learning.data_models.logs import ModelLog
 from multi_agent_reinforcement_learning.data_models.model_data_pair import ModelDataPair
+from multi_agent_reinforcement_learning.envs.amod import AMoD
+from multi_agent_reinforcement_learning.envs.scenario import Scenario
 from multi_agent_reinforcement_learning.evaluation.actor_evaluation import (
     ActorEvaluator,
 )
-import copy
+from multi_agent_reinforcement_learning.utils.init_logger import init_logger
+from multi_agent_reinforcement_learning.utils.minor_utils import dictsum
+from multi_agent_reinforcement_learning.utils.sac_argument_parser import args_to_config
 
 logger = init_logger()
 
@@ -30,9 +33,10 @@ def main(config: SACConfig):
     advesary_number_of_cars = int(config.total_number_of_cars / 2)
     actor_data = [
         ActorData(
-            name="RL_1", no_cars=config.total_number_of_cars - advesary_number_of_cars
+            name="RL_1_SAC",
+            no_cars=config.total_number_of_cars - advesary_number_of_cars,
         ),
-        ActorData(name="RL_2", no_cars=advesary_number_of_cars),
+        ActorData(name="RL_2_SAC", no_cars=advesary_number_of_cars),
     ]
 
     wandb.init(
@@ -214,7 +218,7 @@ def main(config: SACConfig):
             if np.sum(episode_reward) >= best_reward:
                 for model in model_data_pairs:
                     model.model.save_checkpoint(
-                        path=f"saved_files/ckpt/{config.path}/{config.checkpoint_path}_sample.pth"
+                        path=f"saved_files/ckpt/{config.path}/{model.actor_data.name}.pth"
                     )
                 best_reward = np.sum(episode_reward)
                 logging_dict.update({"Best Reward": best_reward})
@@ -402,7 +406,8 @@ def main(config: SACConfig):
 if __name__ == "__main__":
     city = City.brooklyn
     config = args_to_config(city)
-    config.max_episodes = 1
-    config.test = True
-    config.wandb_mode = "disabled"
+    config.tf = 60
+    config.max_episodes = 2000
+    # config.test = True
+    # config.wandb_mode = "disabled"
     main(config)
