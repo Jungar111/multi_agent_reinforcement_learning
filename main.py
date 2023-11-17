@@ -12,10 +12,7 @@ from tqdm import trange
 import wandb
 from multi_agent_reinforcement_learning.algos.actor_critic_gnn import ActorCritic
 from multi_agent_reinforcement_learning.algos.reb_flow_solver import solveRebFlow
-from multi_agent_reinforcement_learning.data_models.actor_data import (
-    ActorData,
-    GraphState,
-)
+from multi_agent_reinforcement_learning.data_models.actor_data import ActorData
 from multi_agent_reinforcement_learning.data_models.city_enum import City
 from multi_agent_reinforcement_learning.data_models.config import BaseConfig
 from multi_agent_reinforcement_learning.data_models.logs import ModelLog
@@ -47,21 +44,11 @@ def _train_loop(
     """
     best_reward = -np.inf
     data = None
-    # df = None
-    # mean_price = 20
-    # price_dict = {}
     if env.config.json_file is not None:
         with open(env.config.json_file) as json_file:
             data = json.load(json_file)
 
-    #     df = pd.DataFrame(data["demand"])
-    #     mean_price = df.price.mean()
-    #     price_dict = df.groupby(["origin", "destination"]).price.mean().to_dict()
-
     epochs = trange(n_episodes)
-    # episode_mean_price = {
-    #     model_data_pair.actor_data.name: [] for model_data_pair in model_data_pairs
-    # }
     for i_episode in epochs:
         for model_data_pair in model_data_pairs:
             model_data_pair.actor_data.model_log = ModelLog()
@@ -98,13 +85,6 @@ def _train_loop(
                 )
 
                 model_data_pair.actor_data.graph_state.price[step + 1] = price
-
-                # @TODO please optimise this. Must be very slow.
-                # for i in range(config.n_regions):
-                #     for j in range(config.n_regions):
-                #         model_data_pair.actor_data.graph_state.price[i, j][
-                #             step + 1
-                #         ] = price[i, j] + price_dict.get((i, j), mean_price)
 
                 actions.append(action)
                 prices.append(price)
@@ -223,12 +203,10 @@ def main(config: BaseConfig):
         ActorData(
             name="RL_1_with_price",
             no_cars=config.total_number_of_cars - advesary_number_of_cars,
-            graph_state=GraphState(price={0: 0}),
         ),
         ActorData(
             name="RL_2_with_price",
             no_cars=advesary_number_of_cars,
-            graph_state=GraphState(price={0: 0}),
         ),
     ]
 

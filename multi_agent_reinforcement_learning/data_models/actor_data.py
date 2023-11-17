@@ -14,7 +14,7 @@ class PaxStepInfo:
 
 @dataclass
 class GraphState:
-    price: T.Dict[int, float]
+    price: T.Dict[int, float] = field(default_factory=dict)
     time: int = 0
     demand: defaultdict[T.Tuple[int, int], T.Dict[int, float]] = field(
         default_factory=lambda: defaultdict(dict)
@@ -63,7 +63,7 @@ class CplexData:
 class ActorData:
     name: str
     no_cars: int
-    graph_state: GraphState
+    graph_state: GraphState = field(default_factory=GraphState)
     unmet_demand: defaultdict[T.Tuple[int, int], T.Dict[int, float]] = field(
         default_factory=lambda: defaultdict(dict)
     )

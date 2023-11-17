@@ -344,15 +344,6 @@ class AMoD:
                     * (model_data_pair.actor_data.graph_state.price[t])
                 )
 
-            # for acc, the time index would be t+1, but for demand, the time index would be t
-            # model_data_pair.actor_data.graph_state = GraphState(
-            #     model_data_pair.actor_data.graph_state.price,
-            #     self.time,
-            #     model_data_pair.actor_data.graph_state.demand,
-            #     model_data_pair.actor_data.graph_state.acc,
-            #     model_data_pair.actor_data.graph_state.dacc,
-            # )
-
             # Update time
             model_data_pair.actor_data.graph_state.time = self.time
 
