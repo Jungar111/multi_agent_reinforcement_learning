@@ -21,7 +21,7 @@ class GNNActor(nn.Module):
         self.lin1 = nn.Linear(in_channels, 32)
         self.lin2 = nn.Linear(32, 32)
         self.dirichlet_concentration_layer = nn.Linear(32, 1)
-        self.price_lin = nn.Linear(32, 14)
+        self.price_lin = nn.Linear(32, 1)
         self.device = device
 
     def forward(self, data: Data):

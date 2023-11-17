@@ -87,7 +87,6 @@ class ActorCritic(nn.Module):
 
         # actor: computes concentration parameters of a Dirichlet distribution
         a_out, price = self.actor(x)
-        price = price.fill_diagonal_(0)
 
         concentration = F.softplus(a_out).reshape(-1) + jitter
 
