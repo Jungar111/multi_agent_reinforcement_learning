@@ -2,7 +2,7 @@
 name = "multi-agent-reinforcement-learning"
 version = "0.1.0"
 description = ""
-authors = ["Asger <jungar111>"]
+authors = ["Asger Sturis Tang <s184305@dtu.dk>", "Frederik Møller Sørensen <s184306@dtu.dk>", "Joachim Pors Andreasen <s184289@dtu.dk>"]
 readme = "README.md"
 packages = [{include = "multi_agent_reinforcement_learning"}]
 

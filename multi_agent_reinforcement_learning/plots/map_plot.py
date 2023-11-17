@@ -8,13 +8,13 @@ from glob2 import glob
 import wandb
 
 
-from multi_agent_reinforcement_learning.data_models.config import Config
+from multi_agent_reinforcement_learning.data_models.config import A2CConfig
 import multi_agent_reinforcement_learning  # noqa: F401
 from multi_agent_reinforcement_learning.data_models.actor_data import ActorData
 
 
 def make_map_plot(
-    G: nx.Graph, actor_data: ActorData, t: int, timeEnd: int, config: Config
+    G: nx.Graph, actor_data: ActorData, t: int, timeEnd: int, config: A2CConfig
 ):
     """Make a mapplot to visualize the distribution of cars over time.
 

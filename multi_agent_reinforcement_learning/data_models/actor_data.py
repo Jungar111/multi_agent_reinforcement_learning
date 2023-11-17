@@ -62,6 +62,9 @@ class CplexData:
 class ActorData:
     name: str
     no_cars: int
+    unmet_demand: defaultdict[T.Tuple[int, int], T.Dict[int, float]] = field(
+        default_factory=lambda: defaultdict(dict)
+    )
     graph_state: GraphState = field(default_factory=GraphState)
     actions: Actions = field(default_factory=Actions)
     flow: Flow = field(default_factory=Flow)
