@@ -10,7 +10,7 @@ from multi_agent_reinforcement_learning.data_models.config import SACConfig
 from pathlib import Path
 
 
-def parse_arguments():
+def parse_arguments(cuda):
     cplex_path = ""
     if platform.system() == "Linux":
         cplex_path = "/opt/ibm/ILOG/CPLEX_Studio2211/opl/bin/x86-64_linux/"
@@ -70,7 +70,7 @@ def parse_arguments():
         help="number of steps per episode (default: T=20)",
     )
     parser.add_argument(
-        "--no-cuda", type=bool, default=True, help="disables CUDA training"
+        "--no-cuda", type=bool, default=not cuda, help="disables CUDA training"
     )
     parser.add_argument(
         "--batch_size",
@@ -137,9 +137,9 @@ def parse_arguments():
     return args
 
 
-def args_to_config(city: City):
+def args_to_config(city: City, cuda=False):
     """Convert args to pydantic model."""
-    args = parse_arguments()
+    args = parse_arguments(cuda)
     return SACConfig(
         **vars(args),
         city=city.value,

@@ -3,9 +3,12 @@ from __future__ import print_function
 
 import copy
 from datetime import datetime
+from pathlib import Path
 
 import numpy as np
 from tqdm import trange
+import json
+import pandas as pd
 
 import wandb
 from multi_agent_reinforcement_learning.algos.reb_flow_solver import solveRebFlow
@@ -105,6 +108,13 @@ def main(config: SACConfig):
         best_reward = -np.inf
         # best_reward_test = -np.inf
 
+        with open(str(env.config.json_file)) as file:
+            data = json.load(file)
+
+        df = pd.DataFrame(data["demand"])
+        # init_price_dict = df.groupby(["origin", "destination"]).price.mean().to_dict()
+        init_price = df.price.mean()
+
         wandb_config_log = {**vars(config)}
         for model in model_data_pairs:
             wandb_config_log[f"test_{model.actor_data.name}"] = model.actor_data.no_cars
@@ -156,7 +166,9 @@ def main(config: SACConfig):
                         model_data_pair.actor_data.rewards.pax_reward
                     )
                     action_rl[idx], price = model_data_pair.model.select_action(o[idx])
-                    model_data_pair.actor_data.graph_state.price[step + 1] = price
+                    model_data_pair.actor_data.graph_state.price[step + 1] = (
+                        init_price + price
+                    )
                     prices.append(price)
 
                 for idx, model in enumerate(model_data_pairs):
@@ -216,7 +228,8 @@ def main(config: SACConfig):
                 f"Reward_1: {episode_reward[1]:.2f} | "
                 f"ServedDemand: {episode_served_demand:.2f} | "
                 f"Reb. Cost: {episode_rebalancing_cost:.2f} | "
-                f"Mean price: {np.mean(list(model_data_pairs[0].actor_data.graph_state.price.values())):.2f}"
+                f"Mean price:"
+                f"{np.mean(list(model_data_pairs[0].actor_data.graph_state.price.values())) - init_price:.2f}"
             )
             # Checkpoint best performing model
             if np.sum(episode_reward) >= best_reward:
@@ -238,6 +251,7 @@ def main(config: SACConfig):
                         f"{model_data_pair.actor_data.name} Mean Price": np.mean(
                             list(model_data_pair.actor_data.graph_state.price.values())
                         )
+                        - init_price
                     }
                 )
                 overall_sum = sum(
@@ -250,6 +264,21 @@ def main(config: SACConfig):
                     {f"{model_data_pair.actor_data.name} Unmet Demand": overall_sum}
                 )
             wandb.log(logging_dict)
+
+        ckpt_paths = [
+            str(
+                Path(
+                    "saved_files",
+                    "ckpt",
+                    "nyc4",
+                    f"gnn_{model_data_pair.actor_data.name}.pth",
+                )
+            )
+            for model_data_pair in model_data_pairs
+        ]
+
+        for ckpt_path in ckpt_paths:
+            wandb.save(ckpt_path)
     else:
         """Run main testing loop."""
         logger.info("Running main testing loop for SAC.")
@@ -412,7 +441,7 @@ def main(config: SACConfig):
 
 if __name__ == "__main__":
     city = City.san_francisco
-    config = args_to_config(city)
+    config = args_to_config(city, cuda=True)
     config.tf = 20
     config.max_episodes = 2000
     # config.test = True

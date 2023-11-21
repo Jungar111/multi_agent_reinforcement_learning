@@ -2,7 +2,7 @@ import numpy as np
 import torch
 from torch import nn
 import torch.nn.functional as F
-from torch.distributions import Dirichlet, LogNormal
+from torch.distributions import Dirichlet, Normal
 from torch_geometric.data import Data, Batch
 from torch_geometric.nn import GCNConv, global_mean_pool
 
@@ -159,7 +159,7 @@ class GNNActor(nn.Module):
             m = Dirichlet(concentration + 1e-20)
             action = m.rsample()
             log_prob = m.log_prob(action)
-            p = LogNormal(mu[0, 0], sigma[0, 0])
+            p = Normal(mu[0, 0], sigma[0, 0])
             price = p.sample()
 
         return action, log_prob, price
