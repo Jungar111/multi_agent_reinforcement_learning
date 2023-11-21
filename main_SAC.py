@@ -125,6 +125,7 @@ def main(config: SACConfig):
             o = [None, None]
             action_rl = [None, None]
             obs_list = [None, None]
+            prices = []
             while not done:
                 # take matching step (Step 1 in paper)
                 if step > 0:
@@ -135,26 +136,28 @@ def main(config: SACConfig):
                     cplex_path=config.cplex_path,
                     path=config.path,
                 )
-                for idx, model in enumerate(model_data_pairs):
-                    o[idx] = parser.parse_obs(model.actor_data.graph_state)
-                    episode_reward[idx] += model.actor_data.rewards.pax_reward
+                for idx, model_data_pair in enumerate(model_data_pairs):
+                    o[idx] = parser.parse_obs(model_data_pair.actor_data.graph_state)
+                    episode_reward[idx] += model_data_pair.actor_data.rewards.pax_reward
                     if step > 0:
                         # store transition in memory
                         rl_reward = (
-                            model.actor_data.rewards.pax_reward
-                            + model.actor_data.rewards.reb_reward
+                            model_data_pair.actor_data.rewards.pax_reward
+                            + model_data_pair.actor_data.rewards.reb_reward
                         )
-                        model.model.replay_buffer.store(
+                        model_data_pair.model.replay_buffer.store(
                             obs_list[idx],
                             action_rl[idx],
                             config.rew_scale * rl_reward,
                             o[idx],
                         )
                     # Log pax_reward
-                    model.actor_data.model_log.reward += (
-                        model.actor_data.rewards.pax_reward
+                    model_data_pair.actor_data.model_log.reward += (
+                        model_data_pair.actor_data.rewards.pax_reward
                     )
-                    action_rl[idx] = model.model.select_action(o[idx])
+                    action_rl[idx], price = model_data_pair.model.select_action(o[idx])
+                    model_data_pair.actor_data.graph_state.price[step + 1] = price
+                    prices.append(price)
 
                 for idx, model in enumerate(model_data_pairs):
                     # transform sample from Dirichlet into actual vehicle counts (i.e. (x1*x2*..*xn)*num_vehicles)
@@ -212,7 +215,8 @@ def main(config: SACConfig):
                 f"Reward_0: {episode_reward[0]:.2f} | "
                 f"Reward_1: {episode_reward[1]:.2f} | "
                 f"ServedDemand: {episode_served_demand:.2f} | "
-                f"Reb. Cost: {episode_rebalancing_cost:.2f}"
+                f"Reb. Cost: {episode_rebalancing_cost:.2f} | "
+                f"Mean price: {np.mean(list(model_data_pairs[0].actor_data.graph_state.price.values())):.2f}"
             )
             # Checkpoint best performing model
             if np.sum(episode_reward) >= best_reward:
@@ -229,20 +233,23 @@ def main(config: SACConfig):
                         model_data_pair.actor_data.name
                     )
                 )
+                logging_dict.update(
+                    {
+                        f"{model_data_pair.actor_data.name} Mean Price": np.mean(
+                            list(model_data_pair.actor_data.graph_state.price.values())
+                        )
+                    }
+                )
+                overall_sum = sum(
+                    value
+                    for inner_dict in model_data_pair.actor_data.unmet_demand.values()
+                    for value in inner_dict.values()
+                )
+
+                logging_dict.update(
+                    {f"{model_data_pair.actor_data.name} Unmet Demand": overall_sum}
+                )
             wandb.log(logging_dict)
-            # if i_episode % 10 == 0:
-            #     (
-            #         test_reward,
-            #         test_served_demand,
-            #         test_rebalancing_cost,
-            #     ) = model.test_agent(
-            #         1, env, config.cplex_path, parser=parser
-            #     )
-            #     if test_reward >= best_reward_test:
-            #         best_reward_test = test_reward
-            #         model.save_checkpoint(
-            #             path=f"saved_files/ckpt/{config.path}/{config.checkpoint_path}_test.pth"
-            #         )
     else:
         """Run main testing loop."""
         logger.info("Running main testing loop for SAC.")
@@ -404,9 +411,9 @@ def main(config: SACConfig):
 
 
 if __name__ == "__main__":
-    city = City.brooklyn
+    city = City.san_francisco
     config = args_to_config(city)
-    config.tf = 60
+    config.tf = 20
     config.max_episodes = 2000
     # config.test = True
     # config.wandb_mode = "disabled"
