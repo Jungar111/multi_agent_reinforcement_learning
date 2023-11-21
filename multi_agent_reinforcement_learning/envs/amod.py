@@ -15,6 +15,7 @@ from multi_agent_reinforcement_learning.envs.scenario import Scenario
 from multi_agent_reinforcement_learning.utils.minor_utils import mat2str
 from multi_agent_reinforcement_learning.data_models.config import BaseConfig
 from multi_agent_reinforcement_learning.data_models.model_data_pair import ModelDataPair
+from multi_agent_reinforcement_learning.utils.value_of_time import hill_equation
 
 
 class AMoD:
@@ -170,7 +171,7 @@ class AMoD:
                 t
             ] = demand
 
-    def distribute_based_on_price(
+    def distribute_based_on_price_and_market_share(
         self,
         model_data_pairs: T.List[ModelDataPair],
         no_customers: int,
@@ -183,34 +184,49 @@ class AMoD:
             model_data_pair.actor_data.graph_state.price[t]
             for model_data_pair in model_data_pairs
         ]
+
         rand = np.random.dirichlet(1 / (np.array(price) + 1e-2), size=no_customers)
         values, counts = np.unique(np.argmax(rand, axis=1), return_counts=True)
         chosen_company = {val: co for val, co in zip(values, counts)}
-        actor_full = {}
         for actor_idx in range(2):
+            no_customers_for_company = chosen_company.get(actor_idx, 0)
+            no_customers_for_other_company = chosen_company.get(1 - actor_idx, 0)
+
+            vot_for_trip = self.scenario.demand_time[origin, dest][t] / (
+                price[actor_idx] + 1e-5
+            )
+            probability_of_taxi = hill_equation(x=vot_for_trip, k=self.scenario.vot)
+            customers_after_bus = np.random.binomial(
+                no_customers_for_company, p=probability_of_taxi
+            )
+
             no_cars = min(
                 cars_in_area_for_each_company[actor_idx],
-                chosen_company.get(actor_idx, 0),
+                customers_after_bus,
             )
+
             model_data_pairs[actor_idx].actor_data.graph_state.demand[origin, dest][
                 t
             ] = no_cars
-            actor_full[actor_idx] = {
-                "full": no_cars == cars_in_area_for_each_company[actor_idx],
-                "excess": chosen_company.get(actor_idx, 0)
-                - cars_in_area_for_each_company[actor_idx],
-            }
 
-        for actor_idx, data in actor_full.items():
-            if data["full"]:
-                if actor_idx == 0:
-                    model_data_pairs[1].actor_data.graph_state.demand[origin, dest][
-                        t
-                    ] += data["excess"]
-                if actor_idx == 1:
-                    model_data_pairs[0].actor_data.graph_state.demand[origin, dest][
-                        t
-                    ] += data["excess"]
+            excess_cars = (
+                chosen_company.get(actor_idx, 0)
+                - cars_in_area_for_each_company[actor_idx]
+            )
+
+            if excess_cars > 0:
+                model_data_pairs[actor_idx].actor_data.unmet_demand[origin, dest][t] = (
+                    (
+                        chosen_company.get(actor_idx, 0)
+                        - cars_in_area_for_each_company[actor_idx]
+                    )
+                    + (no_customers_for_company - customers_after_bus)
+                    + no_customers_for_other_company
+                )
+            else:
+                model_data_pairs[actor_idx].actor_data.unmet_demand[origin, dest][t] = (
+                    no_customers_for_company - customers_after_bus
+                ) + no_customers_for_other_company
 
     # pax step
     def pax_step(
@@ -228,9 +244,25 @@ class AMoD:
         """
         t = self.time
 
+        total_market_share = (
+            np.sum(
+                [
+                    model_data_pair.actor_data.actions.pax_action
+                    for model_data_pair in model_data_pairs
+                ]
+            )
+            if t > 0
+            else None
+        )
+
         for model_data_pair in model_data_pairs:
             model_data_pair.actor_data.info = PaxStepInfo()
             model_data_pair.actor_data.rewards.pax_reward = 0
+            prev_served_demand = np.sum(model_data_pair.actor_data.actions.pax_action)
+            if t > 0:
+                model_data_pair.actor_data.flow.market_share = (
+                    prev_served_demand / total_market_share
+                )
 
         # Distributing customers stochastic given presence in area.
         for (origin, dest), area_demand in self.demand.items():
@@ -240,32 +272,14 @@ class AMoD:
                 for model_data_pair in model_data_pairs
             ]
 
-            if sum(cars_in_area_for_each_company) < no_customers:
-                for idx, model_data_pair in enumerate(model_data_pairs):
-                    model_data_pair.actor_data.graph_state.demand[origin, dest][
-                        t
-                    ] = cars_in_area_for_each_company[idx]
-                    model_data_pair.actor_data.unmet_demand[origin, dest][
-                        t
-                    ] = no_customers - sum(cars_in_area_for_each_company)
-            else:
-                # prices = [
-                #     model_data_pair.actor_data.graph_state.price[origin, dest][t]
-                #     for model_data_pair in model_data_pairs
-                # ]
-                self.distribute_based_on_price(
-                    model_data_pairs=model_data_pairs,
-                    no_customers=no_customers,
-                    cars_in_area_for_each_company=cars_in_area_for_each_company,
-                    origin=origin,
-                    dest=dest,
-                    t=t,
-                )
-                for idx, demand in enumerate(cars_in_area_for_each_company):
-                    model_data_pairs[idx].actor_data.graph_state.demand[origin, dest][
-                        t
-                    ] = demand
-                    model_data_pairs[idx].actor_data.unmet_demand[origin, dest][t] = 0
+            self.distribute_based_on_price_and_market_share(
+                model_data_pairs=model_data_pairs,
+                no_customers=no_customers,
+                cars_in_area_for_each_company=cars_in_area_for_each_company,
+                origin=origin,
+                dest=dest,
+                t=t,
+            )
 
         self.ext_reward = np.zeros(self.nregion)
         for i in self.region:
@@ -337,6 +351,10 @@ class AMoD:
                     * (
                         model_data_pair.actor_data.graph_state.price[t]
                         - self.demand_time[i, j][t] * self.beta
+                    )
+                    - (
+                        model_data_pair.actor_data.graph_state.price[t]
+                        * model_data_pair.actor_data.unmet_demand[i, j][t]
                     )
                 )
                 model_data_pair.actor_data.info.revenue += (

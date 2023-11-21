@@ -7,8 +7,10 @@ import networkx as nx
 from copy import deepcopy
 import json
 import typing as T
+import pandas as pd
 
 from multi_agent_reinforcement_learning.data_models.actor_data import ActorData
+from multi_agent_reinforcement_learning.utils.value_of_time import value_of_time
 
 
 class Scenario:
@@ -48,6 +50,7 @@ class Scenario:
             np.random.seed(self.sd)
         # simulate enviorienment when json is none.
         if json_file == None:
+            self.vot = 0.8
             self.varying_time = varying_time
             self.is_json = False
             self.alpha = alpha
@@ -172,6 +175,13 @@ class Scenario:
             self.is_json = True
             with open(json_file, "r") as file:
                 data = json.load(file)
+
+            df = pd.DataFrame(data["demand"])
+            self.vot = value_of_time(
+                duration=df.travel_time,
+                price=df.price,
+            )
+
             self.tstep = json_tstep
             self.N1 = data["nlat"]
             self.N2 = data["nlon"]

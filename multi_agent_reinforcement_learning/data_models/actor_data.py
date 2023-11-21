@@ -51,6 +51,7 @@ class Flow:
     served_demand: defaultdict[T.Tuple[int, int], T.Dict[int, int]] = field(
         default_factory=lambda: defaultdict(dict)
     )
+    market_share: float = 0
 
 
 @dataclass

@@ -182,11 +182,22 @@ def _train_loop(
             )
             logging_dict.update(
                 {
-                    f"{model_data_pair.actor_data.name}_mean_price": np.mean(
+                    f"{model_data_pair.actor_data.name} Mean Price": np.mean(
                         list(model_data_pair.actor_data.graph_state.price.values())
                     )
                 }
             )
+
+            overall_sum = sum(
+                value
+                for inner_dict in model_data_pair.actor_data.unmet_demand.values()
+                for value in inner_dict.values()
+            )
+
+            logging_dict.update(
+                {f"{model_data_pair.actor_data.name} Unmet Demand": overall_sum}
+            )
+
         wandb.log(logging_dict)
 
         if not training:
@@ -326,11 +337,11 @@ def main(config: BaseConfig):
 
 
 if __name__ == "__main__":
-    city = City.brooklyn
-    config = args_to_config(city, cuda=True)
+    city = City.san_francisco
+    config = args_to_config(city, cuda=False)
     # config.wandb_mode = "disabled"
     config.n_regions = 10
-    config.max_episodes = 10000
+    config.max_episodes = 16000
     # config.test = True
     # config.max_episodes = 11
     # config.json_file = None
