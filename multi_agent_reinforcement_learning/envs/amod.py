@@ -204,6 +204,9 @@ class AMoD:
                     model_data_pair.actor_data.unmet_demand[origin, dest][t] = (
                         allocations[idx] - cars_in_area_for_each_company[idx]
                     )
+                    model_data_pair.actor_data.model_log.overflow_unmet_demand += (
+                        allocations[idx] - cars_in_area_for_each_company[idx]
+                    )
 
     def distribute_based_on_price_and_market_share(
         self,
