@@ -1,8 +1,13 @@
-cff-version: 0.01
+cff-version: 0.0.1
 message: "If you use this code, or parts of it, please cite it using the below."
 authors:
-  - family-names: Andreasen, Møller, Tang
-    given-names: Joachim Pors, Frederik Møller, Asger Sturis
+- family-names: Andreasen
+  given-names: Joachim Pors
+- family-names: Sørensen
+  given-names: Frederik Møller
+- family-names: Tang
+  given-names: Asger Sturis
 title: "Multi Agent Reinforcement Learning Methods"
 version: 1.0.0
+url: "https://github.com/Jungar111/multi_agent_reinforcement_learning"
 date-released: 2023-08-31
