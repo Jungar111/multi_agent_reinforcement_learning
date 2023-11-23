@@ -33,7 +33,9 @@ class PaxStepInfo:
 
 @dataclass
 class GraphState:
-    price: T.Dict[int, float] = field(default_factory=dict)
+    price: defaultdict[T.Tuple[int, int], T.Dict[int, float]] = field(
+        default_factory=lambda: defaultdict(dict)
+    )
     time: int = 0
     demand: defaultdict[T.Tuple[int, int], T.Dict[int, float]] = field(
         default_factory=lambda: defaultdict(dict)

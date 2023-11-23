@@ -181,7 +181,7 @@ class AMoD:
         cars_in_area_for_each_company: T.List[int],
     ):
         price = [
-            model_data_pair.actor_data.graph_state.price[t]
+            model_data_pair.actor_data.graph_state.price[origin, dest][t]
             for model_data_pair in model_data_pairs
         ]
 
@@ -369,13 +369,13 @@ class AMoD:
                 model_data_pair.actor_data.rewards.pax_reward += (
                     model_data_pair.actor_data.actions.pax_action[k]
                     * (
-                        model_data_pair.actor_data.graph_state.price[t]
+                        model_data_pair.actor_data.graph_state.price[i, j][t]
                         - self.demand_time[i, j][t] * self.beta
                     )
                 )
                 model_data_pair.actor_data.info.revenue += (
                     model_data_pair.actor_data.actions.pax_action[k]
-                    * (model_data_pair.actor_data.graph_state.price[t])
+                    * (model_data_pair.actor_data.graph_state.price[i, j][t])
                 )
 
             # Update time
@@ -501,7 +501,7 @@ class AMoD:
             # trip attribute (origin, destination, time of request, demand, price)
             for i, j, t, d, p in tripAttr:
                 self.demand[i, j][t] = d
-                model_data_pair.actor_data.graph_state.price[0] = p
+                model_data_pair.actor_data.graph_state.price[i, j][0] = p
 
             model_data_pair.actor_data.graph_state.demand = defaultdict(dict)
 
