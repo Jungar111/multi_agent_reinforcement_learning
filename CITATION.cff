@@ -1,10 +1,8 @@
-cff-version: 1.2.0
-message: "If you use this software, please cite it as below."
+cff-version: 0.01
+message: "If you use this code, or parts of it, please cite it using the below."
 authors:
-  - family-names: Druskat
-    given-names: Stephan
-    orcid: https://orcid.org/1234-5678-9101-1121
-title: "My Research Software"
-version: 2.0.4
-doi: 10.5281/zenodo.1234
-date-released: 2021-08-11
+  - family-names: Andreasen, Møller, Tang
+    given-names: Joachim Pors, Frederik Møller, Asger Sturis
+title: "Multi Agent Reinforcement Learning Methods"
+version: 1.0.0
+date-released: 2023-08-31
