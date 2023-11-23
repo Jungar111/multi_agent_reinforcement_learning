@@ -193,7 +193,7 @@ class AMoD:
             # no_customers_for_other_company = chosen_company.get(1 - actor_idx, 0)
 
             vot_for_trip = (price[actor_idx]) / (
-                self.scenario.demand_time[origin, dest][t] + 1e-5
+                self.demand_time[origin, dest][t] + 1e-5
             )
 
             probability_of_taxi = 1 - hill_equation(x=vot_for_trip, k=self.scenario.vot)
