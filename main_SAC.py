@@ -14,10 +14,12 @@ import wandb
 from multi_agent_reinforcement_learning.algos.reb_flow_solver import solveRebFlow
 from multi_agent_reinforcement_learning.algos.sac import SAC
 from multi_agent_reinforcement_learning.algos.sac_gnn_parser import GNNParser
-from multi_agent_reinforcement_learning.data_models.actor_data import ActorData
+from multi_agent_reinforcement_learning.data_models.actor_data import (
+    ActorData,
+    ModelLog,
+)
 from multi_agent_reinforcement_learning.data_models.city_enum import City
 from multi_agent_reinforcement_learning.data_models.config import SACConfig
-from multi_agent_reinforcement_learning.data_models.logs import ModelLog
 from multi_agent_reinforcement_learning.data_models.model_data_pair import ModelDataPair
 from multi_agent_reinforcement_learning.envs.amod import AMoD
 from multi_agent_reinforcement_learning.envs.scenario import Scenario
@@ -161,10 +163,6 @@ def main(config: SACConfig):
                             config.rew_scale * rl_reward,
                             o[idx],
                         )
-                    # Log pax_reward
-                    model_data_pair.actor_data.model_log.reward += (
-                        model_data_pair.actor_data.rewards.pax_reward
-                    )
                     action_rl[idx], price = model_data_pair.model.select_action(o[idx])
                     model_data_pair.actor_data.graph_state.price[step + 1] = (
                         init_price + price
@@ -200,19 +198,26 @@ def main(config: SACConfig):
 
                 # track performance over episode
                 for model_data_pair in model_data_pairs:
-                    model_data_pair.actor_data.model_log.reward += (
+                    reward_for_episode = (
+                        model_data_pair.actor_data.rewards.pax_reward
+                        + model_data_pair.actor_data.rewards.reb_reward
+                    )
+                    model_data_pair.actor_data.model_log.reward += reward_for_episode
+
+                    model_data_pair.actor_data.model_log.revenue_reward += (
+                        model_data_pair.actor_data.rewards.pax_reward
+                    )
+                    model_data_pair.actor_data.model_log.rebalancing_reward += (
                         model_data_pair.actor_data.rewards.reb_reward
                     )
+
                     model_data_pair.actor_data.model_log.served_demand += (
                         model_data_pair.actor_data.info.served_demand
                     )
                     model_data_pair.actor_data.model_log.rebalancing_cost += (
                         model_data_pair.actor_data.info.rebalancing_cost
                     )
-                    model_data_pair.model.rewards.append(
-                        model_data_pair.actor_data.rewards.pax_reward
-                        + model_data_pair.actor_data.rewards.reb_reward
-                    )
+                    model_data_pair.model.rewards.append(reward_for_episode)
                 step += 1
                 for model in model_data_pairs:
                     if i_episode > 10:
@@ -253,15 +258,6 @@ def main(config: SACConfig):
                         )
                         - init_price
                     }
-                )
-                overall_sum = sum(
-                    value
-                    for inner_dict in model_data_pair.actor_data.unmet_demand.values()
-                    for value in inner_dict.values()
-                )
-
-                logging_dict.update(
-                    {f"{model_data_pair.actor_data.name} Unmet Demand": overall_sum}
                 )
             wandb.log(logging_dict)
 

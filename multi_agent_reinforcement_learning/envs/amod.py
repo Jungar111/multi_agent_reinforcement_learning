@@ -190,7 +190,7 @@ class AMoD:
         chosen_company = {val: co for val, co in zip(values, counts)}
         for actor_idx in range(2):
             no_customers_for_company = chosen_company.get(actor_idx, 0)
-            no_customers_for_other_company = chosen_company.get(1 - actor_idx, 0)
+            # no_customers_for_other_company = chosen_company.get(1 - actor_idx, 0)
 
             vot_for_trip = (price[actor_idx]) / (
                 self.scenario.demand_time[origin, dest][t] + 1e-5
@@ -215,19 +215,38 @@ class AMoD:
                 - cars_in_area_for_each_company[actor_idx]
             )
 
+            overflow_lost_cars = (
+                chosen_company.get(actor_idx, 0)
+                - cars_in_area_for_each_company[actor_idx]
+            )
+            bus_lost_cars = no_customers_for_company - customers_after_bus
+            # customers_lost_to_other_company = no_customers_for_other_company
+
+            model_data_pairs[
+                actor_idx
+            ].actor_data.model_log.bus_unmet_demand += bus_lost_cars
+
             if excess_cars > 0:
                 model_data_pairs[actor_idx].actor_data.unmet_demand[origin, dest][t] = (
-                    (
-                        chosen_company.get(actor_idx, 0)
-                        - cars_in_area_for_each_company[actor_idx]
-                    )
-                    + (no_customers_for_company - customers_after_bus)
-                    + no_customers_for_other_company
+                    overflow_lost_cars + bus_lost_cars
                 )
+                model_data_pairs[
+                    actor_idx
+                ].actor_data.model_log.overflow_unmet_demand += overflow_lost_cars
             else:
-                model_data_pairs[actor_idx].actor_data.unmet_demand[origin, dest][t] = (
-                    no_customers_for_company - customers_after_bus
-                ) + no_customers_for_other_company
+                model_data_pairs[actor_idx].actor_data.unmet_demand[origin, dest][
+                    t
+                ] = bus_lost_cars
+
+            model_data_pairs[
+                actor_idx
+            ].actor_data.model_log.total_unmet_demand += model_data_pairs[
+                actor_idx
+            ].actor_data.unmet_demand[
+                origin, dest
+            ][
+                t
+            ]
 
     # pax step
     def pax_step(
@@ -352,10 +371,6 @@ class AMoD:
                     * (
                         model_data_pair.actor_data.graph_state.price[t]
                         - self.demand_time[i, j][t] * self.beta
-                    )
-                    - (
-                        model_data_pair.actor_data.graph_state.price[t]
-                        * model_data_pair.actor_data.unmet_demand[i, j][t]
                     )
                 )
                 model_data_pair.actor_data.info.revenue += (
