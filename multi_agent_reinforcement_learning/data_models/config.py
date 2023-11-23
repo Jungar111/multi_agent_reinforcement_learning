@@ -28,6 +28,7 @@ class BaseConfig(BaseModel):
     total_number_of_cars: int
     wandb_mode: str = "online"
     gamma: float = 0.97
+    include_price: bool = True
 
     demand_ratio: T.Dict[str, float] = {
         "san_francisco": 2.0,

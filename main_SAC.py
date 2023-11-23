@@ -113,9 +113,12 @@ def main(config: SACConfig):
         with open(str(env.config.json_file)) as file:
             data = json.load(file)
 
-        df = pd.DataFrame(data["demand"])
-        init_price_dict = df.groupby(["origin", "destination"]).price.mean().to_dict()
-        init_price_mean = df.price.mean()
+        if config.include_price:
+            df = pd.DataFrame(data["demand"])
+            init_price_dict = (
+                df.groupby(["origin", "destination"]).price.mean().to_dict()
+            )
+            init_price_mean = df.price.mean()
 
         wandb_config_log = {**vars(config)}
         for model in model_data_pairs:
@@ -137,10 +140,11 @@ def main(config: SACConfig):
             o = [None, None]
             action_rl = [None, None]
             obs_list = [None, None]
-            prices = {
-                0: [],
-                1: [],
-            }
+            if config.include_price:
+                prices = {
+                    0: [],
+                    1: [],
+                }
             while not done:
                 # take matching step (Step 1 in paper)
                 if step > 0:
@@ -166,14 +170,20 @@ def main(config: SACConfig):
                             config.rew_scale * rl_reward,
                             o[idx],
                         )
-                    action_rl[idx], price = model_data_pair.model.select_action(o[idx])
-                    for i in range(config.grid_size_x):
-                        for j in range(config.grid_size_y):
-                            model_data_pair.actor_data.graph_state.price[i, j][
-                                step + 1
-                            ] = (init_price_dict.get((i, j), init_price_mean) + price)
-                    prices[idx].append(price)
-
+                    if config.include_price:
+                        action_rl[idx], price = model_data_pair.model.select_action(
+                            o[idx]
+                        )
+                        for i in range(config.grid_size_x):
+                            for j in range(config.grid_size_y):
+                                model_data_pair.actor_data.graph_state.price[i, j][
+                                    step + 1
+                                ] = (
+                                    init_price_dict.get((i, j), init_price_mean) + price
+                                )
+                        prices[idx].append(price)
+                    else:
+                        action_rl[idx] = model_data_pair.model.select_action(o[idx])
                 for idx, model in enumerate(model_data_pairs):
                     # transform sample from Dirichlet into actual vehicle counts (i.e. (x1*x2*..*xn)*num_vehicles)
                     model.actor_data.flow.desired_acc = {
@@ -238,7 +248,7 @@ def main(config: SACConfig):
                 f"Reward_1: {episode_reward[1]:.2f} | "
                 f"ServedDemand: {episode_served_demand:.2f} | "
                 f"Reb. Cost: {episode_rebalancing_cost:.2f} | "
-                f"Mean price: {np.mean(prices[0]):.2f}"
+                f"Mean price: {np.mean(prices[0]) if config.include_price else 0:.2f}"
             )
             # Checkpoint best performing model
             if np.sum(episode_reward) >= best_reward:
@@ -255,13 +265,14 @@ def main(config: SACConfig):
                         model_data_pair.actor_data.name
                     )
                 )
-                logging_dict.update(
-                    {
-                        f"{model_data_pair.actor_data.name} Mean Price": np.mean(
-                            prices[idx]
-                        )
-                    }
-                )
+                if config.include_price:
+                    logging_dict.update(
+                        {
+                            f"{model_data_pair.actor_data.name} Mean Price": np.mean(
+                                prices[idx]
+                            )
+                        }
+                    )
             wandb.log(logging_dict)
 
         ckpt_paths = [
@@ -445,6 +456,7 @@ if __name__ == "__main__":
     config.max_episodes = 2000
     config.grid_size_x = 10
     config.grid_size_y = 10
+    config.include_price = False
     # config.test = True
-    # config.wandb_mode = "disabled"
+    config.wandb_mode = "disabled"
     main(config)
