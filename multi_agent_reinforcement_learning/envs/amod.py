@@ -192,10 +192,11 @@ class AMoD:
             no_customers_for_company = chosen_company.get(actor_idx, 0)
             no_customers_for_other_company = chosen_company.get(1 - actor_idx, 0)
 
-            vot_for_trip = self.scenario.demand_time[origin, dest][t] / (
-                price[actor_idx] + 1e-5
+            vot_for_trip = (price[actor_idx]) / (
+                self.scenario.demand_time[origin, dest][t] + 1e-5
             )
-            probability_of_taxi = hill_equation(x=vot_for_trip, k=self.scenario.vot)
+
+            probability_of_taxi = 1 - hill_equation(x=vot_for_trip, k=self.scenario.vot)
             customers_after_bus = np.random.binomial(
                 no_customers_for_company, p=probability_of_taxi
             )

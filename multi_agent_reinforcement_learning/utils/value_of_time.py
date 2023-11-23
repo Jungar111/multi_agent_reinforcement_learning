@@ -3,7 +3,7 @@ import numpy as np
 
 def value_of_time(price: np.ndarray, duration: np.ndarray) -> np.float64:
     """Compute value of time (vot)."""
-    return np.min(price / duration) - 0.1
+    return np.max(price / duration)
 
 
 def hill_equation(x: float, k: float, alpha: float = 4) -> float:
