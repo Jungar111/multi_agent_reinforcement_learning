@@ -239,6 +239,21 @@ def main(config: SACConfig):
             )
             # Checkpoint best performing model
             if np.sum(episode_reward) >= best_reward:
+                ckpt_paths = [
+                    str(
+                        Path(
+                            "saved_files",
+                            "ckpt",
+                            f"{config.path}",
+                            f"{model_data_pair.actor_data.name}.pth",
+                        )
+                    )
+                    for model_data_pair in model_data_pairs
+                ]
+
+                for ckpt_path in ckpt_paths:
+                    wandb.save(ckpt_path)
+
                 for model in model_data_pairs:
                     model.model.save_checkpoint(
                         path=f"saved_files/ckpt/{config.path}/{model.actor_data.name}.pth"
@@ -261,20 +276,6 @@ def main(config: SACConfig):
                 )
             wandb.log(logging_dict)
 
-            ckpt_paths = [
-                str(
-                    Path(
-                        "saved_files",
-                        "ckpt",
-                        f"{config.path}",
-                        f"{model_data_pair.actor_data.name}.pth",
-                    )
-                )
-                for model_data_pair in model_data_pairs
-            ]
-
-            for ckpt_path in ckpt_paths:
-                wandb.save(ckpt_path)
     else:
         """Run main testing loop."""
         logger.info("Running main testing loop for SAC.")
