@@ -1,16 +1,11 @@
-"""Main file for the SAC implementation for the project."""
-from __future__ import print_function
-
+"""Main file for testing model."""
 import copy
-from datetime import datetime
-from pathlib import Path
 
 import numpy as np
 from tqdm import trange
 import json
 import pandas as pd
 
-import wandb
 from multi_agent_reinforcement_learning.algos.reb_flow_solver import solveRebFlow
 from multi_agent_reinforcement_learning.algos.sac import SAC
 from multi_agent_reinforcement_learning.algos.sac_gnn_parser import GNNParser
@@ -23,6 +18,10 @@ from multi_agent_reinforcement_learning.data_models.config import SACConfig
 from multi_agent_reinforcement_learning.data_models.model_data_pair import ModelDataPair
 from multi_agent_reinforcement_learning.envs.amod import AMoD
 from multi_agent_reinforcement_learning.envs.scenario import Scenario
+from multi_agent_reinforcement_learning.evaluation.actor_evaluation import (
+    plot_price_diff_over_time,
+    plot_average_distribution,
+)
 from multi_agent_reinforcement_learning.utils.init_logger import init_logger
 from multi_agent_reinforcement_learning.utils.minor_utils import dictsum
 from multi_agent_reinforcement_learning.utils.sac_argument_parser import args_to_config
@@ -41,14 +40,7 @@ def main(config: SACConfig):
         ActorData(name="RL_2_SAC", no_cars=advesary_number_of_cars),
     ]
 
-    wandb.init(
-        mode=config.wandb_mode,
-        project="master2023",
-        name=f"train_log ({datetime.now().strftime('%Y-%m-%d %H:%M')})",
-    )
-
-    logging_dict = {}
-    logger.info("Running main training loop for SAC.")
+    logger.info("Running main test loop.")
     scenario = Scenario(
         config=config,
         json_file=str(config.json_file),
@@ -99,30 +91,39 @@ def main(config: SACConfig):
         ModelDataPair(rl1_actor, actor_data[0]),
         ModelDataPair(rl2_actor, actor_data[1]),
     ]
-    train_episodes = config.max_episodes
+    test_episodes = config.max_episodes
     # T = config.max_steps
-    epochs = trange(train_episodes)
-    best_reward = -np.inf
-    # best_reward_test = -np.inf
+    epochs = trange(test_episodes)
 
     with open(str(env.config.json_file)) as file:
         data = json.load(file)
 
-    if config.include_price:
-        df = pd.DataFrame(data["demand"])
-        init_price_dict = df.groupby(["origin", "destination"]).price.mean().to_dict()
-        init_price_mean = df.price.mean()
+    df = pd.DataFrame(data["demand"])
+    init_price_dict = df.groupby(["origin", "destination"]).price.mean().to_dict()
+    init_price_mean = df.price.mean()
 
-    wandb_config_log = {**vars(config)}
-    for model in model_data_pairs:
-        wandb_config_log[f"test_{model.actor_data.name}"] = model.actor_data.no_cars
+    for idx, model_data_pair in enumerate(model_data_pairs):
+        logger.info(
+            f"Loading from saved_files/ckpt/{config.path}/{model_data_pair.actor_data.name}.pth"
+        )
+        model_data_pair.model.load_checkpoint(
+            path=f"saved_files/ckpt/{config.path}/{model_data_pair.actor_data.name}.pth"
+        )
 
-    for model_data_pair in model_data_pairs:
-        model_data_pair.model.train()
+    epoch_prices = []
 
     for i_episode in epochs:
         for model_data_pair in model_data_pairs:
             model_data_pair.actor_data.model_log = ModelLog()
+
+        all_actions = np.zeros(
+            (
+                len(model_data_pairs),
+                config.tf,
+                # nr of regions
+                config.grid_size_x,
+            )
+        )
 
         env.reset(model_data_pairs)  # initialize environment
         episode_reward = [0, 0]
@@ -133,11 +134,10 @@ def main(config: SACConfig):
         o = [None, None]
         action_rl = [None, None]
         obs_list = [None, None]
-        if config.include_price:
-            prices = {
-                0: [],
-                1: [],
-            }
+        prices = {
+            0: [],
+            1: [],
+        }
         while not done:
             # take matching step (Step 1 in paper)
             if step > 0:
@@ -163,16 +163,14 @@ def main(config: SACConfig):
                         config.rew_scale * rl_reward,
                         o[idx],
                     )
-                if config.include_price:
-                    action_rl[idx], price = model_data_pair.model.select_action(o[idx])
-                    for i in range(config.grid_size_x):
-                        for j in range(config.grid_size_y):
-                            model_data_pair.actor_data.graph_state.price[i, j][
-                                step + 1
-                            ] = (init_price_dict.get((i, j), init_price_mean) + price)
-                    prices[idx].append(price)
-                else:
-                    action_rl[idx] = model_data_pair.model.select_action(o[idx])
+                action_rl[idx], price = model_data_pair.model.select_action(o[idx])
+                for i in range(config.grid_size_x):
+                    for j in range(config.grid_size_y):
+                        model_data_pair.actor_data.graph_state.price[i, j][step + 1] = (
+                            init_price_dict.get((i, j), init_price_mean) + price
+                        )
+                prices[idx].append(price)
+
             for idx, model in enumerate(model_data_pairs):
                 # transform sample from Dirichlet into actual vehicle counts (i.e. (x1*x2*..*xn)*num_vehicles)
                 model.actor_data.flow.desired_acc = {
@@ -182,6 +180,9 @@ def main(config: SACConfig):
                     )
                     for i in range(len(env.region))
                 }
+                all_actions[idx, step, :] = list(
+                    model_data_pairs[idx].actor_data.flow.desired_acc.values()
+                )
 
             # solve minimum rebalancing distance problem (Step 3 in paper)
             solveRebFlow(
@@ -223,13 +224,6 @@ def main(config: SACConfig):
                 )
                 model_data_pair.model.rewards.append(reward_for_episode)
             step += 1
-            for model in model_data_pairs:
-                if i_episode > 10:
-                    # sample from memory and update model
-                    batch = model.model.replay_buffer.sample_batch(
-                        config.batch_size, norm=False
-                    )
-                    model.model.update(data=batch)
 
         epochs.set_description(
             f"Episode {i_episode+1} | "
@@ -237,57 +231,27 @@ def main(config: SACConfig):
             f"Reward_1: {episode_reward[1]:.2f} | "
             f"ServedDemand: {episode_served_demand:.2f} | "
             f"Reb. Cost: {episode_rebalancing_cost:.2f} | "
-            f"Mean price: {np.mean(prices[0]) if config.include_price else 0:.2f}"
+            f"Mean price: {np.mean(prices[0]):.2f}"
         )
-        # Checkpoint best performing model
-        if np.sum(episode_reward) >= best_reward:
-            ckpt_paths = [
-                str(
-                    Path(
-                        "saved_files",
-                        "ckpt",
-                        f"{config.path}",
-                        f"{model_data_pair.actor_data.name}.pth",
-                    )
-                )
-                for model_data_pair in model_data_pairs
-            ]
 
-            for ckpt_path in ckpt_paths:
-                wandb.save(ckpt_path)
+        epoch_prices.append(prices)
 
-            for model in model_data_pairs:
-                model.model.save_checkpoint(
-                    path=f"saved_files/ckpt/{config.path}/{model.actor_data.name}.pth"
-                )
-            best_reward = np.sum(episode_reward)
-            logging_dict.update({"Best Reward": best_reward})
+    plot_price_diff_over_time(epoch_prices)
 
-        for idx, model_data_pair in enumerate(model_data_pairs):
-            logging_dict.update(
-                model_data_pair.actor_data.model_log.dict(
-                    model_data_pair.actor_data.name
-                )
-            )
-            if config.include_price:
-                logging_dict.update(
-                    {
-                        f"{model_data_pair.actor_data.name} Mean Price": np.mean(
-                            prices[idx]
-                        )
-                    }
-                )
-        wandb.log(logging_dict)
+    plot_average_distribution(
+        actions=np.array(all_actions),
+        T=config.tf,
+        model_data_pairs=model_data_pairs,
+    )
 
 
 if __name__ == "__main__":
     city = City.san_francisco
     config = args_to_config(city, cuda=True)
-    config.tf = 20
-    config.max_episodes = 2000
+    # config.tf = 180
+    config.max_episodes = 1
     config.grid_size_x = 10
     config.grid_size_y = 10
-    config.include_price = False
-    # config.test = True
+    config.total_number_of_cars = 374
     config.wandb_mode = "disabled"
     main(config)

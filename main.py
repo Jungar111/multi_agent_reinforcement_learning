@@ -1,5 +1,6 @@
 """Main file for project."""
 from __future__ import print_function
+from pathlib import Path
 
 import json
 import typing as T
@@ -11,10 +12,12 @@ from tqdm import trange
 import wandb
 from multi_agent_reinforcement_learning.algos.actor_critic_gnn import ActorCritic
 from multi_agent_reinforcement_learning.algos.reb_flow_solver import solveRebFlow
-from multi_agent_reinforcement_learning.data_models.actor_data import ActorData
+from multi_agent_reinforcement_learning.data_models.actor_data import (
+    ActorData,
+    ModelLog,
+)
 from multi_agent_reinforcement_learning.data_models.city_enum import City
 from multi_agent_reinforcement_learning.data_models.config import BaseConfig
-from multi_agent_reinforcement_learning.data_models.logs import ModelLog
 from multi_agent_reinforcement_learning.data_models.model_data_pair import ModelDataPair
 from multi_agent_reinforcement_learning.envs.amod import AMoD
 from multi_agent_reinforcement_learning.envs.scenario import Scenario
@@ -46,6 +49,7 @@ def _train_loop(
     if env.config.json_file is not None:
         with open(env.config.json_file) as json_file:
             data = json.load(json_file)
+
     epochs = trange(n_episodes)
     for i_episode in epochs:
         for model_data_pair in model_data_pairs:
@@ -74,14 +78,18 @@ def _train_loop(
             # use GNN-RL policy (Step 2 in paper)
 
             actions = []
+            prices = []
             for idx, model_data_pair in enumerate(model_data_pairs):
-                actions.append(
-                    model_data_pair.model.select_action(
-                        obs=model_data_pair.actor_data.graph_state,
-                        probabilistic=training,
-                        data=data,
-                    )
+                action, price = model_data_pair.model.select_action(
+                    obs=model_data_pair.actor_data.graph_state,
+                    probabilistic=training,
+                    data=data,
                 )
+
+                model_data_pair.actor_data.graph_state.price[step + 1] = price
+
+                actions.append(action)
+                prices.append(price)
 
             for idx, action in enumerate(actions):
                 # transform sample from Dirichlet into actual vehicle counts (i.e. (x1*x2*..*xn)*num_vehicles)
@@ -138,9 +146,10 @@ def _train_loop(
 
         # Send current statistics to screen
         epochs.set_description(
-            f"Episode {i_episode+1} | Reward: {model_data_pairs[0].actor_data.model_log.reward:.2f} |"
-            f"ServedDemand: {model_data_pairs[0].actor_data.model_log.served_demand:.2f} "
-            f"| Reb. Cost: {model_data_pairs[0].actor_data.model_log.rebalancing_cost:.2f}"
+            f"Episode {i_episode+1} | Reward: {model_data_pairs[0].actor_data.model_log.reward:.2f} "
+            f"| ServedDemand: {model_data_pairs[0].actor_data.model_log.served_demand:.2f} "
+            f"| Reb. Cost: {model_data_pairs[0].actor_data.model_log.rebalancing_cost:.2f} "
+            f"| Mean price: {np.mean(list(model_data_pairs[0].actor_data.graph_state.price.values())):.2f} "
         )
 
         # Checkpoint best performing model
@@ -155,6 +164,21 @@ def _train_loop(
                 )
                 > best_reward
             ):
+                ckpt_paths = [
+                    str(
+                        Path(
+                            "saved_files",
+                            "ckpt",
+                            f"{config.path}",
+                            f"{model_data_pair.actor_data.name}.pth",
+                        )
+                    )
+                    for model_data_pair in model_data_pairs
+                ]
+
+                for ckpt_path in ckpt_paths:
+                    wandb.save(ckpt_path)
+
                 for model_data_pair in model_data_pairs:
                     model_data_pair.model.save_checkpoint(
                         path=f"./{config.directory}/ckpt/{config.path}/a2c_gnn_{model_data_pair.actor_data.name}.pth"
@@ -167,12 +191,30 @@ def _train_loop(
                     )
                     logging_dict.update({"Best Reward": best_reward})
         # Log KPIs on weights and biases
-        for model_data_pair in model_data_pairs:
+        for idx, model_data_pair in enumerate(model_data_pairs):
             logging_dict.update(
                 model_data_pair.actor_data.model_log.dict(
                     model_data_pair.actor_data.name
                 )
             )
+            logging_dict.update(
+                {
+                    f"{model_data_pair.actor_data.name} Mean Price": np.mean(
+                        list(model_data_pair.actor_data.graph_state.price.values())
+                    )
+                }
+            )
+
+            overall_sum = sum(
+                value
+                for inner_dict in model_data_pair.actor_data.unmet_demand.values()
+                for value in inner_dict.values()
+            )
+
+            logging_dict.update(
+                {f"{model_data_pair.actor_data.name} Unmet Demand": overall_sum}
+            )
+
         wandb.log(logging_dict)
 
         if not training:
@@ -187,10 +229,13 @@ def main(config: BaseConfig):
 
     actor_data = [
         ActorData(
-            name="RL_1_a2c",
+            name="RL_1_with_price",
             no_cars=config.total_number_of_cars - advesary_number_of_cars,
         ),
-        ActorData(name="RL_2_a2c", no_cars=advesary_number_of_cars),
+        ActorData(
+            name="RL_2_with_price",
+            no_cars=advesary_number_of_cars,
+        ),
     ]
 
     wandb_config_log = {**vars(config)}
@@ -283,7 +328,7 @@ def main(config: BaseConfig):
         actor_evaluator.plot_average_distribution(
             actions=np.array(all_actions),
             T=episode_length,
-            models=model_data_pairs,
+            model_data_pairs=model_data_pairs,
         )
 
         # actor_evaluator.plot_distribution_at_time_step_t(
@@ -294,9 +339,11 @@ def main(config: BaseConfig):
 
 
 if __name__ == "__main__":
-    city = City.brooklyn
-    config = args_to_config(city)
+    city = City.san_francisco
+    config = args_to_config(city, cuda=False)
     # config.wandb_mode = "disabled"
+    config.n_regions = 10
+    config.max_episodes = 16000
     # config.test = True
     # config.max_episodes = 11
     # config.json_file = None

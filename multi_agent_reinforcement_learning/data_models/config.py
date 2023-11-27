@@ -28,6 +28,7 @@ class BaseConfig(BaseModel):
     total_number_of_cars: int
     wandb_mode: str = "online"
     gamma: float = 0.97
+    include_price: bool = True
 
     demand_ratio: T.Dict[str, float] = {
         "san_francisco": 2.0,
@@ -69,11 +70,6 @@ class A2CConfig(BaseConfig):
             raise ValueError("tf must be at least 10. WE THINK! Depends on grid size.")
         return value
 
-    @validator("n_regions")
-    def update_n_regions(cls, value, values):
-        value = values.grid_size_x * values.grid_size_y
-        return value
-
 
 class SACConfig(BaseConfig):
     """Config class for the SAC implementation."""
@@ -90,6 +86,6 @@ class SACConfig(BaseConfig):
     clip: int
 
     tf: int = 20
-    total_number_of_cars: int = 1500
+    total_number_of_cars: int = 374
     grid_size_x: int = 2
     grid_size_y: int = 4

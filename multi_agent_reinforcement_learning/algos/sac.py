@@ -2,14 +2,15 @@ import numpy as np
 import torch
 from torch import nn
 import torch.nn.functional as F
-from torch.distributions import Dirichlet
+from torch.distributions import Dirichlet, Normal
 from torch_geometric.data import Data, Batch
-from torch_geometric.nn import GCNConv
+from torch_geometric.nn import GCNConv, global_mean_pool
+
+# from torch.nn.init import normal_, constant_
 from multi_agent_reinforcement_learning.algos.reb_flow_solver import solveRebFlow
 from multi_agent_reinforcement_learning.utils.minor_utils import dictsum
 from multi_agent_reinforcement_learning.data_models.config import SACConfig
 from multi_agent_reinforcement_learning.envs.amod import AMoD
-from multi_agent_reinforcement_learning.data_models.logs import ModelLog
 from multi_agent_reinforcement_learning.algos.sac_gnn_parser import (
     GNNParser as SACGNNParser,
 )
@@ -17,6 +18,7 @@ from multi_agent_reinforcement_learning.algos.sac_gnn_parser import (
 from multi_agent_reinforcement_learning.data_models.actor_data import (
     ActorData,
     GraphState,
+    ModelLog,
 )
 import random
 
@@ -30,6 +32,7 @@ class PairData(Data):
         action=None,
         edge_index_t=None,
         x_t=None,
+        device: torch.device = torch.device("cuda:0"),
     ):
         super().__init__()
         self.edge_index_s = edge_index_s
@@ -38,6 +41,9 @@ class PairData(Data):
         self.action = action
         self.edge_index_t = edge_index_t
         self.x_t = x_t
+        self.price_lin_mu = nn.Linear(32, 1)
+        self.price_lin_std = nn.Linear(32, 1)
+        self.device = device
 
     def __inc__(self, key, value, *args, **kwargs):
         if key == "edge_index_s":
@@ -105,30 +111,63 @@ class GNNActor(nn.Module):
     Actor \pi(a_t | s_t) parametrizing the concentration parameters of a Dirichlet Policy.
     """
 
-    def __init__(self, in_channels, hidden_size=32, act_dim=6):
+    def __init__(
+        self,
+        config: SACConfig,
+        in_channels,
+        hidden_size=32,
+        act_dim=6,
+        device: torch.device = torch.device("cuda:0"),
+    ):
         super().__init__()
+        self.config = config
         self.in_channels = in_channels
         self.act_dim = act_dim
         self.conv1 = GCNConv(in_channels, in_channels)
         self.lin1 = nn.Linear(in_channels, hidden_size)
         self.lin2 = nn.Linear(hidden_size, hidden_size)
-        self.lin3 = nn.Linear(hidden_size, 1)
+        self.dirichlet_concentration_layer = nn.Linear(hidden_size, 1)
+        if self.config.include_price:
+            self.price_lin_mu = nn.Linear(hidden_size, 1)
+            self.price_lin_std = nn.Linear(hidden_size, 1)
+            self.device = device
 
-    def forward(self, state, edge_index, deterministic=False):
+        # normal_(self.price_lin_std.weight, mean=0, std=0.1)
+        # constant_(self.price_lin_std.bias, 0)
+
+        # normal_(self.price_lin_mu.weight, mean=0, std=1)
+        # constant_(self.price_lin_mu.bias, 1)
+
+    def forward(self, state, edge_index, batch, deterministic=False):
         out = F.relu(self.conv1(state, edge_index))
         x = out + state
         x = x.reshape(-1, self.act_dim, self.in_channels)
         x = F.leaky_relu(self.lin1(x))
-        x = F.leaky_relu(self.lin2(x))
-        x = F.softplus(self.lin3(x))
-        concentration = x.squeeze(-1)
+        last_hidden_layer = F.leaky_relu(self.lin2(x))
+        concentration = F.softplus(
+            self.dirichlet_concentration_layer(last_hidden_layer)
+        ).squeeze(-1)
+        if self.config.include_price:
+            price_pool = global_mean_pool(last_hidden_layer, batch)
+
+            # outputs mu and sigma for a lognormal distribution
+            mu = self.price_lin_mu(price_pool)
+            sigma = F.softplus(self.price_lin_std(price_pool))
+
         if deterministic:
             action = (concentration) / (concentration.sum() + 1e-20)
             log_prob = None
+            if self.config.include_price:
+                price = mu[0, 0].detach()
         else:
             m = Dirichlet(concentration + 1e-20)
             action = m.rsample()
             log_prob = m.log_prob(action)
+            if self.config.include_price:
+                p = Normal(mu[0, 0], sigma[0, 0])
+                price = p.sample()
+        if self.config.include_price:
+            return action, log_prob, price
         return action, log_prob
 
 
@@ -344,7 +383,9 @@ class SAC(nn.Module):
 
         self.replay_buffer = ReplayData(device=device)
         # nnets
-        self.actor = GNNActor(self.input_size, self.hidden_size, act_dim=self.act_dim)
+        self.actor = GNNActor(
+            self.config, self.input_size, self.hidden_size, act_dim=self.act_dim
+        )
 
         if critic_version == 1:
             GNNCritic = GNNCritic1
@@ -406,9 +447,16 @@ class SAC(nn.Module):
 
     def select_action(self, data, deterministic=False):
         with torch.no_grad():
-            a, _ = self.actor(data.x, data.edge_index, deterministic)
+            if self.config.include_price:
+                a, _, price = self.actor(
+                    data.x, data.edge_index, data.batch, deterministic
+                )
+            else:
+                a, _ = self.actor(data.x, data.edge_index, data.batch, deterministic)
         a = a.squeeze(-1)
         a = a.detach().cpu().numpy()[0]
+        if self.config.include_price:
+            return list(a), price
         return list(a)
 
     def compute_loss_q(self, data):
@@ -432,7 +480,10 @@ class SAC(nn.Module):
         q2 = self.critic2(state_batch, edge_index, action_batch)
         with torch.no_grad():
             # Target actions come from *current* policy
-            a2, logp_a2 = self.actor(next_state_batch, edge_index2)
+            if self.config.include_price:
+                a2, logp_a2, _ = self.actor(next_state_batch, edge_index2, data.batch)
+            else:
+                a2, logp_a2 = self.actor(next_state_batch, edge_index2, data.batch)
             q1_pi_targ = self.critic1_target(next_state_batch, edge_index2, a2)
             q2_pi_targ = self.critic2_target(next_state_batch, edge_index2, a2)
             q_pi_targ = torch.min(q1_pi_targ, q2_pi_targ)
@@ -449,8 +500,10 @@ class SAC(nn.Module):
             data.x_s,
             data.edge_index_s,
         )
-
-        actions, logp_a = self.actor(state_batch, edge_index)
+        if self.config.include_price:
+            actions, logp_a, _ = self.actor(state_batch, edge_index, data.batch)
+        else:
+            actions, logp_a = self.actor(state_batch, edge_index, data.batch)
         q1_1 = self.critic1(state_batch, edge_index, actions)
         q2_a = self.critic2(state_batch, edge_index, actions)
         q_a = torch.min(q1_1, q2_a)
@@ -549,7 +602,7 @@ class SAC(nn.Module):
 
                 o = parser.parse_obs(obs)
 
-                action_rl = self.select_action(o, deterministic=True)
+                action_rl, price = self.select_action(o, deterministic=True)
                 actions.append(action_rl)
 
                 desiredAcc = {
