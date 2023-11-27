@@ -20,6 +20,7 @@ from multi_agent_reinforcement_learning.envs.amod import AMoD
 from multi_agent_reinforcement_learning.envs.scenario import Scenario
 from multi_agent_reinforcement_learning.evaluation.actor_evaluation import (
     plot_price_diff_over_time,
+    plot_average_distribution,
 )
 from multi_agent_reinforcement_learning.utils.init_logger import init_logger
 from multi_agent_reinforcement_learning.utils.minor_utils import dictsum
@@ -115,6 +116,15 @@ def main(config: SACConfig):
         for model_data_pair in model_data_pairs:
             model_data_pair.actor_data.model_log = ModelLog()
 
+        all_actions = np.zeros(
+            (
+                len(model_data_pairs),
+                config.tf,
+                # nr of regions
+                config.grid_size_x,
+            )
+        )
+
         env.reset(model_data_pairs)  # initialize environment
         episode_reward = [0, 0]
         episode_served_demand = 0
@@ -170,6 +180,9 @@ def main(config: SACConfig):
                     )
                     for i in range(len(env.region))
                 }
+                all_actions[idx, step, :] = list(
+                    model_data_pairs[idx].actor_data.flow.desired_acc.values()
+                )
 
             # solve minimum rebalancing distance problem (Step 3 in paper)
             solveRebFlow(
@@ -225,18 +238,18 @@ def main(config: SACConfig):
 
     plot_price_diff_over_time(epoch_prices)
 
-    # actor_evaluator.plot_average_distribution(
-    #     actions=np.array(action_rl),
-    #     T=config.tf,
-    #     model_data_pairs=model_data_pairs,
-    # )
+    plot_average_distribution(
+        actions=np.array(all_actions),
+        T=config.tf,
+        model_data_pairs=model_data_pairs,
+    )
 
 
 if __name__ == "__main__":
     city = City.san_francisco
     config = args_to_config(city, cuda=True)
     # config.tf = 180
-    config.max_episodes = 200
+    config.max_episodes = 1
     config.grid_size_x = 10
     config.grid_size_y = 10
     config.total_number_of_cars = 374
