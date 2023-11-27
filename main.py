@@ -164,6 +164,21 @@ def _train_loop(
                 )
                 > best_reward
             ):
+                ckpt_paths = [
+                    str(
+                        Path(
+                            "saved_files",
+                            "ckpt",
+                            f"{config.path}",
+                            f"{model_data_pair.actor_data.name}.pth",
+                        )
+                    )
+                    for model_data_pair in model_data_pairs
+                ]
+
+                for ckpt_path in ckpt_paths:
+                    wandb.save(ckpt_path)
+
                 for model_data_pair in model_data_pairs:
                     model_data_pair.model.save_checkpoint(
                         path=f"./{config.directory}/ckpt/{config.path}/a2c_gnn_{model_data_pair.actor_data.name}.pth"
@@ -287,21 +302,6 @@ def main(config: BaseConfig):
             episode_length,
             training=True,
         )
-
-        ckpt_paths = [
-            str(
-                Path(
-                    "saved_files",
-                    "ckpt",
-                    "nyc4",
-                    f"a2c_gnn_{model_data_pair.actor_data.name}.pth",
-                )
-            )
-            for model_data_pair in model_data_pairs
-        ]
-
-        for ckpt_path in ckpt_paths:
-            wandb.save(ckpt_path)
 
     else:
         # Load pre-trained model
