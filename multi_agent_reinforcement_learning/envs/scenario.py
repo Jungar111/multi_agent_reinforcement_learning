@@ -180,6 +180,7 @@ class Scenario:
             self.vot = value_of_time(
                 duration=df.travel_time,
                 price=df.price,
+                demand_ratio=config.demand_ratio[config.city],
             )
 
             self.tstep = json_tstep
