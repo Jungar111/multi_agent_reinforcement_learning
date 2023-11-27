@@ -19,7 +19,7 @@ from multi_agent_reinforcement_learning.data_models.model_data_pair import Model
 from multi_agent_reinforcement_learning.envs.amod import AMoD
 from multi_agent_reinforcement_learning.envs.scenario import Scenario
 from multi_agent_reinforcement_learning.evaluation.actor_evaluation import (
-    ActorEvaluator,
+    plot_price_diff_over_time,
 )
 from multi_agent_reinforcement_learning.utils.init_logger import init_logger
 from multi_agent_reinforcement_learning.utils.minor_utils import dictsum
@@ -108,6 +108,8 @@ def main(config: SACConfig):
         model_data_pair.model.load_checkpoint(
             path=f"saved_files/ckpt/{config.path}/{model_data_pair.actor_data.name}.pth"
         )
+
+    epoch_prices = []
 
     for i_episode in epochs:
         for model_data_pair in model_data_pairs:
@@ -219,19 +221,22 @@ def main(config: SACConfig):
             f"Mean price: {np.mean(prices[0]):.2f}"
         )
 
-    actor_evaluator = ActorEvaluator()
-    actor_evaluator.plot_average_distribution(
-        actions=np.array(action_rl),
-        T=config.tf,
-        model_data_pairs=model_data_pairs,
-    )
+        epoch_prices.append(prices)
+
+    plot_price_diff_over_time(epoch_prices)
+
+    # actor_evaluator.plot_average_distribution(
+    #     actions=np.array(action_rl),
+    #     T=config.tf,
+    #     model_data_pairs=model_data_pairs,
+    # )
 
 
 if __name__ == "__main__":
     city = City.san_francisco
     config = args_to_config(city, cuda=True)
-    config.tf = 20
-    config.max_episodes = 1
+    # config.tf = 180
+    config.max_episodes = 200
     config.grid_size_x = 10
     config.grid_size_y = 10
     config.total_number_of_cars = 374

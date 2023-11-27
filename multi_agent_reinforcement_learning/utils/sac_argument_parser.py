@@ -141,6 +141,10 @@ def parse_arguments(cuda):
         help="critic version (default: 4)",
     )
 
+    parser.add_argument(
+        "-f", "--fff", help="a dummy argument to fool ipython", default="1"
+    )
+
     args = parser.parse_args()
     args.cuda = not args.no_cuda and torch.cuda.is_available()
     args.device = torch.device("cpu")
