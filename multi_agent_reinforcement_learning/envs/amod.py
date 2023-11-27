@@ -171,6 +171,43 @@ class AMoD:
                 t
             ] = demand
 
+    def distribute_based_on_presence_in_grid(
+        self,
+        model_data_pairs: T.List[ModelDataPair],
+        no_customers: int,
+        origin: int,
+        dest: int,
+        t: int,
+        cars_in_area_for_each_company: T.List[int],
+    ):
+        if sum(cars_in_area_for_each_company) > 0:
+            prob_a1 = cars_in_area_for_each_company[0] / np.sum(
+                cars_in_area_for_each_company
+            )
+            prob_a2 = 1 - prob_a1
+            allocation_a1 = np.sum(
+                np.random.choice([0, 1], no_customers, p=[prob_a2, prob_a1])
+            )
+            allocation_a2 = no_customers - allocation_a1
+            allocations = [allocation_a1, allocation_a2]
+
+            for idx, model_data_pair in enumerate(model_data_pairs):
+                if cars_in_area_for_each_company[idx] >= allocations[idx]:
+                    model_data_pair.actor_data.graph_state.demand[origin, dest][
+                        t
+                    ] = allocations[idx]
+                    model_data_pair.actor_data.unmet_demand[origin, dest][t] = 0
+                else:
+                    model_data_pair.actor_data.graph_state.demand[origin, dest][
+                        t
+                    ] = cars_in_area_for_each_company[idx]
+                    model_data_pair.actor_data.unmet_demand[origin, dest][t] = (
+                        allocations[idx] - cars_in_area_for_each_company[idx]
+                    )
+                    model_data_pair.actor_data.model_log.overflow_unmet_demand += (
+                        allocations[idx] - cars_in_area_for_each_company[idx]
+                    )
+
     def distribute_based_on_price_and_market_share(
         self,
         model_data_pairs: T.List[ModelDataPair],
@@ -292,14 +329,24 @@ class AMoD:
                 for model_data_pair in model_data_pairs
             ]
 
-            self.distribute_based_on_price_and_market_share(
-                model_data_pairs=model_data_pairs,
-                no_customers=no_customers,
-                cars_in_area_for_each_company=cars_in_area_for_each_company,
-                origin=origin,
-                dest=dest,
-                t=t,
-            )
+            if self.config.include_price:
+                self.distribute_based_on_price_and_market_share(
+                    model_data_pairs=model_data_pairs,
+                    no_customers=no_customers,
+                    cars_in_area_for_each_company=cars_in_area_for_each_company,
+                    origin=origin,
+                    dest=dest,
+                    t=t,
+                )
+            else:
+                self.distribute_based_on_presence_in_grid(
+                    model_data_pairs=model_data_pairs,
+                    no_customers=no_customers,
+                    cars_in_area_for_each_company=cars_in_area_for_each_company,
+                    origin=origin,
+                    dest=dest,
+                    t=t,
+                )
 
         self.ext_reward = np.zeros(self.nregion)
         for i in self.region:
@@ -366,17 +413,27 @@ class AMoD:
                     t + self.demand_time[i, j][t]
                 ]
                 # add to reward
-                model_data_pair.actor_data.rewards.pax_reward += (
-                    model_data_pair.actor_data.actions.pax_action[k]
-                    * (
-                        model_data_pair.actor_data.graph_state.price[i, j][t]
-                        - self.demand_time[i, j][t] * self.beta
+                if self.config.include_price:
+                    model_data_pair.actor_data.rewards.pax_reward += (
+                        model_data_pair.actor_data.actions.pax_action[k]
+                        * (
+                            model_data_pair.actor_data.graph_state.price[i, j][t]
+                            - self.demand_time[i, j][t] * self.beta
+                        )
                     )
-                )
-                model_data_pair.actor_data.info.revenue += (
-                    model_data_pair.actor_data.actions.pax_action[k]
-                    * (model_data_pair.actor_data.graph_state.price[i, j][t])
-                )
+                    model_data_pair.actor_data.info.revenue += (
+                        model_data_pair.actor_data.actions.pax_action[k]
+                        * (model_data_pair.actor_data.graph_state.price[i, j][t])
+                    )
+                else:
+                    model_data_pair.actor_data.rewards.pax_reward += (
+                        model_data_pair.actor_data.actions.pax_action[k]
+                        * (self.price[i, j][t] - self.demand_time[i, j][t] * self.beta)
+                    )
+                    model_data_pair.actor_data.info.revenue += (
+                        model_data_pair.actor_data.actions.pax_action[k]
+                        * (self.price[i, j][t])
+                    )
 
             # Update time
             model_data_pair.actor_data.graph_state.time = self.time
