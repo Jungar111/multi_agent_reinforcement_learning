@@ -23,9 +23,6 @@ from multi_agent_reinforcement_learning.data_models.config import SACConfig
 from multi_agent_reinforcement_learning.data_models.model_data_pair import ModelDataPair
 from multi_agent_reinforcement_learning.envs.amod import AMoD
 from multi_agent_reinforcement_learning.envs.scenario import Scenario
-from multi_agent_reinforcement_learning.evaluation.actor_evaluation import (
-    ActorEvaluator,
-)
 from multi_agent_reinforcement_learning.utils.init_logger import init_logger
 from multi_agent_reinforcement_learning.utils.minor_utils import dictsum
 from multi_agent_reinforcement_learning.utils.sac_argument_parser import args_to_config
@@ -264,20 +261,20 @@ def main(config: SACConfig):
                 )
             wandb.log(logging_dict)
 
-        ckpt_paths = [
-            str(
-                Path(
-                    "saved_files",
-                    "ckpt",
-                    "nyc4",
-                    f"gnn_{model_data_pair.actor_data.name}.pth",
+            ckpt_paths = [
+                str(
+                    Path(
+                        "saved_files",
+                        "ckpt",
+                        f"{config.path}",
+                        f"{model_data_pair.actor_data.name}.pth",
+                    )
                 )
-            )
-            for model_data_pair in model_data_pairs
-        ]
+                for model_data_pair in model_data_pairs
+            ]
 
-        for ckpt_path in ckpt_paths:
-            wandb.save(ckpt_path)
+            for ckpt_path in ckpt_paths:
+                wandb.save(ckpt_path)
     else:
         """Run main testing loop."""
         logger.info("Running main testing loop for SAC.")
@@ -430,12 +427,6 @@ def main(config: SACConfig):
                 f"ServedDemand: {episode_served_demand:.2f} | "
                 f"Reb. Cost: {episode_rebalancing_cost:.2f}"
             )
-        actor_evaluator = ActorEvaluator()
-        actor_evaluator.plot_average_distribution(
-            actions=np.array(all_actions),
-            T=config.tf,
-            model_data_pairs=model_data_pairs,
-        )
 
 
 if __name__ == "__main__":
