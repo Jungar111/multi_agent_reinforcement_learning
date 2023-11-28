@@ -21,6 +21,9 @@ from multi_agent_reinforcement_learning.envs.scenario import Scenario
 from multi_agent_reinforcement_learning.evaluation.actor_evaluation import (
     plot_price_diff_over_time,
     plot_actions_as_fucntion_of_time,
+    plot_average_distribution,
+    plot_price_distribution,
+    plot_price_vs_other_attribute,
 )
 from multi_agent_reinforcement_learning.utils.init_logger import init_logger
 from multi_agent_reinforcement_learning.utils.minor_utils import dictsum
@@ -112,6 +115,8 @@ def main(config: SACConfig):
 
     epoch_prices = []
     actions_over_epoch = []
+    epoch_served_demand = []
+    epoch_unmet_demand = []
     for i_episode in epochs:
         for model_data_pair in model_data_pairs:
             model_data_pair.actor_data.model_log = ModelLog()
@@ -127,7 +132,8 @@ def main(config: SACConfig):
 
         env.reset(model_data_pairs)  # initialize environment
         episode_reward = [0, 0]
-        episode_served_demand = 0
+        episode_served_demand = {0: [], 1: []}
+        episode_unmet_demand = {0: [], 1: []}
         episode_rebalancing_cost = 0
         done = False
         step = 0
@@ -202,8 +208,13 @@ def main(config: SACConfig):
             for idx, model in enumerate(model_data_pairs):
                 episode_reward[idx] += model.actor_data.rewards.reb_reward
             # track performance over episode
-            for model in model_data_pairs:
-                episode_served_demand += model.actor_data.info.served_demand
+            for idx, model in enumerate(model_data_pairs):
+                unmet_demand = sum(
+                    sum(inner_dict.values())
+                    for inner_dict in model.actor_data.unmet_demand.values()
+                )
+                episode_served_demand[idx].append(model.actor_data.info.served_demand)
+                episode_unmet_demand[idx].append(unmet_demand)
                 episode_rebalancing_cost += model.actor_data.info.rebalancing_cost
 
             # track performance over episode
@@ -234,14 +245,20 @@ def main(config: SACConfig):
             f"Episode {i_episode+1} | "
             f"Reward_0: {episode_reward[0]:.2f} | "
             f"Reward_1: {episode_reward[1]:.2f} | "
-            f"ServedDemand: {episode_served_demand:.2f} | "
+            f"ServedDemand: {np.sum([served_demand for served_demand in episode_served_demand.values()]):.2f} | "
             f"Reb. Cost: {episode_rebalancing_cost:.2f} | "
             f"Mean price: {np.mean(prices[0]):.2f}"
         )
         epoch_prices.append(prices)
         actions_over_epoch.append(actions_over_t)
+        epoch_served_demand.append(episode_served_demand)
+        epoch_unmet_demand.append(episode_unmet_demand)
 
     plot_price_diff_over_time(epoch_prices)
+    plot_price_distribution(price_dicts=epoch_prices, data=df)
+
+    plot_price_vs_other_attribute(epoch_prices, epoch_served_demand, "served_demand")
+    plot_price_vs_other_attribute(epoch_prices, epoch_unmet_demand, "unmet_demand")
 
     plot_actions_as_fucntion_of_time(actions=np.array(actions_over_epoch))
 
@@ -250,7 +267,7 @@ if __name__ == "__main__":
     city = City.san_francisco
     config = args_to_config(city, cuda=True)
     # config.tf = 180
-    config.max_episodes = 2
+    config.max_episodes = 10
     config.grid_size_x = 10
     config.grid_size_y = 10
     config.total_number_of_cars = 374

@@ -1,8 +1,12 @@
 """Module for testing and evaluating actor performance."""
 import multi_agent_reinforcement_learning  # noqa: F401
 import matplotlib.pyplot as plt
+import seaborn as sns
 import typing as T
 import numpy as np
+import pandas as pd
+from bokeh.io import show
+import holoviews as hv
 
 from multi_agent_reinforcement_learning.algos.actor_critic_gnn import ActorCritic
 from multi_agent_reinforcement_learning.data_models.model_data_pair import ModelDataPair
@@ -96,13 +100,20 @@ def plot_average_distribution(
     plt.show()
 
 
-def plot_price_diff_over_time(price_dicts: T.List, tf=20, n_actors=2) -> None:
+def _get_price_matrix(price_dicts: T.List, tf=20, n_actors=2) -> np.ndarray:
     n_epochs = len(price_dicts)
     prices = np.zeros((n_actors, n_epochs, tf))
-    x = [i for i in range(tf)]
     for idx, price_dict in enumerate(price_dicts):
         for actor_idx in range(n_actors):
             prices[actor_idx, idx, :] = price_dict[actor_idx]
+
+    return prices
+
+
+def plot_price_diff_over_time(price_dicts: T.List, tf=20, n_actors=2) -> None:
+    x = [i for i in range(tf)]
+    prices = _get_price_matrix(price_dicts, tf, n_actors)
+    n_epochs = len(price_dicts)
 
     fig, ax = plt.subplots(n_actors, 1)
     for actor_idx in range(n_actors):
@@ -159,3 +170,63 @@ def plot_actions_as_fucntion_of_time(
         ax[actor_idx].set_ylabel("Action distribution")
     plt.xlabel("Time")
     plt.show()
+    
+def plot_price_distribution(price_dicts: T.List, data: pd.DataFrame, tf=20, n_actors=2):
+    mean_prices = data.groupby(["origin", "destination"])["price"].transform("mean")
+    data["price"] -= mean_prices
+    n_epochs = len(price_dicts)
+    prices = _get_price_matrix(price_dicts, tf, n_actors)
+
+    fig, ax = plt.subplots(n_actors, 1)
+    for actor_idx in range(n_actors):
+        price_actor = prices[actor_idx, ...].reshape(tf * n_epochs)
+        sns.kdeplot(x=price_actor, ax=ax[actor_idx], label="Estimated price difference")
+        sns.kdeplot(
+            x="price", data=data, ax=ax[actor_idx], label="Price difference in data"
+        )
+        # sns.histplot(x=price_actor, stat="density", alpha=0.4, ax=ax[actor_idx])
+        ax[actor_idx].set_title(f"Price distribution - Actor {actor_idx + 1}")
+        ax[actor_idx].legend()
+
+    plt.show()
+
+
+def flatten_data(data: T.List, column_name: str):
+    return [
+        {
+            "epoch": epoch,
+            "time_step": time_step,
+            "actor": point,
+            column_name: float(value),
+        }
+        for epoch, time_steps in enumerate(data)
+        for time_step, actors in time_steps.items()
+        for point, value in enumerate(actors)
+    ]
+
+
+def plot_price_vs_other_attribute(
+    price_dicts: T.List,
+    other_attribute: T.List,
+    name_for_other: str,
+):
+    df_price = pd.DataFrame(flatten_data(price_dicts, "price"))
+    df_demand = pd.DataFrame(flatten_data(other_attribute, name_for_other))
+    df = df_price.merge(df_demand, on=["epoch", "time_step", "actor"]).sort_values(
+        "price"
+    )
+
+    plt.scatter(df["price"], df[name_for_other])
+    plt.xlabel("Price")
+    plt.ylabel(name_for_other.replace("_", " ").capitalize())
+    plt.title(f"Price vs. {name_for_other.replace('_', ' ').capitalize()}")
+    plt.show()
+
+
+def chord_chart_of_trips_in_data(data: pd.DataFrame):
+    hv.extension("bokeh")
+    hv.output(size=500)
+    df = data.groupby(["origin", "destination"]).price.count().reset_index()
+    df.columns = ["source", "target", "value"]
+    chord = hv.Chord(df)
+    show(hv.render(chord))
