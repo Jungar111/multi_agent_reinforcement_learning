@@ -186,9 +186,10 @@ def plot_price_vs_other_attribute(
         "price"
     )
 
-    plt.plot(df["price"], df[name_for_other])
+    plt.scatter(df["price"], df[name_for_other])
     plt.xlabel("Price")
     plt.ylabel(name_for_other.replace("_", " ").capitalize())
+    plt.title(f"Price vs. {name_for_other.replace('_', ' ').capitalize()}")
     plt.show()
 
 
