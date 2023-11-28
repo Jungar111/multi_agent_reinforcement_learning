@@ -94,7 +94,7 @@ def plot_average_distribution(
         ax[idx].matshow(actor_actions.mean(axis=0), norm=norm)
         ax[idx].set_title(f"Actor: {model.actor_data.name}")
     fig.subplots_adjust(right=0.8)
-    fig.supxlabel("Total demand / total unmet demand", fontsize=12)
+    fig.supxlabel("Actor specific demand / actor specific unmet demand", fontsize=12)
     fig.colorbar(sc, ax=ax.ravel().tolist(), label="Mean # of cars departing from")
 
     plt.show()
@@ -141,6 +141,36 @@ def plot_price_diff_over_time(price_dicts: T.List, tf=20, n_actors=2) -> None:
     plt.show()
 
 
+def plot_actions_as_fucntion_of_time(
+    actions: np.ndarray,
+):
+    """Plot boxplot."""
+    actions_agg_over_epoch_actor1 = [[] for _ in range(len(actions[0][0]))]
+    actions_agg_over_epoch_actor2 = [[] for _ in range(len(actions[0][0]))]
+    fig, ax = plt.subplots(len(actions[0]), 1, sharey=True)
+    for epochs in range(actions.shape[0]):
+        for time in range(len(actions[0][0])):
+            actions_agg_over_epoch_actor1[time].extend(actions[epochs][0][time])
+            actions_agg_over_epoch_actor2[time].extend(actions[epochs][1][time])
+
+    actions_for_all_actors = [
+        actions_agg_over_epoch_actor1,
+        actions_agg_over_epoch_actor2,
+    ]
+    c = "#8C1C13"
+    for actor_idx in range(len(actions_for_all_actors)):
+        ax[actor_idx].boxplot(
+            actions_for_all_actors[actor_idx],
+            capprops=dict(color=c),
+            whiskerprops=dict(color=c),
+            flierprops=dict(color=c, markeredgecolor=c),
+            medianprops=dict(color=c),
+        )
+        ax[actor_idx].set_title(f"Actor {actor_idx+1}", fontsize=16)
+        ax[actor_idx].set_ylabel("Action distribution")
+    plt.xlabel("Time")
+    plt.show()
+    
 def plot_price_distribution(price_dicts: T.List, data: pd.DataFrame, tf=20, n_actors=2):
     mean_prices = data.groupby(["origin", "destination"])["price"].transform("mean")
     data["price"] -= mean_prices

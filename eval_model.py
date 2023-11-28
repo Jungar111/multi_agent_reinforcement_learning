@@ -20,6 +20,7 @@ from multi_agent_reinforcement_learning.envs.amod import AMoD
 from multi_agent_reinforcement_learning.envs.scenario import Scenario
 from multi_agent_reinforcement_learning.evaluation.actor_evaluation import (
     plot_price_diff_over_time,
+    plot_actions_as_fucntion_of_time,
     plot_average_distribution,
     plot_price_distribution,
     plot_price_vs_other_attribute,
@@ -113,9 +114,9 @@ def main(config: SACConfig):
         )
 
     epoch_prices = []
+    actions_over_epoch = []
     epoch_served_demand = []
     epoch_unmet_demand = []
-
     for i_episode in epochs:
         for model_data_pair in model_data_pairs:
             model_data_pair.actor_data.model_log = ModelLog()
@@ -139,7 +140,14 @@ def main(config: SACConfig):
         o = [None, None]
         action_rl = [None, None]
         obs_list = [None, None]
-        prices = {0: [], 1: []}
+        actions_over_t = {
+            0: [],
+            1: [],
+        }
+        prices = {
+            0: [],
+            1: [],
+        }
         while not done:
             # take matching step (Step 1 in paper)
             if step > 0:
@@ -172,6 +180,7 @@ def main(config: SACConfig):
                             init_price_dict.get((i, j), init_price_mean) + price
                         )
                 prices[idx].append(price)
+                actions_over_t[idx].append(action_rl[idx])
 
             for idx, model in enumerate(model_data_pairs):
                 # transform sample from Dirichlet into actual vehicle counts (i.e. (x1*x2*..*xn)*num_vehicles)
@@ -240,8 +249,8 @@ def main(config: SACConfig):
             f"Reb. Cost: {episode_rebalancing_cost:.2f} | "
             f"Mean price: {np.mean(prices[0]):.2f}"
         )
-
         epoch_prices.append(prices)
+        actions_over_epoch.append(actions_over_t)
         epoch_served_demand.append(episode_served_demand)
         epoch_unmet_demand.append(episode_unmet_demand)
 
@@ -251,11 +260,7 @@ def main(config: SACConfig):
     plot_price_vs_other_attribute(epoch_prices, epoch_served_demand, "served_demand")
     plot_price_vs_other_attribute(epoch_prices, epoch_unmet_demand, "unmet_demand")
 
-    plot_average_distribution(
-        actions=np.array(all_actions),
-        T=config.tf,
-        model_data_pairs=model_data_pairs,
-    )
+    plot_actions_as_fucntion_of_time(actions=np.array(actions_over_epoch))
 
 
 if __name__ == "__main__":
