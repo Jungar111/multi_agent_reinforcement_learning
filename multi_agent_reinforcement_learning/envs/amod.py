@@ -218,7 +218,7 @@ class AMoD:
         cars_in_area_for_each_company: T.List[int],
     ):
         price = [
-            model_data_pair.actor_data.graph_state.price[origin, dest][t]
+            max(model_data_pair.actor_data.graph_state.price[origin, dest][t], 1)
             for model_data_pair in model_data_pairs
         ]
 

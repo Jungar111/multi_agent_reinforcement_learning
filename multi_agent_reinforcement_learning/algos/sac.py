@@ -166,8 +166,9 @@ class GNNActor(nn.Module):
             if self.config.include_price:
                 p = Normal(mu[0, 0], sigma[0, 0])
                 price = p.sample()
+                log_prob_a = p.log_prob(price)
         if self.config.include_price:
-            return action, log_prob, price
+            return action, log_prob, log_prob_a
         return action, log_prob
 
 
@@ -500,10 +501,13 @@ class SAC(nn.Module):
             data.x_s,
             data.edge_index_s,
         )
+        actor_val = 0
         if self.config.include_price:
-            actions, logp_a, _ = self.actor(state_batch, edge_index, data.batch)
+            actions, logp_a, logp_p = self.actor(state_batch, edge_index, data.batch)
+            actor_val = self.alpha * (logp_a + logp_p)
         else:
             actions, logp_a = self.actor(state_batch, edge_index, data.batch)
+            actor_val = self.alpha * logp_a
         q1_1 = self.critic1(state_batch, edge_index, actions)
         q2_a = self.critic2(state_batch, edge_index, actions)
         q_a = torch.min(q1_1, q2_a)
@@ -517,7 +521,7 @@ class SAC(nn.Module):
             self.alpha_optimizer.step()
             self.alpha = self.log_alpha().exp()
 
-        loss_pi = (self.alpha * logp_a - q_a).mean()
+        loss_pi = (actor_val - q_a).mean()
 
         return loss_pi
 
