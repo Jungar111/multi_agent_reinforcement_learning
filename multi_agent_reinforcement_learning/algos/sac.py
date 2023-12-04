@@ -144,9 +144,11 @@ class GNNActor(nn.Module):
         x = x.reshape(-1, self.act_dim, self.in_channels)
         x = F.leaky_relu(self.lin1(x))
         last_hidden_layer = F.leaky_relu(self.lin2(x))
+
         concentration = F.softplus(
             self.dirichlet_concentration_layer(last_hidden_layer)
         ).squeeze(-1)
+
         if self.config.include_price:
             price_pool = global_mean_pool(last_hidden_layer, batch)
 
@@ -168,7 +170,7 @@ class GNNActor(nn.Module):
                 price = p.sample()
                 log_prob_a = p.log_prob(price)
         if self.config.include_price:
-            return action, log_prob, log_prob_a
+            return action, log_prob, price, log_prob_a
         return action, log_prob
 
 
@@ -273,7 +275,8 @@ class GNNCritic4(nn.Module):
         out = F.relu(self.conv1(state, edge_index))
         x = out + state
         x = x.reshape(-1, self.act_dim, self.in_channels)  # (B,N,21)
-        concat = torch.cat([x, action.unsqueeze(-1)], dim=-1)  # (B,N,22)
+        # (B,N,23)
+        concat = torch.cat([x, action.unsqueeze(-1)], dim=-1)
         x = F.relu(self.lin1(concat))
         x = F.relu(self.lin2(x))  # (B, N, H)
         x = torch.sum(x, dim=1)  # (B, H)
@@ -449,7 +452,7 @@ class SAC(nn.Module):
     def select_action(self, data, deterministic=False):
         with torch.no_grad():
             if self.config.include_price:
-                a, _, price = self.actor(
+                a, _, price, _ = self.actor(
                     data.x, data.edge_index, data.batch, deterministic
                 )
             else:
@@ -482,14 +485,21 @@ class SAC(nn.Module):
         with torch.no_grad():
             # Target actions come from *current* policy
             if self.config.include_price:
-                a2, logp_a2, _ = self.actor(next_state_batch, edge_index2, data.batch)
+                a2, logp_a2, _, logp_p = self.actor(
+                    next_state_batch, edge_index2, data.batch
+                )
+                q1_pi_targ = self.critic1_target(next_state_batch, edge_index2, a2)
+                q2_pi_targ = self.critic2_target(next_state_batch, edge_index2, a2)
+                q_pi_targ = torch.min(q1_pi_targ, q2_pi_targ)
+                backup = reward_batch + self.gamma * (
+                    q_pi_targ - self.alpha * (logp_a2 + logp_p)
+                )
             else:
                 a2, logp_a2 = self.actor(next_state_batch, edge_index2, data.batch)
-            q1_pi_targ = self.critic1_target(next_state_batch, edge_index2, a2)
-            q2_pi_targ = self.critic2_target(next_state_batch, edge_index2, a2)
-            q_pi_targ = torch.min(q1_pi_targ, q2_pi_targ)
-
-            backup = reward_batch + self.gamma * (q_pi_targ - self.alpha * logp_a2)
+                q1_pi_targ = self.critic1_target(next_state_batch, edge_index2, a2)
+                q2_pi_targ = self.critic2_target(next_state_batch, edge_index2, a2)
+                q_pi_targ = torch.min(q1_pi_targ, q2_pi_targ)
+                backup = reward_batch + self.gamma * (q_pi_targ - self.alpha * logp_a2)
 
         loss_q1 = F.mse_loss(q1, backup)
         loss_q2 = F.mse_loss(q2, backup)
@@ -503,14 +513,17 @@ class SAC(nn.Module):
         )
         actor_val = 0
         if self.config.include_price:
-            actions, logp_a, logp_p = self.actor(state_batch, edge_index, data.batch)
+            actions, logp_a, _, logp_p = self.actor(state_batch, edge_index, data.batch)
             actor_val = self.alpha * (logp_a + logp_p)
+            q1_1 = self.critic1(state_batch, edge_index, actions)
+            q2_a = self.critic2(state_batch, edge_index, actions)
+            q_a = torch.min(q1_1, q2_a)
         else:
             actions, logp_a = self.actor(state_batch, edge_index, data.batch)
             actor_val = self.alpha * logp_a
-        q1_1 = self.critic1(state_batch, edge_index, actions)
-        q2_a = self.critic2(state_batch, edge_index, actions)
-        q_a = torch.min(q1_1, q2_a)
+            q1_1 = self.critic1(state_batch, edge_index, actions)
+            q2_a = self.critic2(state_batch, edge_index, actions)
+            q_a = torch.min(q1_1, q2_a)
 
         if self.use_automatic_entropy_tuning:
             alpha_loss = -(

@@ -217,10 +217,13 @@ class AMoD:
         t: int,
         cars_in_area_for_each_company: T.List[int],
     ):
-        price = [
-            max(model_data_pair.actor_data.graph_state.price[origin, dest][t], 1)
-            for model_data_pair in model_data_pairs
-        ]
+        if self.config.include_price:
+            price = [
+                max(model_data_pair.actor_data.graph_state.price[origin, dest][t], 1)
+                for model_data_pair in model_data_pairs
+            ]
+        else:
+            price = [self.price[origin, dest][t] for _ in model_data_pairs]
 
         rand = np.random.dirichlet(1 / (np.array(price) + 1e-2), size=no_customers)
         values, counts = np.unique(np.argmax(rand, axis=1), return_counts=True)
@@ -329,25 +332,14 @@ class AMoD:
                 for model_data_pair in model_data_pairs
             ]
 
-            if self.config.include_price:
-                self.distribute_based_on_price_and_market_share(
-                    model_data_pairs=model_data_pairs,
-                    no_customers=no_customers,
-                    cars_in_area_for_each_company=cars_in_area_for_each_company,
-                    origin=origin,
-                    dest=dest,
-                    t=t,
-                )
-            else:
-                self.distribute_based_on_presence_in_grid(
-                    model_data_pairs=model_data_pairs,
-                    no_customers=no_customers,
-                    cars_in_area_for_each_company=cars_in_area_for_each_company,
-                    origin=origin,
-                    dest=dest,
-                    t=t,
-                )
-
+            self.distribute_based_on_price_and_market_share(
+                model_data_pairs=model_data_pairs,
+                no_customers=no_customers,
+                cars_in_area_for_each_company=cars_in_area_for_each_company,
+                origin=origin,
+                dest=dest,
+                t=t,
+            )
         self.ext_reward = np.zeros(self.nregion)
         for i in self.region:
             for model_data_pair in model_data_pairs:

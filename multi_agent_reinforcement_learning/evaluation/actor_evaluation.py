@@ -141,36 +141,49 @@ def plot_price_diff_over_time(price_dicts: T.List, tf=20, n_actors=2) -> None:
     plt.show()
 
 
-def plot_actions_as_fucntion_of_time(
-    actions: np.ndarray,
-):
+def plot_actions_as_fucntion_of_time(actions: np.ndarray, chosen_area: int = 7):
     """Plot boxplot."""
-    actions_agg_over_epoch_actor1 = [[] for _ in range(len(actions[0][0]))]
-    actions_agg_over_epoch_actor2 = [[] for _ in range(len(actions[0][0]))]
-    fig, ax = plt.subplots(len(actions[0]), 1, sharey=True)
-    for epochs in range(actions.shape[0]):
-        for time in range(len(actions[0][0])):
-            actions_agg_over_epoch_actor1[time].extend(actions[epochs][0][time])
-            actions_agg_over_epoch_actor2[time].extend(actions[epochs][1][time])
+    # actions_agg_over_epoch_actor1 = [[] for _ in range(len(actions[0][0]))]
+    # actions_agg_over_epoch_actor2 = [[] for _ in range(len(actions[0][0]))]
+    fig, ax = plt.subplots(actions.shape[0], 1, sharey=True)
+    # for epochs in range(actions.shape[0]):
+    #     for time in range(len(actions[0][0])):
+    #         actions_agg_over_epoch_actor1[time].extend(actions[epochs][0][time])
+    #         actions_agg_over_epoch_actor2[time].extend(actions[epochs][1][time])
 
-    actions_for_all_actors = [
-        actions_agg_over_epoch_actor1,
-        actions_agg_over_epoch_actor2,
-    ]
-    c = "#8C1C13"
-    for actor_idx in range(len(actions_for_all_actors)):
-        ax[actor_idx].boxplot(
-            actions_for_all_actors[actor_idx],
-            capprops=dict(color=c),
-            whiskerprops=dict(color=c),
-            flierprops=dict(color=c, markeredgecolor=c),
-            medianprops=dict(color=c),
+    # actions_for_all_actors = [
+    #     actions_agg_over_epoch_actor1,
+    #     actions_agg_over_epoch_actor2,
+    # ]
+    c = ["#8C1C13", "#2F4550", "#A3BBAD"]
+    areas = [3, 6, 7]
+    for actor_idx in range(actions.shape[0]):
+        box_plots = []
+        for idx, area in enumerate(areas):
+            box_plot = ax[actor_idx].boxplot(
+                actions[actor_idx, area, ...],
+                capprops=dict(color=c[idx]),
+                whiskerprops=dict(color=c[idx]),
+                flierprops=dict(color=c[idx], markeredgecolor=c[idx]),
+                medianprops=dict(color="magenta"),
+                patch_artist=True,
+            )
+            box_plots.append(box_plot)
+
+        for bplot, color in zip(box_plots, c):
+            for patch in bplot["boxes"]:
+                patch.set_facecolor(color)
+        ax[actor_idx].legend(
+            [bp["boxes"][0] for bp in box_plots],
+            [f"Area: {area + 1}" for area in areas],
+            loc="upper right",
         )
         ax[actor_idx].set_title(f"Actor {actor_idx+1}", fontsize=16)
-        ax[actor_idx].set_ylabel("Action distribution")
+        ax[actor_idx].set_ylabel("Concentration")
     plt.xlabel("Time")
     plt.show()
-    
+
+
 def plot_price_distribution(price_dicts: T.List, data: pd.DataFrame, tf=20, n_actors=2):
     mean_prices = data.groupby(["origin", "destination"])["price"].transform("mean")
     data["price"] -= mean_prices
@@ -195,8 +208,8 @@ def flatten_data(data: T.List, column_name: str):
     return [
         {
             "epoch": epoch,
-            "time_step": time_step,
-            "actor": point,
+            "time_step": point,
+            "actor": time_step,
             column_name: float(value),
         }
         for epoch, time_steps in enumerate(data)
@@ -215,8 +228,12 @@ def plot_price_vs_other_attribute(
     df = df_price.merge(df_demand, on=["epoch", "time_step", "actor"]).sort_values(
         "price"
     )
+    print(df.head())
 
-    plt.scatter(df["price"], df[name_for_other])
+    df_actor_1 = df[df["actor"] == 0]
+    df_actor_2 = df[df["actor"] == 1]
+    plt.scatter(df_actor_1["price"], df_actor_1[name_for_other])
+    plt.scatter(df_actor_2["price"], df_actor_2[name_for_other])
     plt.xlabel("Price")
     plt.ylabel(name_for_other.replace("_", " ").capitalize())
     plt.title(f"Price vs. {name_for_other.replace('_', ' ').capitalize()}")

@@ -287,7 +287,7 @@ if __name__ == "__main__":
     config.max_episodes = 2000
     config.grid_size_x = 10
     config.grid_size_y = 10
-    # config.include_price = False
+    config.include_price = False
     # config.test = True
     # config.wandb_mode = "disabled"
     main(config)
