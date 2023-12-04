@@ -114,7 +114,8 @@ def main(config: SACConfig):
         )
 
     epoch_prices = []
-    actions_over_epoch = []
+    # actions_over_epoch = []
+    actions_over_epoch = np.zeros((2, 10, test_episodes, config.tf))
     epoch_served_demand = []
     epoch_unmet_demand = []
     for i_episode in epochs:
@@ -140,10 +141,6 @@ def main(config: SACConfig):
         o = [None, None]
         action_rl = [None, None]
         obs_list = [None, None]
-        actions_over_t = {
-            0: [],
-            1: [],
-        }
         prices = {
             0: [],
             1: [],
@@ -180,7 +177,7 @@ def main(config: SACConfig):
                             init_price_dict.get((i, j), init_price_mean) + price
                         )
                 prices[idx].append(price)
-                actions_over_t[idx].append(action_rl[idx])
+                actions_over_epoch[idx, :, i_episode, step] = action_rl[idx]
 
             for idx, model in enumerate(model_data_pairs):
                 # transform sample from Dirichlet into actual vehicle counts (i.e. (x1*x2*..*xn)*num_vehicles)
@@ -250,7 +247,6 @@ def main(config: SACConfig):
             f"Mean price: {np.mean(prices[0]):.2f}"
         )
         epoch_prices.append(prices)
-        actions_over_epoch.append(actions_over_t)
         epoch_served_demand.append(episode_served_demand)
         epoch_unmet_demand.append(episode_unmet_demand)
 
@@ -261,6 +257,9 @@ def main(config: SACConfig):
     plot_price_vs_other_attribute(epoch_prices, epoch_unmet_demand, "unmet_demand")
 
     plot_actions_as_fucntion_of_time(actions=np.array(actions_over_epoch))
+    plot_average_distribution(
+        actions=all_actions, T=20, model_data_pairs=model_data_pairs
+    )
 
 
 if __name__ == "__main__":

@@ -289,5 +289,5 @@ if __name__ == "__main__":
     config.grid_size_y = 10
     config.include_price = False
     # config.test = True
-    config.wandb_mode = "disabled"
+    # config.wandb_mode = "disabled"
     main(config)
