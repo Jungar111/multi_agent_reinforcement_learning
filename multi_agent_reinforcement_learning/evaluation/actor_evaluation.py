@@ -52,7 +52,7 @@ def plot_average_distribution(
         )
     )
     norm = plt.cm.colors.Normalize(vmin=0, vmax=np.max(max_values_for_cbar))
-    sc = plt.cm.ScalarMappable(norm=norm)
+    sc = plt.cm.ScalarMappable(norm=norm, cmap="bone")
     fig, ax = plt.subplots(1, len(actions))
     no_grids = actions[0, :, :].shape[1]
     for idx, model in enumerate(model_data_pairs):
@@ -89,13 +89,16 @@ def plot_average_distribution(
                     j - 0.3,
                     i,
                     f"{demand_from_grid.round(2)}/{unmet_demand_from_grid.round(2)}",
-                    color="White",
+                    color="red",
+                    fontsize=16,
                 )
-        ax[idx].matshow(actor_actions.mean(axis=0), norm=norm)
+        ax[idx].matshow(actor_actions.mean(axis=0), norm=norm, cmap="bone")
         ax[idx].set_title(f"Actor: {model.actor_data.name}")
     fig.subplots_adjust(right=0.8)
     fig.supxlabel("Actor specific demand / actor specific unmet demand", fontsize=12)
-    fig.colorbar(sc, ax=ax.ravel().tolist(), label="Mean # of cars departing from")
+    fig.colorbar(
+        sc, ax=ax.ravel().tolist(), label="Mean # of cars departing from", cmap="bone"
+    )
 
     plt.show()
 
@@ -117,10 +120,10 @@ def plot_price_diff_over_time(price_dicts: T.List, tf=20, n_actors=2) -> None:
 
     fig, ax = plt.subplots(n_actors, 1)
     for actor_idx in range(n_actors):
-        mean_price = prices[1, ...].mean(axis=0)
+        mean_price = prices[actor_idx, ...].mean(axis=0)
         ax[actor_idx].plot(mean_price, label="Mean price")
         if n_epochs > 1:
-            std_price = prices[1, ...].std(axis=0)
+            std_price = prices[actor_idx, ...].std(axis=0)
             upper_bound = mean_price + 1.96 * std_price
             lower_bound = mean_price - 1.96 * std_price
             ax[actor_idx].fill_between(

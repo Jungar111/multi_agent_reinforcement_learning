@@ -169,14 +169,15 @@ def main(config: SACConfig):
                         action_rl[idx],
                         config.rew_scale * rl_reward,
                         o[idx],
+                        prices[idx],
                     )
                 action_rl[idx], price = model_data_pair.model.select_action(o[idx])
                 for i in range(config.grid_size_x):
                     for j in range(config.grid_size_y):
                         model_data_pair.actor_data.graph_state.price[i, j][step + 1] = (
-                            init_price_dict.get((i, j), init_price_mean) + price
+                            init_price_dict.get((i, j), init_price_mean) + price[0][0]
                         )
-                prices[idx].append(price)
+                prices[idx].append(price[0][0])
                 actions_over_epoch[idx, :, i_episode, step] = action_rl[idx]
 
             for idx, model in enumerate(model_data_pairs):
