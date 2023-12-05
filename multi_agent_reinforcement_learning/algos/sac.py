@@ -32,6 +32,7 @@ class PairData(Data):
         action=None,
         edge_index_t=None,
         x_t=None,
+        price=None,
         device: torch.device = torch.device("cuda:0"),
     ):
         super().__init__()
@@ -41,8 +42,7 @@ class PairData(Data):
         self.action = action
         self.edge_index_t = edge_index_t
         self.x_t = x_t
-        self.price_lin_mu = nn.Linear(32, 1)
-        self.price_lin_std = nn.Linear(32, 1)
+        self.price = price
         self.device = device
 
     def __inc__(self, key, value, *args, **kwargs):
@@ -64,7 +64,7 @@ class ReplayData:
         self.data_list = []
         self.rewards = []
 
-    def store(self, data1, action, reward, data2):
+    def store(self, data1, action, reward, data2, price):
         self.data_list.append(
             PairData(
                 data1.edge_index,
@@ -73,6 +73,7 @@ class ReplayData:
                 torch.as_tensor(action),
                 data2.edge_index,
                 data2.x,
+                torch.as_tensor(price),
             )
         )
         self.rewards.append(reward)
@@ -106,6 +107,12 @@ class Scalar(nn.Module):
 #########################################
 ############## ACTOR ####################
 #########################################
+
+
+def map_to_price(x, lower: float, upper: float):
+    return (upper - lower) / 2 * x + (lower + upper) / 2
+
+
 class GNNActor(nn.Module):
     """
     Actor \pi(a_t | s_t) parametrizing the concentration parameters of a Dirichlet Policy.
@@ -128,6 +135,8 @@ class GNNActor(nn.Module):
         self.lin2 = nn.Linear(hidden_size, hidden_size)
         self.dirichlet_concentration_layer = nn.Linear(hidden_size, 1)
         if self.config.include_price:
+            self.max_price_diff = 10
+            self.max_price_diff_neg = -10
             self.price_lin_mu = nn.Linear(hidden_size, 1)
             self.price_lin_std = nn.Linear(hidden_size, 1)
             self.device = device
@@ -152,24 +161,33 @@ class GNNActor(nn.Module):
         if self.config.include_price:
             price_pool = global_mean_pool(last_hidden_layer, batch)
 
-            # outputs mu and sigma for a lognormal distribution
-            mu = self.price_lin_mu(price_pool)
+            # outputs mu and sigma for a normal distribution
+            mu = self.price_lin_mu(price_pool)  # [-1,1]
             sigma = F.softplus(self.price_lin_std(price_pool))
 
         if deterministic:
             action = (concentration) / (concentration.sum() + 1e-20)
             log_prob = None
             if self.config.include_price:
-                price = mu[0, 0].detach()
+                pi_action_p = mu[0, 0].detach()
         else:
             m = Dirichlet(concentration + 1e-20)
             action = m.rsample()
             log_prob = m.log_prob(action)
             if self.config.include_price:
                 p = Normal(mu[0, 0], sigma[0, 0])
-                price = p.sample()
-                log_prob_a = p.log_prob(price)
+                pi_action_p = p.rsample()
+                log_prob_a = p.log_prob(pi_action_p).sum(axis=-1)
         if self.config.include_price:
+            # Correction formula for Tanh squashing see: https://github.com/openai/spinningup/blob/master/spinup/algos/pytorch/sac/core.py
+            # and appendix C in original SAC paper.
+            log_prob_a -= 2 * (np.log(2) - pi_action_p - F.softplus(-2 * pi_action_p))
+            price_tanh = torch.tanh(pi_action_p)
+
+            price = map_to_price(
+                price_tanh, lower=self.max_price_diff_neg, upper=self.max_price_diff
+            )
+
             return action, log_prob, price, log_prob_a
         return action, log_prob
 
@@ -271,15 +289,35 @@ class GNNCritic4(nn.Module):
         self.lin3 = nn.Linear(hidden_size, 1)
         self.in_channels = in_channels
 
-    def forward(self, state, edge_index, action):
+    def forward(self, state, edge_index, action, price=None):
         out = F.relu(self.conv1(state, edge_index))
         x = out + state
         x = x.reshape(-1, self.act_dim, self.in_channels)  # (B,N,21)
-        # (B,N,23)
-        concat = torch.cat([x, action.unsqueeze(-1)], dim=-1)
+        # (B,N,22)
+        # (10,2)
+        # Do this v
+        # Action  price
+        # [0.723, 1.23]
+        # [0.251, 1.23]
+        # [0.451, 1.23]
+        # [0.281, 1.23]
+        # [0.851, 1.23]
+        # [0.251, 1.23]
+        # [0.251, 1.23]
+        # [0.251, 1.23]
+        # [0.251, 1.23]
+        # [0.251, 1.23]
+        if price is not None:
+            concat = torch.cat([x, action.unsqueeze(-1)], dim=-1)
+            concat = torch.cat(
+                [concat, price.repeat(action.size()).unsqueeze(-1)], dim=2
+            )
+        else:
+            concat = torch.cat([x, action.unsqueeze(-1)], dim=-1)
         x = F.relu(self.lin1(concat))
         x = F.relu(self.lin2(x))  # (B, N, H)
         x = torch.sum(x, dim=1)  # (B, H)
+        # Add price here maybe?
         x = self.lin3(x).squeeze(-1)  # (B)
         return x
 
@@ -513,10 +551,16 @@ class SAC(nn.Module):
         )
         actor_val = 0
         if self.config.include_price:
-            actions, logp_a, _, logp_p = self.actor(state_batch, edge_index, data.batch)
+            actions, logp_a, price, logp_p = self.actor(
+                state_batch, edge_index, data.batch
+            )
+            logp_a *= 0.01
+            # @TODO Investigate the magnitude of the logprobs. Maybe find magic number.
+            # maybe TODO Look into alpha, may make a difference - 0.1 to 0.3
             actor_val = self.alpha * (logp_a + logp_p)
-            q1_1 = self.critic1(state_batch, edge_index, actions)
-            q2_a = self.critic2(state_batch, edge_index, actions)
+            # @TODO hallo pris
+            q1_1 = self.critic1(state_batch, edge_index, actions, price)
+            q2_a = self.critic2(state_batch, edge_index, actions, price)
             q_a = torch.min(q1_1, q2_a)
         else:
             actions, logp_a = self.actor(state_batch, edge_index, data.batch)
