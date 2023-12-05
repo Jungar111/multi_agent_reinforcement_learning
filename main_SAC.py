@@ -44,7 +44,7 @@ def main(config: SACConfig):
     wandb.init(
         mode=config.wandb_mode,
         project="master2023",
-        name=f"SAC baseline_price ({datetime.now().strftime('%Y-%m-%d %H:%M')})",
+        name=f"Carolin changes Akshually ({datetime.now().strftime('%Y-%m-%d %H:%M')})",
     )
 
     logging_dict = {}
@@ -179,7 +179,10 @@ def main(config: SACConfig):
                         for j in range(config.grid_size_y):
                             model_data_pair.actor_data.graph_state.price[i, j][
                                 step + 1
-                            ] = (init_price_dict.get((i, j), init_price_mean) + 0)
+                            ] = (
+                                init_price_dict.get((i, j), init_price_mean)
+                                + price[0][0]
+                            )
                     prices[idx].append(price)
                 else:
                     action_rl[idx] = model_data_pair.model.select_action(o[idx])
@@ -299,5 +302,5 @@ if __name__ == "__main__":
     config.grid_size_y = 10
     # config.include_price = False
     # config.test = True
-    config.wandb_mode = "disabled"
+    # config.wandb_mode = "disabled"
     main(config)
