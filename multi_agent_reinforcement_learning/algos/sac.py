@@ -136,7 +136,7 @@ class GNNActor(nn.Module):
         self.dirichlet_concentration_layer = nn.Linear(hidden_size, 1)
         if self.config.include_price:
             self.max_price_diff = 10
-            self.max_price_diff_neg = -10
+            self.max_price_diff_neg = 0
             self.price_lin_mu = nn.Linear(hidden_size, 1)
             self.price_lin_std = nn.Linear(hidden_size, 1)
             self.device = device

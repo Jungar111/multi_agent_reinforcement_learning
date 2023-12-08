@@ -7,8 +7,9 @@ from pathlib import Path
 
 import numpy as np
 from tqdm import trange
-import json
-import pandas as pd
+
+# import json
+# import pandas as pd
 
 import wandb
 from multi_agent_reinforcement_learning.algos.reb_flow_solver import solveRebFlow
@@ -44,7 +45,7 @@ def main(config: SACConfig):
     wandb.init(
         mode=config.wandb_mode,
         project="master2023",
-        name=f"Carolin changes Akshually ({datetime.now().strftime('%Y-%m-%d %H:%M')})",
+        name=f"Baseline, p=0 ({datetime.now().strftime('%Y-%m-%d %H:%M')})",
     )
 
     logging_dict = {}
@@ -105,13 +106,13 @@ def main(config: SACConfig):
     best_reward = -np.inf
     # best_reward_test = -np.inf
 
-    with open(str(env.config.json_file)) as file:
-        data = json.load(file)
+    # with open(str(env.config.json_file)) as file:
+    #     data = json.load(file)
 
-    if config.include_price:
-        df = pd.DataFrame(data["demand"])
-        init_price_dict = df.groupby(["origin", "destination"]).price.mean().to_dict()
-        init_price_mean = df.price.mean()
+    # if config.include_price:
+    #     df = pd.DataFrame(data["demand"])
+    #     init_price_dict = df.groupby(["origin", "destination"]).price.mean().to_dict()
+    #     init_price_mean = df.price.mean()
 
     wandb_config_log = {**vars(config)}
     for model in model_data_pairs:
@@ -179,10 +180,7 @@ def main(config: SACConfig):
                         for j in range(config.grid_size_y):
                             model_data_pair.actor_data.graph_state.price[i, j][
                                 step + 1
-                            ] = (
-                                init_price_dict.get((i, j), init_price_mean)
-                                + price[0][0]
-                            )
+                            ] = (price[0][0] * scenario.demand_time[i, j][step + 1])
                     prices[idx].append(price)
                 else:
                     action_rl[idx] = model_data_pair.model.select_action(o[idx])
