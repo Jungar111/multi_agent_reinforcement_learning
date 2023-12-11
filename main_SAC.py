@@ -8,8 +8,9 @@ from pathlib import Path
 import numpy as np
 from tqdm import trange
 
-# import json
-# import pandas as pd
+import json
+
+import pandas as pd
 
 import wandb
 from multi_agent_reinforcement_learning.algos.reb_flow_solver import solveRebFlow
@@ -27,6 +28,7 @@ from multi_agent_reinforcement_learning.envs.scenario import Scenario
 from multi_agent_reinforcement_learning.utils.init_logger import init_logger
 from multi_agent_reinforcement_learning.utils.minor_utils import dictsum
 from multi_agent_reinforcement_learning.utils.sac_argument_parser import args_to_config
+from multi_agent_reinforcement_learning.utils.value_of_time import value_of_time
 
 logger = init_logger()
 
@@ -45,7 +47,7 @@ def main(config: SACConfig):
     wandb.init(
         mode=config.wandb_mode,
         project="master2023",
-        name=f"Baseline, p=0 ({datetime.now().strftime('%Y-%m-%d %H:%M')})",
+        name=f"Max price 6 ({datetime.now().strftime('%Y-%m-%d %H:%M')})",
     )
 
     logging_dict = {}
@@ -59,6 +61,7 @@ def main(config: SACConfig):
         json_tstep=config.json_tstep,
         actor_data=actor_data,
     )
+
     env = AMoD(
         beta=config.beta[config.city],
         scenario=scenario,
@@ -106,11 +109,19 @@ def main(config: SACConfig):
     best_reward = -np.inf
     # best_reward_test = -np.inf
 
-    # with open(str(env.config.json_file)) as file:
-    #     data = json.load(file)
+    with open(str(env.config.json_file)) as file:
+        data = json.load(file)
 
-    # if config.include_price:
-    #     df = pd.DataFrame(data["demand"])
+    if config.include_price:
+        df = pd.DataFrame(data["demand"])
+        df["converted_time_stamp"] = (df["time_stamp"] - 19 * 60) // 3
+        travel_time_dict = (
+            df.groupby(["origin", "destination", "converted_time_stamp"])["travel_time"]
+            .mean()
+            .to_dict()
+        )
+
+        print(value_of_time(df.price, df.travel_time, demand_ratio=2))
     #     init_price_dict = df.groupby(["origin", "destination"]).price.mean().to_dict()
     #     init_price_mean = df.price.mean()
 
@@ -176,11 +187,19 @@ def main(config: SACConfig):
 
                 if config.include_price:
                     action_rl[idx], price = model_data_pair.model.select_action(o[idx])
+
                     for i in range(config.grid_size_x):
                         for j in range(config.grid_size_y):
+                            tt = travel_time_dict.get(
+                                (i, j, step * config.json_tstep), 1
+                            )
+                            model_data_pair.actor_data.flow.value_of_time[i, j][
+                                step + 1
+                            ] = price[0][0]
                             model_data_pair.actor_data.graph_state.price[i, j][
                                 step + 1
-                            ] = (price[0][0] * scenario.demand_time[i, j][step + 1])
+                            ] = (price[0][0] * tt)
+
                     prices[idx].append(price)
                 else:
                     action_rl[idx] = model_data_pair.model.select_action(o[idx])
