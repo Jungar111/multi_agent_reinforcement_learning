@@ -4,6 +4,7 @@ from __future__ import print_function
 import copy
 from datetime import datetime
 from pathlib import Path
+import torch
 
 import numpy as np
 from tqdm import trange
@@ -319,6 +320,7 @@ def main(config: SACConfig):
 
 
 if __name__ == "__main__":
+    torch.manual_seed(42)
     city = City.san_francisco
     config = args_to_config(city, cuda=True)
     config.tf = 20
