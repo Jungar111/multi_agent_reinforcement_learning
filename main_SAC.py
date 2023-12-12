@@ -34,7 +34,7 @@ from multi_agent_reinforcement_learning.utils.value_of_time import value_of_time
 logger = init_logger()
 
 
-def main(config: SACConfig):
+def main(config: SACConfig, run_name: str):
     """Main loop for training and testing."""
     advesary_number_of_cars = int(config.total_number_of_cars / 2)
     actor_data = [
@@ -48,7 +48,7 @@ def main(config: SACConfig):
     wandb.init(
         mode=config.wandb_mode,
         project="master2023",
-        name=f"Max price 6 ({datetime.now().strftime('%Y-%m-%d %H:%M')})",
+        name=f"{run_name} price 6 ({datetime.now().strftime('%Y-%m-%d %H:%M')})",
     )
 
     logging_dict = {}
@@ -316,6 +316,26 @@ def main(config: SACConfig):
                         )
                     }
                 )
+        if i_episode + 1 == train_episodes:
+            ckpt_paths = [
+                str(
+                    Path(
+                        "saved_files",
+                        "ckpt",
+                        f"{config.path}",
+                        f"{model_data_pair.actor_data.name}_last.pth",
+                    )
+                )
+                for model_data_pair in model_data_pairs
+            ]
+
+            for model in model_data_pairs:
+                model.model.save_checkpoint(
+                    path=f"saved_files/ckpt/{config.path}/{model.actor_data.name}.pth"
+                )
+
+            for ckpt_path in ckpt_paths:
+                wandb.save(ckpt_path)
         wandb.log(logging_dict)
 
 
@@ -324,10 +344,10 @@ if __name__ == "__main__":
     city = City.san_francisco
     config = args_to_config(city, cuda=True)
     config.tf = 20
-    config.max_episodes = 2000
+    config.max_episodes = 5000
     config.grid_size_x = 10
     config.grid_size_y = 10
     # config.include_price = False
     # config.test = True
     # config.wandb_mode = "disabled"
-    main(config)
+    main(config, run_name="Longer training, 2 actors, price regression")
