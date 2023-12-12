@@ -20,7 +20,7 @@ from multi_agent_reinforcement_learning.envs.amod import AMoD
 from multi_agent_reinforcement_learning.envs.scenario import Scenario
 from multi_agent_reinforcement_learning.evaluation.actor_evaluation import (
     plot_price_diff_over_time,
-    plot_actions_as_fucntion_of_time,
+    plot_actions_as_function_of_time,
     plot_average_distribution,
     plot_price_distribution,
     plot_price_vs_other_attribute,
@@ -123,7 +123,9 @@ def main(config: SACConfig):
 
     epoch_prices = []
     # actions_over_epoch = []
-    actions_over_epoch = np.zeros((2, 10, test_episodes, config.tf))
+    actions_over_epoch = np.zeros(
+        (2, config.n_regions[config.city], test_episodes, config.tf)
+    )
     epoch_served_demand = []
     epoch_unmet_demand = []
     for i_episode in epochs:
@@ -134,8 +136,7 @@ def main(config: SACConfig):
             (
                 len(model_data_pairs),
                 config.tf,
-                # nr of regions
-                config.grid_size_x,
+                config.n_regions[config.city],
             )
         )
 
@@ -180,8 +181,8 @@ def main(config: SACConfig):
                         prices[idx],
                     )
                 action_rl[idx], price = model_data_pair.model.select_action(o[idx])
-                for i in range(config.grid_size_x):
-                    for j in range(config.grid_size_y):
+                for i in range(config.n_regions[config.city]):
+                    for j in range(config.n_regions[config.city]):
                         tt = travel_time_dict.get((i, j, step * config.json_tstep), 0)
                         model_data_pair.actor_data.flow.value_of_time[i, j][
                             step + 1
@@ -273,19 +274,21 @@ def main(config: SACConfig):
     plot_price_vs_other_attribute(epoch_prices, epoch_served_demand, "served_demand")
     plot_price_vs_other_attribute(epoch_prices, epoch_unmet_demand, "unmet_demand")
 
-    plot_actions_as_fucntion_of_time(actions=np.array(actions_over_epoch))
+    plot_actions_as_function_of_time(
+        actions=np.array(actions_over_epoch),
+        chosen_areas=[1, 2, 3],
+        colors=["#8C1C13", "#2F4550", "#A3BBAD"],
+    )
     plot_average_distribution(
-        actions=all_actions, T=20, model_data_pairs=model_data_pairs
+        config=config, actions=all_actions, T=20, model_data_pairs=model_data_pairs
     )
 
 
 if __name__ == "__main__":
-    city = City.san_francisco
+    city = City.shenzhen
     config = args_to_config(city, cuda=True)
-    # config.tf = 180
-    config.max_episodes = 20
-    config.grid_size_x = 10
-    config.grid_size_y = 10
+    config.tf = 20
+    config.max_episodes = 1
     config.total_number_of_cars = 374
     config.wandb_mode = "disabled"
     main(config)

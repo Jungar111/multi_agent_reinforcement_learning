@@ -195,8 +195,8 @@ def main(config: SACConfig, run_name: str):
                 if config.include_price:
                     action_rl[idx], price = model_data_pair.model.select_action(o[idx])
 
-                    for i in range(config.grid_size_x):
-                        for j in range(config.grid_size_y):
+                    for i in range(config.n_regions[config.city]):
+                        for j in range(config.n_regions[config.city]):
                             tt = travel_time_dict.get(
                                 (i, j, step * config.json_tstep), 1
                             )
@@ -341,13 +341,11 @@ def main(config: SACConfig, run_name: str):
 
 if __name__ == "__main__":
     torch.manual_seed(42)
-    city = City.san_francisco
+    city = City.washington
     config = args_to_config(city, cuda=True)
     config.tf = 20
-    config.max_episodes = 5000
-    config.grid_size_x = 10
-    config.grid_size_y = 10
+    config.max_episodes = 11
     # config.include_price = False
     # config.test = True
-    # config.wandb_mode = "disabled"
-    main(config, run_name="Longer training, 2 actors, price regression")
+    config.wandb_mode = "disabled"
+    main(config, run_name="JPA_TEST_NO_WANDB")

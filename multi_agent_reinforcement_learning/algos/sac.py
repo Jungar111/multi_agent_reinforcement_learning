@@ -6,7 +6,6 @@ from torch.distributions import Dirichlet, Normal
 from torch_geometric.data import Data, Batch
 from torch_geometric.nn import GCNConv, global_mean_pool
 
-# from torch.nn.init import normal_, constant_
 from multi_agent_reinforcement_learning.algos.reb_flow_solver import solveRebFlow
 from multi_agent_reinforcement_learning.utils.minor_utils import dictsum
 from multi_agent_reinforcement_learning.data_models.config import SACConfig
@@ -107,8 +106,6 @@ class Scalar(nn.Module):
 #########################################
 ############## ACTOR ####################
 #########################################
-
-
 def map_to_price(x, lower: float, upper: float):
     return (upper - lower) / 2 * x + (lower + upper) / 2
 
@@ -143,6 +140,7 @@ class GNNActor(nn.Module):
             self.price_lin_std = nn.Linear(hidden_size, 1)
             self.device = device
 
+        #  ----- Vi gør noget med det her, lad det være for nu. -----   #
         # normal_(self.price_lin_std.weight, mean=0, std=0.1)
         # constant_(self.price_lin_std.bias, 0)
 
@@ -161,9 +159,11 @@ class GNNActor(nn.Module):
         ).squeeze(-1)
 
         if self.config.include_price:
-            # 10 areas from same batch.
             price_pool = global_mean_pool(
-                last_hidden_layer, torch.tensor([0 for i in range(10)])
+                last_hidden_layer,
+                torch.tensor(
+                    [0 for i in range(int(self.config.n_regions[self.config.city]))]
+                ),
             )
             # outputs mu and sigma for a normal distribution
             mu = self.price_lin_mu(price_pool)  # [-1,1]

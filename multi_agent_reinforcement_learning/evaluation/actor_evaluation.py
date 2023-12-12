@@ -1,5 +1,4 @@
 """Module for testing and evaluating actor performance."""
-import multi_agent_reinforcement_learning  # noqa: F401
 import matplotlib.pyplot as plt
 import seaborn as sns
 import typing as T
@@ -10,6 +9,7 @@ import holoviews as hv
 
 from multi_agent_reinforcement_learning.algos.actor_critic_gnn import ActorCritic
 from multi_agent_reinforcement_learning.data_models.model_data_pair import ModelDataPair
+from multi_agent_reinforcement_learning.data_models.config import SACConfig
 
 
 def plot_distribution_at_time_step_t(
@@ -40,6 +40,7 @@ def plot_distribution_at_time_step_t(
 
 
 def plot_average_distribution(
+    config: SACConfig,
     actions: np.ndarray,
     T: int,
     model_data_pairs: T.List[ModelDataPair],
@@ -56,21 +57,18 @@ def plot_average_distribution(
     fig, ax = plt.subplots(1, len(actions))
     no_grids = actions[0, :, :].shape[1]
     for idx, model in enumerate(model_data_pairs):
-        if no_grids < 16:
-            actor_actons = np.pad(
-                actions[idx, :, :],
-                pad_width=((0, 0), (0, 16 - no_grids)),
-            )
-        actor_actions = actor_actons.reshape(T, 4, 4)
-        for i in range(4):
-            for j in range(4):
+        actor_actions = actions[idx, :, :].reshape(
+            T, config.grid_size_x[config.city], config.grid_size_y[config.city]
+        )
+        for i in range(config.grid_size_x[config.city]):
+            for j in range(config.grid_size_y[config.city]):
                 # Computes demand from i to all other grids
                 demand_from_grid = np.array(
                     [
                         np.array(
                             list(
                                 model.actor_data.graph_state.demand[
-                                    i * 4 + j, k
+                                    i * config.grid_size_y[config.city] + j, k
                                 ].values()
                             )
                         )
@@ -80,7 +78,11 @@ def plot_average_distribution(
                 unmet_demand_from_grid = np.array(
                     [
                         np.array(
-                            list(model.actor_data.unmet_demand[i * 4 + j, k].values())
+                            list(
+                                model.actor_data.unmet_demand[
+                                    i * config.grid_size_y[config.city] + j, k
+                                ].values()
+                            )
                         )
                         for k in range(no_grids)
                     ]
@@ -90,7 +92,7 @@ def plot_average_distribution(
                     i,
                     f"{demand_from_grid.round(2)}/{unmet_demand_from_grid.round(2)}",
                     color="red",
-                    fontsize=16,
+                    fontsize=8,
                 )
         ax[idx].matshow(actor_actions.mean(axis=0), norm=norm, cmap="bone")
         ax[idx].set_title(f"Actor: {model.actor_data.name}")
@@ -144,41 +146,31 @@ def plot_price_diff_over_time(price_dicts: T.List, tf=20, n_actors=2) -> None:
     plt.show()
 
 
-def plot_actions_as_fucntion_of_time(actions: np.ndarray, chosen_area: int = 7):
+def plot_actions_as_function_of_time(
+    actions: np.ndarray, chosen_areas: T.List[int], colors: T.List[str]
+):
     """Plot boxplot."""
-    # actions_agg_over_epoch_actor1 = [[] for _ in range(len(actions[0][0]))]
-    # actions_agg_over_epoch_actor2 = [[] for _ in range(len(actions[0][0]))]
     fig, ax = plt.subplots(actions.shape[0], 1, sharey=True)
-    # for epochs in range(actions.shape[0]):
-    #     for time in range(len(actions[0][0])):
-    #         actions_agg_over_epoch_actor1[time].extend(actions[epochs][0][time])
-    #         actions_agg_over_epoch_actor2[time].extend(actions[epochs][1][time])
-
-    # actions_for_all_actors = [
-    #     actions_agg_over_epoch_actor1,
-    #     actions_agg_over_epoch_actor2,
-    # ]
-    c = ["#8C1C13", "#2F4550", "#A3BBAD"]
-    areas = [3, 6, 7]
     for actor_idx in range(actions.shape[0]):
         box_plots = []
-        for idx, area in enumerate(areas):
+        actual_areas = [x - 1 for x in chosen_areas]
+        for idx, area in enumerate(actual_areas):
             box_plot = ax[actor_idx].boxplot(
                 actions[actor_idx, area, ...],
-                capprops=dict(color=c[idx]),
-                whiskerprops=dict(color=c[idx]),
-                flierprops=dict(color=c[idx], markeredgecolor=c[idx]),
+                capprops=dict(color=colors[idx]),
+                whiskerprops=dict(color=colors[idx]),
+                flierprops=dict(color=colors[idx], markeredgecolor=colors[idx]),
                 medianprops=dict(color="magenta"),
                 patch_artist=True,
             )
             box_plots.append(box_plot)
 
-        for bplot, color in zip(box_plots, c):
+        for bplot, color in zip(box_plots, colors):
             for patch in bplot["boxes"]:
                 patch.set_facecolor(color)
         ax[actor_idx].legend(
             [bp["boxes"][0] for bp in box_plots],
-            [f"Area: {area + 1}" for area in areas],
+            [f"Area: {area}" for area in chosen_areas],
             loc="upper right",
         )
         ax[actor_idx].set_title(f"Actor {actor_idx+1}", fontsize=16)
