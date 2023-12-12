@@ -55,9 +55,14 @@ def plot_average_distribution(
     norm = plt.cm.colors.Normalize(vmin=0, vmax=np.max(max_values_for_cbar))
     sc = plt.cm.ScalarMappable(norm=norm, cmap="bone")
     fig, ax = plt.subplots(1, len(actions))
-    no_grids = actions[0, :, :].shape[1]
+    no_regions = actions[0, :, :].shape[1]
     for idx, model in enumerate(model_data_pairs):
-        actor_actions = actions[idx, :, :].reshape(
+        if config.n_regions[config.city] % 2 == 1:
+            actor_actions = np.pad(
+                actions[idx, :, :],
+                pad_width=((0, 0), (0, config.n_regions[config.city] - no_regions)),
+            )
+        actor_actions = actor_actions.reshape(
             T, config.grid_size_x[config.city], config.grid_size_y[config.city]
         )
         for i in range(config.grid_size_x[config.city]):
@@ -72,7 +77,7 @@ def plot_average_distribution(
                                 ].values()
                             )
                         )
-                        for k in range(no_grids)
+                        for k in range(no_regions)
                     ]
                 ).sum()
                 unmet_demand_from_grid = np.array(
@@ -84,7 +89,7 @@ def plot_average_distribution(
                                 ].values()
                             )
                         )
-                        for k in range(no_grids)
+                        for k in range(no_regions)
                     ]
                 ).sum()
                 ax[idx].text(
