@@ -104,7 +104,9 @@ def main(config: SACConfig):
     df = pd.DataFrame(data["demand"])
     # init_price_dict = df.groupby(["origin", "destination"]).price.mean().to_dict()
     # init_price_mean = df.price.mean()
-    df["converted_time_stamp"] = (df["time_stamp"] - 19 * 60) // 3
+    df["converted_time_stamp"] = (
+        df["time_stamp"] - config.json_hr[config.city] * 60
+    ) // config.json_tstep
     travel_time_dict = (
         df.groupby(["origin", "destination", "converted_time_stamp"])["travel_time"]
         .mean()
