@@ -114,14 +114,20 @@ def main(config: SACConfig):
 
     if config.include_price:
         df = pd.DataFrame(data["demand"])
-        df["converted_time_stamp"] = (df["time_stamp"] - 19 * 60) // 3
+        df["converted_time_stamp"] = (
+            df["time_stamp"] - config.json_hr[config.city] * 60
+        ) // config.json_tstep
         travel_time_dict = (
             df.groupby(["origin", "destination", "converted_time_stamp"])["travel_time"]
             .mean()
             .to_dict()
         )
 
-        print(value_of_time(df.price, df.travel_time, demand_ratio=2))
+        logger.info(
+            f"VOT {value_of_time(df.price, df.travel_time, demand_ratio=2):.2f}"
+        )
+
+    # Used for price diff
     #     init_price_dict = df.groupby(["origin", "destination"]).price.mean().to_dict()
     #     init_price_mean = df.price.mean()
 
@@ -263,11 +269,12 @@ def main(config: SACConfig):
 
         epochs.set_description(
             f"Episode {i_episode+1} | "
-            f"Reward_0: {episode_reward[0]:.2f} | "
-            f"Reward_1: {episode_reward[1]:.2f} | "
+            f"Reward 1: {episode_reward[0]:.2f} | "
+            f"Reward 2: {episode_reward[1]:.2f} | "
             f"ServedDemand: {episode_served_demand:.2f} | "
-            f"Reb. Cost: {episode_rebalancing_cost:.2f} | "
-            f"Mean price: {np.mean(prices[0]) if config.include_price else 0:.2f}"
+            # f"Reb. Cost: {episode_rebalancing_cost:.2f} | "
+            f"Mean price 1: {np.mean(prices[0]) if config.include_price else 0:.2f} | "
+            f"Mean price 2: {np.mean(prices[1]) if config.include_price else 0:.2f}"
         )
         # Checkpoint best performing model
         if np.sum(episode_reward) >= best_reward:
@@ -283,13 +290,14 @@ def main(config: SACConfig):
                 for model_data_pair in model_data_pairs
             ]
 
-            for ckpt_path in ckpt_paths:
-                wandb.save(ckpt_path)
-
             for model in model_data_pairs:
                 model.model.save_checkpoint(
                     path=f"saved_files/ckpt/{config.path}/{model.actor_data.name}.pth"
                 )
+
+            for ckpt_path in ckpt_paths:
+                wandb.save(ckpt_path)
+
             best_reward = np.sum(episode_reward)
             logging_dict.update({"Best Reward": best_reward})
 
