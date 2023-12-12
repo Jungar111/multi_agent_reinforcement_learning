@@ -331,7 +331,7 @@ def main(config: SACConfig, run_name: str):
 
             for model in model_data_pairs:
                 model.model.save_checkpoint(
-                    path=f"saved_files/ckpt/{config.path}/{model.actor_data.name}.pth"
+                    path=f"saved_files/ckpt/{config.path}/{model.actor_data.name}_last.pth"
                 )
 
             for ckpt_path in ckpt_paths:
