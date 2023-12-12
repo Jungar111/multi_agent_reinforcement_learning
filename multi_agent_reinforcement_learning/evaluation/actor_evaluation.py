@@ -187,19 +187,22 @@ def plot_actions_as_fucntion_of_time(actions: np.ndarray, chosen_area: int = 7):
     plt.show()
 
 
-def plot_price_distribution(price_dicts: T.List, data: pd.DataFrame, tf=20, n_actors=2):
-    mean_prices = data.groupby(["origin", "destination"])["price"].transform("mean")
-    data["price"] -= mean_prices
-    n_epochs = len(price_dicts)
-    prices = _get_price_matrix(price_dicts, tf, n_actors)
-
+def plot_price_distribution(
+    model_data_pairs: T.List, data: pd.DataFrame, tf=20, n_actors=2, n_epochs=10
+):
     fig, ax = plt.subplots(n_actors, 1)
-    for actor_idx in range(n_actors):
-        price_actor = prices[actor_idx, ...].reshape(tf * n_epochs)
-        sns.kdeplot(x=price_actor, ax=ax[actor_idx], label="Estimated price difference")
-        sns.kdeplot(
-            x="price", data=data, ax=ax[actor_idx], label="Price difference in data"
-        )
+    for actor_idx, model_data_pair in enumerate(model_data_pairs):
+        price = model_data_pair.actor_data.graph_state.price
+        prices = [
+            value
+            for inner_dict in price.values()
+            for value in inner_dict.values()
+            if value != 0
+        ]
+
+        price_actor = prices
+        sns.kdeplot(x=price_actor, ax=ax[actor_idx], label="Estimated price")
+        sns.kdeplot(x="price", data=data, ax=ax[actor_idx], label="Price in data")
         # sns.histplot(x=price_actor, stat="density", alpha=0.4, ax=ax[actor_idx])
         ax[actor_idx].set_title(f"Price distribution - Actor {actor_idx + 1}")
         ax[actor_idx].legend()

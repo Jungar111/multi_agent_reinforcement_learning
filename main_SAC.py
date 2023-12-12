@@ -4,10 +4,13 @@ from __future__ import print_function
 import copy
 from datetime import datetime
 from pathlib import Path
+import torch
 
 import numpy as np
 from tqdm import trange
+
 import json
+
 import pandas as pd
 
 import wandb
@@ -26,11 +29,12 @@ from multi_agent_reinforcement_learning.envs.scenario import Scenario
 from multi_agent_reinforcement_learning.utils.init_logger import init_logger
 from multi_agent_reinforcement_learning.utils.minor_utils import dictsum
 from multi_agent_reinforcement_learning.utils.sac_argument_parser import args_to_config
+from multi_agent_reinforcement_learning.utils.value_of_time import value_of_time
 
 logger = init_logger()
 
 
-def main(config: SACConfig):
+def main(config: SACConfig, run_name: str):
     """Main loop for training and testing."""
     advesary_number_of_cars = int(config.total_number_of_cars / 2)
     actor_data = [
@@ -44,7 +48,7 @@ def main(config: SACConfig):
     wandb.init(
         mode=config.wandb_mode,
         project="master2023",
-        name=f"Carolin changes Akshually ({datetime.now().strftime('%Y-%m-%d %H:%M')})",
+        name=f"{run_name} ({datetime.now().strftime('%Y-%m-%d %H:%M')})",
     )
 
     logging_dict = {}
@@ -58,6 +62,7 @@ def main(config: SACConfig):
         json_tstep=config.json_tstep,
         actor_data=actor_data,
     )
+
     env = AMoD(
         beta=config.beta[config.city],
         scenario=scenario,
@@ -110,8 +115,22 @@ def main(config: SACConfig):
 
     if config.include_price:
         df = pd.DataFrame(data["demand"])
-        init_price_dict = df.groupby(["origin", "destination"]).price.mean().to_dict()
-        init_price_mean = df.price.mean()
+        df["converted_time_stamp"] = (
+            df["time_stamp"] - config.json_hr[config.city] * 60
+        ) // config.json_tstep
+        travel_time_dict = (
+            df.groupby(["origin", "destination", "converted_time_stamp"])["travel_time"]
+            .mean()
+            .to_dict()
+        )
+
+        logger.info(
+            f"VOT {value_of_time(df.price, df.travel_time, demand_ratio=2):.2f}"
+        )
+
+    # Used for price diff
+    #     init_price_dict = df.groupby(["origin", "destination"]).price.mean().to_dict()
+    #     init_price_mean = df.price.mean()
 
     wandb_config_log = {**vars(config)}
     for model in model_data_pairs:
@@ -175,14 +194,19 @@ def main(config: SACConfig):
 
                 if config.include_price:
                     action_rl[idx], price = model_data_pair.model.select_action(o[idx])
+
                     for i in range(config.grid_size_x):
                         for j in range(config.grid_size_y):
+                            tt = travel_time_dict.get(
+                                (i, j, step * config.json_tstep), 1
+                            )
+                            model_data_pair.actor_data.flow.value_of_time[i, j][
+                                step + 1
+                            ] = price[0][0]
                             model_data_pair.actor_data.graph_state.price[i, j][
                                 step + 1
-                            ] = (
-                                init_price_dict.get((i, j), init_price_mean)
-                                + price[0][0]
-                            )
+                            ] = (price[0][0] * tt)
+
                     prices[idx].append(price)
                 else:
                     action_rl[idx] = model_data_pair.model.select_action(o[idx])
@@ -246,11 +270,12 @@ def main(config: SACConfig):
 
         epochs.set_description(
             f"Episode {i_episode+1} | "
-            f"Reward_0: {episode_reward[0]:.2f} | "
-            f"Reward_1: {episode_reward[1]:.2f} | "
+            f"Reward 1: {episode_reward[0]:.2f} | "
+            f"Reward 2: {episode_reward[1]:.2f} | "
             f"ServedDemand: {episode_served_demand:.2f} | "
-            f"Reb. Cost: {episode_rebalancing_cost:.2f} | "
-            f"Mean price: {np.mean(prices[0]) if config.include_price else 0:.2f}"
+            # f"Reb. Cost: {episode_rebalancing_cost:.2f} | "
+            f"Mean price 1: {np.mean(prices[0]) if config.include_price else 0:.2f} | "
+            f"Mean price 2: {np.mean(prices[1]) if config.include_price else 0:.2f}"
         )
         # Checkpoint best performing model
         if np.sum(episode_reward) >= best_reward:
@@ -266,13 +291,14 @@ def main(config: SACConfig):
                 for model_data_pair in model_data_pairs
             ]
 
-            for ckpt_path in ckpt_paths:
-                wandb.save(ckpt_path)
-
             for model in model_data_pairs:
                 model.model.save_checkpoint(
                     path=f"saved_files/ckpt/{config.path}/{model.actor_data.name}.pth"
                 )
+
+            for ckpt_path in ckpt_paths:
+                wandb.save(ckpt_path)
+
             best_reward = np.sum(episode_reward)
             logging_dict.update({"Best Reward": best_reward})
 
@@ -290,17 +316,38 @@ def main(config: SACConfig):
                         )
                     }
                 )
+        if i_episode + 1 == train_episodes:
+            ckpt_paths = [
+                str(
+                    Path(
+                        "saved_files",
+                        "ckpt",
+                        f"{config.path}",
+                        f"{model_data_pair.actor_data.name}_last.pth",
+                    )
+                )
+                for model_data_pair in model_data_pairs
+            ]
+
+            for model in model_data_pairs:
+                model.model.save_checkpoint(
+                    path=f"saved_files/ckpt/{config.path}/{model.actor_data.name}_last.pth"
+                )
+
+            for ckpt_path in ckpt_paths:
+                wandb.save(ckpt_path)
         wandb.log(logging_dict)
 
 
 if __name__ == "__main__":
+    torch.manual_seed(42)
     city = City.san_francisco
     config = args_to_config(city, cuda=True)
     config.tf = 20
-    config.max_episodes = 2000
+    config.max_episodes = 5000
     config.grid_size_x = 10
     config.grid_size_y = 10
     # config.include_price = False
     # config.test = True
     # config.wandb_mode = "disabled"
-    main(config)
+    main(config, run_name="Longer training, 2 actors, price regression")

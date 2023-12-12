@@ -135,8 +135,10 @@ class GNNActor(nn.Module):
         self.lin2 = nn.Linear(hidden_size, hidden_size)
         self.dirichlet_concentration_layer = nn.Linear(hidden_size, 1)
         if self.config.include_price:
-            self.max_price_diff = 10
-            self.max_price_diff_neg = -10
+            self.price_upper_bound = 10
+            self.price_lower_bound = 0
+            self.log_std_min = -20
+            self.log_std_max = 2
             self.price_lin_mu = nn.Linear(hidden_size, 1)
             self.price_lin_std = nn.Linear(hidden_size, 1)
             self.device = device
@@ -159,12 +161,16 @@ class GNNActor(nn.Module):
         ).squeeze(-1)
 
         if self.config.include_price:
+            # 10 areas from same batch.
             price_pool = global_mean_pool(
                 last_hidden_layer, torch.tensor([0 for i in range(10)])
             )
             # outputs mu and sigma for a normal distribution
             mu = self.price_lin_mu(price_pool)  # [-1,1]
-            sigma = F.softplus(self.price_lin_std(price_pool))
+            log_std = torch.clamp(
+                self.price_lin_std(price_pool), self.log_std_min, self.log_std_max
+            )
+            sigma = torch.exp(log_std)
 
         if deterministic:
             action = (concentration) / (concentration.sum() + 1e-20)
@@ -188,7 +194,7 @@ class GNNActor(nn.Module):
             price_tanh = torch.tanh(pi_action_p)
 
             price = map_to_price(
-                price_tanh, lower=self.max_price_diff_neg, upper=self.max_price_diff
+                price_tanh, lower=self.price_lower_bound, upper=self.price_upper_bound
             )
 
             return action, log_prob, price, log_prob_p

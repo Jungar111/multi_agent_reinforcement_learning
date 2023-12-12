@@ -218,25 +218,26 @@ class AMoD:
         cars_in_area_for_each_company: T.List[int],
     ):
         if self.config.include_price:
-            price = [
-                max(model_data_pair.actor_data.graph_state.price[origin, dest][t], 1)
+            vot = [
+                max(model_data_pair.actor_data.flow.value_of_time[origin, dest][t], 1)
                 for model_data_pair in model_data_pairs
             ]
         else:
-            price = [self.price[origin, dest][t] for _ in model_data_pairs]
+            # @TODO, fix det her. Det skal være VOT
+            vot = [self.price[origin, dest][t] for _ in model_data_pairs]
 
-        rand = np.random.dirichlet(1 / (np.array(price) + 1e-2), size=no_customers)
+        rand = np.random.dirichlet(1 / (np.array(vot) + 1e-2), size=no_customers)
         values, counts = np.unique(np.argmax(rand, axis=1), return_counts=True)
         chosen_company = {val: co for val, co in zip(values, counts)}
         for actor_idx in range(2):
             no_customers_for_company = chosen_company.get(actor_idx, 0)
             # no_customers_for_other_company = chosen_company.get(1 - actor_idx, 0)
 
-            vot_for_trip = (price[actor_idx]) / (
-                self.demand_time[origin, dest][t] + 1e-5
-            )
+            # vot_for_trip = price[actor_idx] / (self.demand_time[origin, dest][t] + 1e-5)
 
-            probability_of_taxi = 1 - hill_equation(x=vot_for_trip, k=self.scenario.vot)
+            probability_of_taxi = 1 - hill_equation(
+                x=vot[actor_idx], k=self.scenario.vot
+            )
             customers_after_bus = np.random.binomial(
                 no_customers_for_company, p=probability_of_taxi
             )
@@ -304,25 +305,25 @@ class AMoD:
         """
         t = self.time
 
-        total_market_share = (
-            np.sum(
-                [
-                    model_data_pair.actor_data.actions.pax_action
-                    for model_data_pair in model_data_pairs
-                ]
-            )
-            if t > 0
-            else None
-        )
+        # total_market_share = (
+        #     np.sum(
+        #         [
+        #             model_data_pair.actor_data.actions.pax_action
+        #             for model_data_pair in model_data_pairs
+        #         ]
+        #     )
+        #     if t > 0
+        #     else None
+        # )
 
         for model_data_pair in model_data_pairs:
             model_data_pair.actor_data.info = PaxStepInfo()
             model_data_pair.actor_data.rewards.pax_reward = 0
-            prev_served_demand = np.sum(model_data_pair.actor_data.actions.pax_action)
-            if t > 0:
-                model_data_pair.actor_data.flow.market_share = (
-                    prev_served_demand / total_market_share
-                )
+            # prev_served_demand = np.sum(model_data_pair.actor_data.actions.pax_action)
+            # if t > 0:
+            #     model_data_pair.actor_data.flow.market_share = (
+            #         prev_served_demand / total_market_share
+            #     )
 
         # Distributing customers stochastic given presence in area.
         for (origin, dest), area_demand in self.demand.items():
@@ -551,6 +552,7 @@ class AMoD:
             for i, j, t, d, p in tripAttr:
                 self.demand[i, j][t] = d
                 model_data_pair.actor_data.graph_state.price[i, j][0] = p
+                model_data_pair.actor_data.flow.value_of_time[i, j][0] = p
 
             model_data_pair.actor_data.graph_state.demand = defaultdict(dict)
 

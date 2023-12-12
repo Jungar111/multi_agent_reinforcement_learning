@@ -102,8 +102,16 @@ def main(config: SACConfig):
         data = json.load(file)
 
     df = pd.DataFrame(data["demand"])
-    init_price_dict = df.groupby(["origin", "destination"]).price.mean().to_dict()
-    init_price_mean = df.price.mean()
+    # init_price_dict = df.groupby(["origin", "destination"]).price.mean().to_dict()
+    # init_price_mean = df.price.mean()
+    df["converted_time_stamp"] = (
+        df["time_stamp"] - config.json_hr[config.city] * 60
+    ) // config.json_tstep
+    travel_time_dict = (
+        df.groupby(["origin", "destination", "converted_time_stamp"])["travel_time"]
+        .mean()
+        .to_dict()
+    )
 
     for idx, model_data_pair in enumerate(model_data_pairs):
         logger.info(
@@ -174,9 +182,17 @@ def main(config: SACConfig):
                 action_rl[idx], price = model_data_pair.model.select_action(o[idx])
                 for i in range(config.grid_size_x):
                     for j in range(config.grid_size_y):
+                        tt = travel_time_dict.get((i, j, step * config.json_tstep), 0)
+                        model_data_pair.actor_data.flow.value_of_time[i, j][
+                            step + 1
+                        ] = price[0][0]
                         model_data_pair.actor_data.graph_state.price[i, j][step + 1] = (
-                            init_price_dict.get((i, j), init_price_mean) + price[0][0]
+                            price[0][0] * tt
                         )
+
+                        # model_data_pair.actor_data.graph_state.price[i, j][step + 1] = (
+                        #     init_price_dict.get((i, j), init_price_mean) + price[0][0]
+                        # )
                 prices[idx].append(price[0][0])
                 actions_over_epoch[idx, :, i_episode, step] = action_rl[idx]
 
@@ -252,7 +268,7 @@ def main(config: SACConfig):
         epoch_unmet_demand.append(episode_unmet_demand)
 
     plot_price_diff_over_time(epoch_prices)
-    plot_price_distribution(price_dicts=epoch_prices, data=df)
+    plot_price_distribution(model_data_pairs=model_data_pairs, data=df)
 
     plot_price_vs_other_attribute(epoch_prices, epoch_served_demand, "served_demand")
     plot_price_vs_other_attribute(epoch_prices, epoch_unmet_demand, "unmet_demand")
@@ -267,7 +283,7 @@ if __name__ == "__main__":
     city = City.san_francisco
     config = args_to_config(city, cuda=True)
     # config.tf = 180
-    config.max_episodes = 10
+    config.max_episodes = 20
     config.grid_size_x = 10
     config.grid_size_y = 10
     config.total_number_of_cars = 374

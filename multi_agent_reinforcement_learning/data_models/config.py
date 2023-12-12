@@ -20,7 +20,7 @@ class BaseConfig(BaseModel):
     max_steps: int
     no_cuda: bool
     render: bool = True
-    city: str = "nyc4x4"
+    city: str = "san_francisco"
     device: torch.device
     grid_size_x: int
     grid_size_y: int
