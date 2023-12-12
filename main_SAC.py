@@ -48,7 +48,7 @@ def main(config: SACConfig, run_name: str):
     wandb.init(
         mode=config.wandb_mode,
         project="master2023",
-        name=f"{run_name} price 6 ({datetime.now().strftime('%Y-%m-%d %H:%M')})",
+        name=f"{run_name} ({datetime.now().strftime('%Y-%m-%d %H:%M')})",
     )
 
     logging_dict = {}
