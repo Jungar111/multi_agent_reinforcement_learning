@@ -57,14 +57,18 @@ def plot_average_distribution(
     fig, ax = plt.subplots(1, len(actions))
     no_regions = actions[0, :, :].shape[1]
     for idx, model in enumerate(model_data_pairs):
-        if config.n_regions[config.city] % 2 == 1:
+        if 0 not in config.n_regions[config.city] % np.array(list(range(2, 10))):
             actor_actions = np.pad(
                 actions[idx, :, :],
-                pad_width=((0, 0), (0, config.n_regions[config.city] - no_regions)),
+                pad_width=((0, 0), (0, config.n_regions[config.city] + 1 - no_regions)),
             )
-        actor_actions = actor_actions.reshape(
-            T, config.grid_size_x[config.city], config.grid_size_y[config.city]
-        )
+            actor_actions = actor_actions.reshape(
+                T, config.grid_size_x[config.city], config.grid_size_y[config.city]
+            )
+        else:
+            actor_actions = actions[idx].reshape(
+                T, config.grid_size_x[config.city], config.grid_size_y[config.city]
+            )
         for i in range(config.grid_size_x[config.city]):
             for j in range(config.grid_size_y[config.city]):
                 # Computes demand from i to all other grids
