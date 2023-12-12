@@ -276,6 +276,7 @@ class Scenario:
                             )
                 self.tripAttr = self.get_random_demand()
 
+        # Set value of time form the data.
         df = pd.DataFrame(data["demand"])
 
         self.vot = value_of_time(
