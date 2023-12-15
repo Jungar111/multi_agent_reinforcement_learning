@@ -22,10 +22,10 @@ class BaseConfig(BaseModel):
     render: bool = True
     city: str = "san_francisco"
     device: torch.device
-    grid_size_x: int
-    grid_size_y: int
     tf: int
     total_number_of_cars: int
+    price_lower_bound: int = 0
+    price_upper_bound: int = 10
     wandb_mode: str = "online"
     gamma: float = 0.97
     include_price: bool = True

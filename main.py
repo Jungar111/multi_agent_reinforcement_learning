@@ -5,6 +5,7 @@ from pathlib import Path
 import json
 import typing as T
 from datetime import datetime
+import pandas as pd
 
 import numpy as np
 from tqdm import trange
@@ -21,12 +22,10 @@ from multi_agent_reinforcement_learning.data_models.config import BaseConfig
 from multi_agent_reinforcement_learning.data_models.model_data_pair import ModelDataPair
 from multi_agent_reinforcement_learning.envs.amod import AMoD
 from multi_agent_reinforcement_learning.envs.scenario import Scenario
-from multi_agent_reinforcement_learning.evaluation.actor_evaluation import (
-    ActorEvaluator,
-)
 from multi_agent_reinforcement_learning.utils.argument_parser import args_to_config
 from multi_agent_reinforcement_learning.utils.init_logger import init_logger
 from multi_agent_reinforcement_learning.utils.minor_utils import dictsum
+from multi_agent_reinforcement_learning.utils.price_utils import value_of_time
 from multi_agent_reinforcement_learning.utils.setup_grid import setup_dummy_grid
 
 logger = init_logger()
@@ -38,6 +37,7 @@ def _train_loop(
     model_data_pairs: T.List[ModelDataPair],
     n_actions: int,
     episode_length: int,
+    travel_time_dict: dict,
     training: bool = True,
 ):
     """General train loop.
@@ -80,16 +80,34 @@ def _train_loop(
             actions = []
             prices = []
             for idx, model_data_pair in enumerate(model_data_pairs):
-                action, price = model_data_pair.model.select_action(
-                    obs=model_data_pair.actor_data.graph_state,
-                    probabilistic=training,
-                    data=data,
-                )
+                if config.include_price:
+                    action, price = model_data_pair.model.select_action(
+                        obs=model_data_pair.actor_data.graph_state,
+                        probabilistic=training,
+                        data=data,
+                    )
 
-                model_data_pair.actor_data.graph_state.price[step + 1] = price
+                    for i in range(config.n_regions[config.city]):
+                        for j in range(config.n_regions[config.city]):
+                            tt = travel_time_dict.get(
+                                (i, j, step * config.json_tstep), 1
+                            )
+                            model_data_pair.actor_data.flow.value_of_time[i, j][
+                                step + 1
+                            ] = price[0][0][0]
+                            model_data_pair.actor_data.graph_state.price[i, j][
+                                step + 1
+                            ] = (price[0][0][0] * tt)
+
+                    prices.append(price)
+                else:
+                    action = model_data_pair.model.select_action(
+                        obs=model_data_pair.actor_data.graph_state,
+                        probabilistic=training,
+                        data=data,
+                    )
 
                 actions.append(action)
-                prices.append(price)
 
             for idx, action in enumerate(actions):
                 # transform sample from Dirichlet into actual vehicle counts (i.e. (x1*x2*..*xn)*num_vehicles)
@@ -145,11 +163,15 @@ def _train_loop(
                 model_data_pair.model.training_step()
 
         # Send current statistics to screen
+        all_prices = [
+            list(p.values())
+            for p in list(model_data_pairs[0].actor_data.graph_state.price.values())
+        ]
         epochs.set_description(
             f"Episode {i_episode+1} | Reward: {model_data_pairs[0].actor_data.model_log.reward:.2f} "
             f"| ServedDemand: {model_data_pairs[0].actor_data.model_log.served_demand:.2f} "
             f"| Reb. Cost: {model_data_pairs[0].actor_data.model_log.rebalancing_cost:.2f} "
-            f"| Mean price: {np.mean(list(model_data_pairs[0].actor_data.graph_state.price.values())):.2f} "
+            f"| Mean price: {np.mean(all_prices):.2f} "
         )
 
         # Checkpoint best performing model
@@ -181,7 +203,7 @@ def _train_loop(
 
                 for model_data_pair in model_data_pairs:
                     model_data_pair.model.save_checkpoint(
-                        path=f"./{config.directory}/ckpt/{config.path}/a2c_gnn_{model_data_pair.actor_data.name}.pth"
+                        path=f"./{config.directory}/ckpt/{config.path}/a2c_{model_data_pair.actor_data.name}.pth"
                     )
                     best_reward = sum(
                         [
@@ -198,11 +220,7 @@ def _train_loop(
                 )
             )
             logging_dict.update(
-                {
-                    f"{model_data_pair.actor_data.name} Mean Price": np.mean(
-                        list(model_data_pair.actor_data.graph_state.price.values())
-                    )
-                }
+                {f"{model_data_pair.actor_data.name} Mean Price": np.mean(all_prices)}
             )
 
             overall_sum = sum(
@@ -289,6 +307,21 @@ def main(config: BaseConfig):
     episode_length = config.max_steps  # set episode length
     n_actions = len(env.region)
 
+    with open(str(env.config.json_file)) as file:
+        data = json.load(file)
+
+    df = pd.DataFrame(data["demand"])
+    df["converted_time_stamp"] = (
+        df["time_stamp"] - config.json_hr[config.city] * 60
+    ) // config.json_tstep
+    travel_time_dict = (
+        df.groupby(["origin", "destination", "converted_time_stamp"])["travel_time"]
+        .mean()
+        .to_dict()
+    )
+
+    logger.info(f"VOT {value_of_time(df.price, df.travel_time, demand_ratio=2):.2f}")
+
     if not config.test:
         train_episodes = config.max_episodes  # set max number of training episodes
         for model_data_pair in model_data_pairs:
@@ -300,40 +333,9 @@ def main(config: BaseConfig):
             model_data_pairs,
             n_actions,
             episode_length,
+            travel_time_dict,
             training=True,
         )
-
-    else:
-        # Load pre-trained model
-        rl1_actor.load_checkpoint(
-            path=f"./{config.directory}/ckpt/{config.path}/a2c_gnn_RL_1_big_run.pth"
-        )
-        rl2_actor.load_checkpoint(
-            path=f"./{config.directory}/ckpt/{config.path}/a2c_gnn_RL_2_big_run.pth"
-        )
-
-        test_episodes = 1
-        episode_length = config.max_steps
-
-        all_actions = _train_loop(
-            test_episodes,
-            env,
-            model_data_pairs,
-            n_actions,
-            episode_length,
-            training=False,
-        )
-
-        actor_evaluator = ActorEvaluator()
-        actor_evaluator.plot_average_distribution(
-            actions=np.array(all_actions),
-            T=episode_length,
-            model_data_pairs=model_data_pairs,
-        )
-
-        # actor_evaluator.plot_distribution_at_time_step_t(
-        #     actions=np.array(all_actions), models=models
-        # )
 
     wandb.finish()
 
@@ -341,8 +343,7 @@ def main(config: BaseConfig):
 if __name__ == "__main__":
     city = City.san_francisco
     config = args_to_config(city, cuda=False)
-    # config.wandb_mode = "disabled"
-    config.n_regions = 10
+    config.wandb_mode = "disabled"
     config.max_episodes = 16000
     # config.test = True
     # config.max_episodes = 11

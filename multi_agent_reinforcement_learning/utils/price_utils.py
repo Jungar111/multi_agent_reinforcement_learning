@@ -1,4 +1,9 @@
+"""A module for different utils regarding price."""
 import numpy as np
+
+
+def map_to_price(x, lower: float, upper: float):
+    return (upper - lower) / 2 * x + (lower + upper) / 2
 
 
 def value_of_time(

@@ -15,7 +15,7 @@ from multi_agent_reinforcement_learning.envs.scenario import Scenario
 from multi_agent_reinforcement_learning.utils.minor_utils import mat2str
 from multi_agent_reinforcement_learning.data_models.config import BaseConfig
 from multi_agent_reinforcement_learning.data_models.model_data_pair import ModelDataPair
-from multi_agent_reinforcement_learning.utils.value_of_time import hill_equation
+from multi_agent_reinforcement_learning.utils.price_utils import hill_equation
 
 
 class AMoD:

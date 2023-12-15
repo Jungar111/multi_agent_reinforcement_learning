@@ -29,7 +29,7 @@ from multi_agent_reinforcement_learning.envs.scenario import Scenario
 from multi_agent_reinforcement_learning.utils.init_logger import init_logger
 from multi_agent_reinforcement_learning.utils.minor_utils import dictsum
 from multi_agent_reinforcement_learning.utils.sac_argument_parser import args_to_config
-from multi_agent_reinforcement_learning.utils.value_of_time import value_of_time
+from multi_agent_reinforcement_learning.utils.price_utils import value_of_time
 
 logger = init_logger()
 
@@ -341,11 +341,11 @@ def main(config: SACConfig, run_name: str):
 
 if __name__ == "__main__":
     torch.manual_seed(42)
-    city = City.washington
+    city = City.san_francisco
     config = args_to_config(city, cuda=True)
     config.tf = 20
-    config.max_episodes = 11
+    config.max_episodes = 16000
     # config.include_price = False
     # config.test = True
-    config.wandb_mode = "disabled"
-    main(config, run_name="JPA_TEST_NO_WANDB")
+    # config.wandb_mode = "disabled"
+    main(config, run_name="Long run - SAC 2 actors")
