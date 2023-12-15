@@ -190,6 +190,7 @@ def main(config: SACConfig, run_name: str):
                             action_rl[idx],
                             config.rew_scale * rl_reward,
                             o[idx],
+                            None,
                         )
 
                 if config.include_price:
@@ -341,11 +342,11 @@ def main(config: SACConfig, run_name: str):
 
 if __name__ == "__main__":
     torch.manual_seed(42)
-    city = City.washington
+    city = City.san_francisco
     config = args_to_config(city, cuda=True)
     config.tf = 20
     config.max_episodes = 11
-    # config.include_price = False
+    config.include_price = False
     # config.test = True
     config.wandb_mode = "disabled"
     main(config, run_name="JPA_TEST_NO_WANDB")

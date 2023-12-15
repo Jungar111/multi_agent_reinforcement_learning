@@ -72,7 +72,7 @@ class ReplayData:
                 action=torch.as_tensor(action),
                 edge_index_t=data2.edge_index,
                 x_t=data2.x,
-                price=torch.as_tensor(price[0]),
+                price=torch.as_tensor(price[0]) if price != None else None,
             )
         )
         self.rewards.append(reward)
@@ -529,9 +529,12 @@ class SAC(nn.Module):
             data.action.reshape(-1, self.nodes),
             data.price,
         )
-
-        q1 = self.critic1(state_batch, edge_index, action_batch, price)
-        q2 = self.critic2(state_batch, edge_index, action_batch, price)
+        if self.config.include_price:
+            q1 = self.critic1(state_batch, edge_index, action_batch, price)
+            q2 = self.critic2(state_batch, edge_index, action_batch, price)
+        else:
+            q1 = self.critic1(state_batch, edge_index, action_batch)
+            q2 = self.critic2(state_batch, edge_index, action_batch)
         with torch.no_grad():
             # Target actions come from *current* policy
             if self.config.include_price:
