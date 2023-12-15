@@ -204,6 +204,11 @@ def main(config: SACConfig, run_name: str):
                             model_data_pair.actor_data.flow.value_of_time[i, j][
                                 step + 1
                             ] = price[0][0]
+
+                            model_data_pair.actor_data.flow.travel_time[i, j][
+                                step + 1
+                            ] = tt
+
                             model_data_pair.actor_data.graph_state.price[i, j][
                                 step + 1
                             ] = max((price[0][0] * tt), 10)
@@ -344,8 +349,8 @@ if __name__ == "__main__":
     city = City.san_francisco
     config = args_to_config(city, cuda=True)
     config.tf = 20
-    config.max_episodes = 100
+    config.max_episodes = 2000
     config.include_price = True
     # config.test = True
     # config.wandb_mode = "disabled"
-    main(config, run_name="Price minimum 10, TEST, 100 episodes")
+    main(config, run_name="Price minimum 10")

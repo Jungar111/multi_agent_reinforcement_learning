@@ -166,9 +166,9 @@ class AMoD:
                     vot.append(
                         max(
                             10
-                            / model_data_pair.actor_data.flow.value_of_time[
-                                origin, dest
-                            ][t],
+                            / model_data_pair.actor_data.flow.travel_time[origin, dest][
+                                t
+                            ],
                             1,
                         )
                     )
@@ -508,6 +508,7 @@ class AMoD:
                 self.demand[i, j][t] = d
                 model_data_pair.actor_data.graph_state.price[i, j][0] = p
                 model_data_pair.actor_data.flow.value_of_time[i, j][0] = p
+                model_data_pair.actor_data.flow.travel_time[i, j][0] = t
 
             model_data_pair.actor_data.graph_state.demand = defaultdict(dict)
 
