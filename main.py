@@ -344,7 +344,7 @@ if __name__ == "__main__":
     city = City.san_francisco
     config = args_to_config(city, cuda=False)
     config.wandb_mode = "disabled"
-    config.max_episodes = 16000
+    config.max_episodes = 11
     # config.test = True
     # config.max_episodes = 11
     # config.json_file = None

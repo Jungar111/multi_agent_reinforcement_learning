@@ -8,7 +8,6 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from torch import nn
-from torch.distributions import Dirichlet, Normal
 from multi_agent_reinforcement_learning.data_models.actor_data import GraphState
 
 from multi_agent_reinforcement_learning.envs.amod import AMoD
@@ -18,8 +17,6 @@ from multi_agent_reinforcement_learning.algos.gnn_parser import GNNParser
 from multi_agent_reinforcement_learning.data_models.config import A2CConfig
 from multi_agent_reinforcement_learning.data_models.actor_critic_data import SavedAction
 import typing as T
-
-from multi_agent_reinforcement_learning.utils.price_utils import map_to_price
 
 
 class ActorCritic(nn.Module):
@@ -78,13 +75,11 @@ class ActorCritic(nn.Module):
         x = self.parse_obs(obs, data).to(self.config.device)
 
         # actor: computes concentration parameters of a Dirichlet distribution
-        a_out, mu, std = self.actor(x)
-
-        concentration = F.softplus(a_out).reshape(-1) + jitter
+        concentration, action, logp_a, price, logp_p = self.actor(x)
 
         # critic: estimates V(s_t)
-        value = self.critic(x)
-        return concentration, mu, std, value
+        value = self.critic(x, concentration, price)
+        return concentration, action, logp_a, price, logp_p, value
 
     def _forward_without_price(
         self, data: T.Optional[T.Dict], obs: GraphState, jitter: float = 1e-20
@@ -141,42 +136,29 @@ class ActorCritic(nn.Module):
         """
 
         if self.config.include_price:
-            concentration, mu, std, value = self.forward(
+            concentration, action, logp_a, price, logp_p, value = self.forward(
                 obs=obs, data=data, include_price=True
             )
         else:
-            concentration, value = self.forward(obs=obs, data=data, include_price=True)
+            concentration, value = self.forward(obs=obs, data=data, include_price=False)
 
         if probabilistic:
-            m = Dirichlet(concentration)
-            action = m.rsample()
             if self.config.include_price:
-                p = Normal(mu, std)
-                price = p.rsample()
-                log_prob_p = p.log_prob(price).sum(axis=1)
-                log_prob_p -= 2 * (np.log(2) - price[0] - F.softplus(-2 * price[0]))
-                price_tanh = torch.tanh(price)
-
-                price = map_to_price(
-                    price_tanh,
-                    lower=self.config.price_lower_bound,
-                    upper=self.config.price_upper_bound,
-                )
                 self.saved_actions.append(
                     SavedAction(
-                        log_prob=m.log_prob(action),
+                        log_prob=logp_a,
                         value=value,
-                        log_prob_price=log_prob_p,
+                        log_prob_price=logp_p,
                     )
                 )
-            else:
-                self.saved_actions.append(
-                    SavedAction(log_prob=m.log_prob(action), value=value)
-                )
-        else:
-            action = (concentration) / (concentration.sum() + 1e-20)
-            action = action.detach()
-            price = mu.detach()
+        #     else:
+        #         self.saved_actions.append(
+        #             SavedAction(log_prob=m.log_prob(action), value=[value])
+        #         )
+        # else:
+        #     action = (concentration) / (concentration.sum() + 1e-20)
+        #     action = action.detach()
+        #     price = mu.detach()
 
         if self.config.include_price:
             return (
@@ -209,15 +191,22 @@ class ActorCritic(nn.Module):
             advantage = R - saved_action.value.item()
 
             # calculate actor (policy) loss
-            policy_losses.append(
-                -saved_action.log_prob.to(self.config.device) * advantage
-            )
+            if self.config.include_price:
+                policy_losses.append(
+                    -(
+                        saved_action.log_prob.to(self.config.device) * 0.1
+                        + saved_action.log_prob_price.to(self.config.device)
+                    )
+                    * advantage
+                )
 
             # calculate critic (value) loss using L1 smooth loss
             value_losses.append(
                 F.smooth_l1_loss(
-                    saved_action.value.to(self.config.device),
-                    torch.tensor([R]).to(self.config.device),
+                    torch.tensor([saved_action.value], requires_grad=True).to(
+                        self.config.device
+                    ),
+                    torch.tensor([R], requires_grad=True).to(self.config.device),
                 )
             )
 

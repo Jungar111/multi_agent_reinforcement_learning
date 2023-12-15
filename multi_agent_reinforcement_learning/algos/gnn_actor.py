@@ -4,8 +4,11 @@ import torch.nn.functional as F
 from torch import nn
 from torch_geometric.nn import GCNConv, global_mean_pool
 from torch_geometric.data import Data
+from torch.distributions import Normal, Dirichlet
+import numpy as np
 
 from multi_agent_reinforcement_learning.data_models.config import A2CConfig
+from multi_agent_reinforcement_learning.utils.price_utils import map_to_price
 
 
 class GNNActor(nn.Module):
@@ -46,6 +49,10 @@ class GNNActor(nn.Module):
         last_hidden_layer = F.leaky_relu(self.lin2(x))
 
         a_out = self.dirichlet_concentration_layer(last_hidden_layer)
+        a_out = F.softplus(a_out).reshape(-1) + 1e-20
+        m = Dirichlet(a_out)
+        action = m.rsample()
+        logp_a = m.log_prob(action)
 
         if self.config.include_price:
             price_pool = global_mean_pool(
@@ -61,6 +68,22 @@ class GNNActor(nn.Module):
             )
             sigma = torch.exp(log_std)
 
-            return a_out, mu, sigma
+            p = Normal(mu, sigma)
+            pi_action_p = p.rsample()
+            log_prob_p = p.log_prob(pi_action_p).sum(axis=-1)
+            # Correction formula for Tanh squashing see: https://github.com/openai/spinningup/blob/master/spinup/algos/pytorch/sac/core.py
+            # and appendix C in original SAC paper.
+            log_prob_p -= 2 * (
+                np.log(2) - pi_action_p[0] - F.softplus(-2 * pi_action_p[0])
+            )
+            price_tanh = torch.tanh(pi_action_p)
+
+            price = map_to_price(
+                price_tanh,
+                lower=self.config.price_lower_bound,
+                upper=self.config.price_upper_bound,
+            )
+
+            return a_out, action, logp_a, price, log_prob_p
 
         return a_out

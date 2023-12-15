@@ -344,8 +344,8 @@ if __name__ == "__main__":
     city = City.san_francisco
     config = args_to_config(city, cuda=True)
     config.tf = 20
-    config.max_episodes = 16000
+    config.max_episodes = 12
     # config.include_price = False
     # config.test = True
-    # config.wandb_mode = "disabled"
+    config.wandb_mode = "disabled"
     main(config, run_name="Long run - SAC 2 actors")
