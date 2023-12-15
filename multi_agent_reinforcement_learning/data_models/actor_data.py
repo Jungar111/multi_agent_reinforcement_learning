@@ -76,6 +76,9 @@ class Flow:
     value_of_time: defaultdict[T.Tuple[int, int], T.Dict[int, float]] = field(
         default_factory=lambda: defaultdict(dict)
     )
+    travel_time: defaultdict[T.Tuple[int, int], T.Dict[int, float]] = field(
+        default_factory=lambda: defaultdict(dict)
+    )
 
 
 @dataclass
