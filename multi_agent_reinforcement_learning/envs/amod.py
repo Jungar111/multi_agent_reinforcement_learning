@@ -160,10 +160,27 @@ class AMoD:
         cars_in_area_for_each_company: T.List[int],
     ):
         if self.config.include_price:
-            vot = [
-                max(model_data_pair.actor_data.flow.value_of_time[origin, dest][t], 1)
-                for model_data_pair in model_data_pairs
-            ]
+            vot = []
+            for model_data_pair in model_data_pairs:
+                if model_data_pair.actor_data.graph_state.price[origin, dest][t] == 10:
+                    vot.append(
+                        max(
+                            10
+                            / model_data_pair.actor_data.flow.value_of_time[
+                                origin, dest
+                            ][t],
+                            1,
+                        )
+                    )
+                else:
+                    vot.append(
+                        max(
+                            model_data_pair.actor_data.flow.value_of_time[origin, dest][
+                                t
+                            ],
+                            1,
+                        )
+                    )
         else:
             # @TODO, fix det her. Det skal være VOT
             vot = [self.price[origin, dest][t] for _ in model_data_pairs]

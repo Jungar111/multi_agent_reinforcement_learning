@@ -125,7 +125,7 @@ def main(config: SACConfig, run_name: str):
         )
 
         logger.info(
-            f"VOT {value_of_time(df.price, df.travel_time, demand_ratio=2):.2f}"
+            f"VOT {value_of_time(df.price, df.travel_time, demand_ratio=config.demand_ratio[config.city]):.2f}"
         )
 
     # Used for price diff
@@ -206,8 +206,7 @@ def main(config: SACConfig, run_name: str):
                             ] = price[0][0]
                             model_data_pair.actor_data.graph_state.price[i, j][
                                 step + 1
-                            ] = (price[0][0] * tt)
-
+                            ] = max((price[0][0] * tt), 10)
                     prices[idx].append(price)
                 else:
                     action_rl[idx] = model_data_pair.model.select_action(o[idx])
@@ -345,8 +344,8 @@ if __name__ == "__main__":
     city = City.san_francisco
     config = args_to_config(city, cuda=True)
     config.tf = 20
-    config.max_episodes = 11
-    config.include_price = False
+    config.max_episodes = 100
+    config.include_price = True
     # config.test = True
-    config.wandb_mode = "disabled"
-    main(config, run_name="JPA_TEST_NO_WANDB")
+    # config.wandb_mode = "disabled"
+    main(config, run_name="Price minimum 10, TEST, 100 episodes")
