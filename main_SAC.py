@@ -125,7 +125,7 @@ def main(config: SACConfig, run_name: str):
         )
 
         logger.info(
-            f"VOT {value_of_time(df.price, df.travel_time, demand_ratio=2):.2f}"
+            f"VOT {value_of_time(df.price, df.travel_time, demand_ratio=config.demand_ratio[config.city]):.2f}"
         )
 
     # Used for price diff
@@ -190,6 +190,7 @@ def main(config: SACConfig, run_name: str):
                             action_rl[idx],
                             config.rew_scale * rl_reward,
                             o[idx],
+                            None,
                         )
 
                 if config.include_price:
@@ -203,10 +204,14 @@ def main(config: SACConfig, run_name: str):
                             model_data_pair.actor_data.flow.value_of_time[i, j][
                                 step + 1
                             ] = price[0][0]
+
+                            model_data_pair.actor_data.flow.travel_time[i, j][
+                                step + 1
+                            ] = tt
+
                             model_data_pair.actor_data.graph_state.price[i, j][
                                 step + 1
-                            ] = (price[0][0] * tt)
-
+                            ] = max((price[0][0] * tt), 10)
                     prices[idx].append(price)
                 else:
                     action_rl[idx] = model_data_pair.model.select_action(o[idx])
