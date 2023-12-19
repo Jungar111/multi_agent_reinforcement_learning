@@ -14,7 +14,7 @@ different cities using SAC and A2C.
 
 ### Requirements
 
-- Python 3.x
+- Python 3.10
 - [Poetry](https://python-poetry.org/) for dependency management
 
 ### Installation
@@ -39,7 +39,7 @@ The project includes two main scripts:
 - `main.py`: Runs the A2C (Advantage Actor-Critic) algorithm.
 - `main_SAC.py`: Executes the Soft Actor-Critic (SAC) algorithm.
 
-To run the default simulation for San Francisco, use:
+To run the A2C algorithm for San Francisco, use:
 
 ```bash
 python main.py
