@@ -170,8 +170,15 @@ class AMoD:
                     )
                 )
         else:
-            # @TODO, fix det her. Det skal være VOT
-            vot = [self.price[origin, dest][t] for _ in model_data_pairs]
+            vot = []
+            for model_data_pair in model_data_pairs:
+                vot.append(
+                    max(
+                        self.price[origin, dest][t]
+                        / model_data_pair.actor_data.flow.travel_time[origin, dest][t],
+                        1,
+                    )
+                )
 
         rand = np.random.dirichlet(1 / (np.array(vot) + 1e-2), size=no_customers)
         values, counts = np.unique(np.argmax(rand, axis=1), return_counts=True)

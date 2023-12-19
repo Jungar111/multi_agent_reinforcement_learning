@@ -215,6 +215,15 @@ def main(config: SACConfig, run_name: str):
                     prices[idx].append(price)
                 else:
                     action_rl[idx] = model_data_pair.model.select_action(o[idx])
+                    for i in range(config.n_regions[config.city]):
+                        for j in range(config.n_regions[config.city]):
+                            tt = travel_time_dict.get(
+                                (i, j, step * config.json_tstep), 1
+                            )
+
+                            model_data_pair.actor_data.flow.travel_time[i, j][
+                                step + 1
+                            ] = tt
             for idx, model in enumerate(model_data_pairs):
                 # transform sample from Dirichlet into actual vehicle counts (i.e. (x1*x2*..*xn)*num_vehicles)
                 model.actor_data.flow.desired_acc = {

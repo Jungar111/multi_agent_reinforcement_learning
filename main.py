@@ -75,6 +75,9 @@ def _train_loop(
                 model_data_pair.actor_data.model_log.reward += (
                     model_data_pair.actor_data.rewards.pax_reward
                 )
+                model_data_pair.actor_data.model_log.revenue_reward += (
+                    model_data_pair.actor_data.rewards.pax_reward
+                )
             # use GNN-RL policy (Step 2 in paper)
 
             actions = []
@@ -106,6 +109,15 @@ def _train_loop(
                         probabilistic=training,
                         data=data,
                     )
+                    for i in range(config.n_regions[config.city]):
+                        for j in range(config.n_regions[config.city]):
+                            tt = travel_time_dict.get(
+                                (i, j, step * config.json_tstep), 1
+                            )
+
+                            model_data_pair.actor_data.flow.travel_time[i, j][
+                                step + 1
+                            ] = tt
 
                 actions.append(action)
 
@@ -247,11 +259,11 @@ def main(config: BaseConfig):
 
     actor_data = [
         ActorData(
-            name="RL_1_with_price",
+            name="RL_1_SAC",
             no_cars=config.total_number_of_cars - advesary_number_of_cars,
         ),
         ActorData(
-            name="RL_2_with_price",
+            name="RL_2_SAC",
             no_cars=advesary_number_of_cars,
         ),
     ]
@@ -263,9 +275,9 @@ def main(config: BaseConfig):
     wandb.init(
         mode=config.wandb_mode,
         project="master2023",
-        name=f"test_log ({datetime.now().strftime('%Y-%m-%d %H:%M')})"
+        name=f"Test ({datetime.now().strftime('%Y-%m-%d %H:%M')})"
         if config.test
-        else f"train_log ({datetime.now().strftime('%Y-%m-%d %H:%M')})",
+        else f"A2C with bus ({datetime.now().strftime('%Y-%m-%d %H:%M')})",
         config=wandb_config_log,
     )
 
@@ -343,12 +355,13 @@ def main(config: BaseConfig):
 if __name__ == "__main__":
     city = City.san_francisco
     config = args_to_config(city, cuda=False)
-    config.wandb_mode = "disabled"
-    config.max_episodes = 16000
+    # config.wandb_mode = "disabled"
+    config.max_episodes = 300
     # config.test = True
     # config.max_episodes = 11
     # config.json_file = None
     # config.grid_size_x = 2
     # config.grid_size_y = 3
-    # config.tf = 20
+    config.tf = 20
+    config.include_price = False
     main(config)

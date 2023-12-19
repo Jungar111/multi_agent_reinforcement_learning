@@ -145,7 +145,7 @@ class ActorCritic(nn.Module):
                 obs=obs, data=data, include_price=True
             )
         else:
-            concentration, value = self.forward(obs=obs, data=data, include_price=True)
+            concentration, value = self.forward(obs=obs, data=data, include_price=False)
 
         if probabilistic:
             m = Dirichlet(concentration)
@@ -184,7 +184,7 @@ class ActorCritic(nn.Module):
                 price.detach().cpu().numpy(),
             )
 
-        return list(action.cpu().numpy())
+        return list(action.detach().cpu().numpy())
 
     def training_step(self):
         """Take one training step."""
