@@ -1,5 +1,5 @@
 """Config for the entire project."""
-from pydantic import BaseModel, ConfigDict, validator
+from pydantic import BaseModel, ConfigDict
 import torch
 from pathlib import Path
 import typing as T
@@ -20,7 +20,7 @@ class BaseConfig(BaseModel):
     max_steps: int
     no_cuda: bool
     render: bool = True
-    city: str = "nyc4x4"
+    city: str = "san_francisco"
     device: torch.device
     grid_size_x: int
     grid_size_y: int
@@ -51,24 +51,35 @@ class BaseConfig(BaseModel):
         "shenzhen_downtown_west": 0.5,
         "nyc4x4": 0.5,
     }
+    grid_size_x: T.Dict[str, int] = {
+        "san_francisco": 2,
+        "washington_dc": 3,
+        "nyc_brooklyn": 2,
+        "shenzhen_downtown_west": 3,
+        "nyc4x4": 4,
+    }
+    grid_size_y: T.Dict[str, int] = {
+        "san_francisco": 5,
+        "washington_dc": 6,
+        "nyc_brooklyn": 7,
+        "shenzhen_downtown_west": 6,
+        "nyc4x4": 4,
+    }
+    n_regions: T.Dict[str, int] = {
+        "san_francisco": 10,
+        "washington_dc": 18,
+        "nyc_brooklyn": 14,
+        "shenzhen_downtown_west": 17,
+        "nyc4x4": 12,
+    }
 
 
 class A2CConfig(BaseConfig):
     """Config class for the A2C method."""
 
-    grid_size_x: int = 4
-    grid_size_y: int = 4
-    n_regions: int = 4 * 4
     total_number_of_cars: int = 1408
     log_interval: int = 10
     tf: int = 60
-
-    @validator("tf", pre=True)
-    @classmethod
-    def check_tf(cls, value):
-        if value < 10:
-            raise ValueError("tf must be at least 10. WE THINK! Depends on grid size.")
-        return value
 
 
 class SACConfig(BaseConfig):
@@ -87,5 +98,3 @@ class SACConfig(BaseConfig):
 
     tf: int = 20
     total_number_of_cars: int = 374
-    grid_size_x: int = 2
-    grid_size_y: int = 4

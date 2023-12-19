@@ -176,13 +176,6 @@ class Scenario:
             with open(json_file, "r") as file:
                 data = json.load(file)
 
-            df = pd.DataFrame(data["demand"])
-            self.vot = value_of_time(
-                duration=df.travel_time,
-                price=df.price,
-                demand_ratio=config.demand_ratio[config.city],
-            )
-
             self.tstep = json_tstep
             self.N1 = data["nlat"]
             self.N2 = data["nlon"]
@@ -201,6 +194,7 @@ class Scenario:
             self.demand_time = defaultdict(dict)
             self.reb_time = defaultdict(dict)
             self.json_start = json_hr * 60
+            self.config = config
             self.tf = config.tf
             self.edges = list(self.G.edges) + [(i, i) for i in self.G.nodes]
 
@@ -281,6 +275,15 @@ class Scenario:
                                 actor.no_cars // len(self.G)
                             )
                 self.tripAttr = self.get_random_demand()
+
+        # Set value of time form the data.
+        df = pd.DataFrame(data["demand"])
+
+        self.vot = value_of_time(
+            price=df.price,
+            duration=df.travel_time,
+            demand_ratio=self.config.demand_ratio[self.config.city],
+        )
 
     def get_random_demand(self, reset: bool = False):
         """Generate demand and price.
