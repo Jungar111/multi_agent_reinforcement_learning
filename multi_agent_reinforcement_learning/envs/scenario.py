@@ -1,15 +1,16 @@
 """This is the environment for the scenario."""
 
-from collections import defaultdict
-from multi_agent_reinforcement_learning.data_models.config import BaseConfig
-import numpy as np
-import networkx as nx
-from copy import deepcopy
 import json
 import typing as T
+from collections import defaultdict
+from copy import deepcopy
+
+import networkx as nx
+import numpy as np
 import pandas as pd
 
 from multi_agent_reinforcement_learning.data_models.actor_data import ActorData
+from multi_agent_reinforcement_learning.data_models.config import BaseConfig
 from multi_agent_reinforcement_learning.utils.price_utils import value_of_time
 
 

@@ -2,11 +2,12 @@
 
 import argparse
 import platform
-import torch
-from multi_agent_reinforcement_learning.data_models.city_enum import City
-
-from multi_agent_reinforcement_learning.data_models.config import A2CConfig
 from pathlib import Path
+
+import torch
+
+from multi_agent_reinforcement_learning.data_models.city_enum import City
+from multi_agent_reinforcement_learning.data_models.config import A2CConfig
 
 
 def parse_arguments(cuda: bool):

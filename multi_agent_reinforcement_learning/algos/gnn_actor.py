@@ -2,16 +2,14 @@
 import torch
 import torch.nn.functional as F
 from torch import nn
-from torch_geometric.nn import GCNConv, global_mean_pool
 from torch_geometric.data import Data
+from torch_geometric.nn import GCNConv, global_mean_pool
 
 from multi_agent_reinforcement_learning.data_models.config import A2CConfig
 
 
 class GNNActor(nn.Module):
-    """
-    Actor \pi(a_t | s_t) parametrizing the concentration parameters of a Dirichlet Policy.
-    """
+    r"""Actor \pi(a_t | s_t) parametrizing the concentration parameters of a Dirichlet Policy."""
 
     def __init__(
         self,
@@ -21,6 +19,7 @@ class GNNActor(nn.Module):
         act_dim=6,
         device: torch.device = torch.device("cuda:0"),
     ):
+        """Initialise the actor."""
         super().__init__()
         self.config = config
         self.in_channels = in_channels
@@ -39,6 +38,7 @@ class GNNActor(nn.Module):
             self.device = device
 
     def forward(self, data: Data):
+        """Forward pass for the actor."""
         out = F.relu(self.conv1(data.x, data.edge_index))
         x = out + data.x
         x = x.reshape(-1, self.act_dim, self.in_channels)

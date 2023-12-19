@@ -1,5 +1,7 @@
-import colorlog
+"""Module for logging."""
 import logging
+
+import colorlog
 
 
 def init_logger() -> logging.Logger:

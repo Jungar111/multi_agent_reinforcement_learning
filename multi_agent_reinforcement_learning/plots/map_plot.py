@@ -1,16 +1,16 @@
 """File for making mapplots."""
-import networkx as nx
-import matplotlib.pyplot as plt
-import numpy as np
-from PIL import Image
 import os
+
+import matplotlib.pyplot as plt
+import networkx as nx
+import numpy as np
 from glob2 import glob
-import wandb
+from PIL import Image
 
-
-from multi_agent_reinforcement_learning.data_models.config import A2CConfig
 import multi_agent_reinforcement_learning  # noqa: F401
+import wandb
 from multi_agent_reinforcement_learning.data_models.actor_data import ActorData
+from multi_agent_reinforcement_learning.data_models.config import A2CConfig
 
 
 def make_map_plot(

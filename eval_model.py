@@ -1,10 +1,10 @@
 """Main file for testing model."""
 import copy
+import json
 
 import numpy as np
-from tqdm import trange
-import json
 import pandas as pd
+from tqdm import trange
 
 from multi_agent_reinforcement_learning.algos.reb_flow_solver import solveRebFlow
 from multi_agent_reinforcement_learning.algos.sac import SAC
@@ -19,9 +19,9 @@ from multi_agent_reinforcement_learning.data_models.model_data_pair import Model
 from multi_agent_reinforcement_learning.envs.amod import AMoD
 from multi_agent_reinforcement_learning.envs.scenario import Scenario
 from multi_agent_reinforcement_learning.evaluation.actor_evaluation import (
-    plot_price_diff_over_time,
     plot_actions_as_function_of_time,
     plot_average_distribution,
+    plot_price_diff_over_time,
     plot_price_distribution,
     plot_price_vs_other_attribute,
 )
@@ -33,7 +33,7 @@ logger = init_logger()
 
 
 def main(config: SACConfig):
-    """Main loop for training and testing."""
+    """Train SAC algorithm."""
     advesary_number_of_cars = int(config.total_number_of_cars / 2)
     actor_data = [
         ActorData(

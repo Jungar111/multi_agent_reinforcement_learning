@@ -1,13 +1,13 @@
 """Main file for project."""
 from __future__ import print_function
-from pathlib import Path
 
 import json
 import typing as T
 from datetime import datetime
-import pandas as pd
+from pathlib import Path
 
 import numpy as np
+import pandas as pd
 from tqdm import trange
 
 import wandb

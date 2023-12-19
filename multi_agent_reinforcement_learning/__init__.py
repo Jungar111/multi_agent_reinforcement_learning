@@ -1,7 +1,8 @@
 """Init method for the package."""
 
-import matplotlib.pyplot as plt
 from pathlib import Path
+
+import matplotlib.pyplot as plt
 
 style_path = Path(
     "multi_agent_reinforcement_learning", "utils", "master_2023.mplstyle"

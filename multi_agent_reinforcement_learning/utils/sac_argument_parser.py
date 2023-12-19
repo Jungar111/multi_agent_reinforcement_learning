@@ -1,16 +1,16 @@
 """Argument parser for the SAC implementation."""
-
-import torch
 import argparse
 import platform
-from multi_agent_reinforcement_learning.data_models.city_enum import City
-
-from multi_agent_reinforcement_learning.data_models.config import SACConfig
-
 from pathlib import Path
+
+import torch
+
+from multi_agent_reinforcement_learning.data_models.city_enum import City
+from multi_agent_reinforcement_learning.data_models.config import SACConfig
 
 
 def parse_arguments(cuda):
+    """Parse arguments for SAC."""
     cplex_path = ""
     if platform.system() == "Linux":
         cplex_path = "/opt/ibm/ILOG/CPLEX_Studio2211/opl/bin/x86-64_linux/"

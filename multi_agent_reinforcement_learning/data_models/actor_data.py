@@ -1,7 +1,9 @@
+"""Module for holding all data associated with an actor."""
+import typing as T
 from collections import defaultdict
 from dataclasses import dataclass, field
-import typing as T
-from pydantic import BaseModel, Field, ConfigDict
+
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ModelLog(BaseModel):
@@ -25,6 +27,8 @@ class ModelLog(BaseModel):
 
 @dataclass
 class PaxStepInfo:
+    """Summary stats about an episode run for an actor."""
+
     served_demand: int = 0
     operating_cost: int = 0
     revenue: float = 0
@@ -33,6 +37,8 @@ class PaxStepInfo:
 
 @dataclass
 class GraphState:
+    """Input to the GNNs."""
+
     price: defaultdict[T.Tuple[int, int], T.Dict[int, float]] = field(
         default_factory=lambda: defaultdict(dict)
     )
@@ -50,18 +56,24 @@ class GraphState:
 
 @dataclass
 class Actions:
+    """A list of actions which the actor takes."""
+
     reb_action: T.List[float] = field(default_factory=list)
     pax_action: T.List[int] = field(default_factory=list)
 
 
 @dataclass
 class Rewards:
+    """Rewards for the actor."""
+
     pax_reward: float = 0
     reb_reward: float = 0
 
 
 @dataclass
 class Flow:
+    """Describes the flow, and other stats for the actor."""
+
     reb_flow: defaultdict[T.Tuple[int, int], T.Dict[int, float]] = field(
         default_factory=lambda: defaultdict(dict)
     )
@@ -83,12 +95,16 @@ class Flow:
 
 @dataclass
 class CplexData:
+    """Data associated with the optimisations."""
+
     acc_actor_tuple: T.Optional[T.List[T.Tuple[int, int]]] = None
     acc_init_tuple: T.Optional[T.List[T.Tuple[int, int]]] = None
 
 
 @dataclass
 class ActorData:
+    """Main class holding all the data."""
+
     name: str
     no_cars: int
     graph_state: GraphState = field(default_factory=GraphState)

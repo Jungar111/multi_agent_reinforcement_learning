@@ -1,28 +1,32 @@
+"""Module for the SAC algorithm."""
+import random
+
 import numpy as np
 import torch
-from torch import nn
 import torch.nn.functional as F
+from torch import nn
 from torch.distributions import Dirichlet, Normal
-from torch_geometric.data import Data, Batch
+from torch_geometric.data import Batch, Data
 from torch_geometric.nn import GCNConv, global_mean_pool
 
 from multi_agent_reinforcement_learning.algos.reb_flow_solver import solveRebFlow
-from multi_agent_reinforcement_learning.utils.minor_utils import dictsum
-from multi_agent_reinforcement_learning.data_models.config import SACConfig
-from multi_agent_reinforcement_learning.envs.amod import AMoD
 from multi_agent_reinforcement_learning.algos.sac_gnn_parser import (
     GNNParser as SACGNNParser,
 )
-
 from multi_agent_reinforcement_learning.data_models.actor_data import (
     ActorData,
     GraphState,
     ModelLog,
 )
-import random
+from multi_agent_reinforcement_learning.data_models.config import SACConfig
+from multi_agent_reinforcement_learning.envs.amod import AMoD
+from multi_agent_reinforcement_learning.utils.minor_utils import dictsum
+from multi_agent_reinforcement_learning.utils.price_utils import map_to_price
 
 
 class PairData(Data):
+    """Class holding elements in the replay buffer."""
+
     def __init__(
         self,
         edge_index_s=None,
@@ -34,6 +38,7 @@ class PairData(Data):
         price=None,
         device: torch.device = torch.device("cuda:0"),
     ):
+        """Initialise the element."""
         super().__init__()
         self.edge_index_s = edge_index_s
         self.x_s = x_s
@@ -45,6 +50,7 @@ class PairData(Data):
         self.device = device
 
     def __inc__(self, key, value, *args, **kwargs):
+        """Increment the data."""
         if key == "edge_index_s":
             return self.x_s.size(0)
         if key == "edge_index_t":
@@ -54,16 +60,16 @@ class PairData(Data):
 
 
 class ReplayData:
-    """
-    A simple FIFO experience replay buffer for SAC agents.
-    """
+    """A simple FIFO experience replay buffer for SAC agents."""
 
     def __init__(self, device):
+        """Initialise the buffer."""
         self.device = device
         self.data_list = []
         self.rewards = []
 
     def store(self, data1, action, reward, data2, price):
+        """Store data in the buffer."""
         self.data_list.append(
             PairData(
                 edge_index_s=data1.edge_index,
@@ -78,9 +84,11 @@ class ReplayData:
         self.rewards.append(reward)
 
     def size(self):
+        """Return the size of the buffer."""
         return len(self.data_list)
 
     def sample_batch(self, batch_size=32, norm=False):
+        """Sample a batch from the replay buffer."""
         data = random.sample(self.data_list, batch_size)
         if norm:
             mean = np.mean(self.rewards)
@@ -95,25 +103,23 @@ class ReplayData:
 
 
 class Scalar(nn.Module):
+    """Defines a scalar in torch."""
+
     def __init__(self, init_value):
+        """Init for the scalar."""
         super().__init__()
         self.constant = nn.Parameter(torch.tensor(init_value, dtype=torch.float32))
 
     def forward(self):
+        """Return the scalar."""
         return self.constant
 
 
 #########################################
 ############## ACTOR ####################
 #########################################
-def map_to_price(x, lower: float, upper: float):
-    return (upper - lower) / 2 * x + (lower + upper) / 2
-
-
 class GNNActor(nn.Module):
-    """
-    Actor \pi(a_t | s_t) parametrizing the concentration parameters of a Dirichlet Policy.
-    """
+    r"""Actor \pi(a_t | s_t) parametrizing the concentration parameters of a Dirichlet Policy."""
 
     def __init__(
         self,
@@ -123,6 +129,7 @@ class GNNActor(nn.Module):
         act_dim=6,
         device: torch.device = torch.device("cuda:0"),
     ):
+        """Init method for the actor."""
         super().__init__()
         self.config = config
         self.in_channels = in_channels
@@ -138,14 +145,8 @@ class GNNActor(nn.Module):
             self.price_lin_std = nn.Linear(hidden_size, 1)
             self.device = device
 
-        #  ----- Vi gør noget med det her, lad det være for nu. -----   #
-        # normal_(self.price_lin_std.weight, mean=0, std=0.1)
-        # constant_(self.price_lin_std.bias, 0)
-
-        # normal_(self.price_lin_mu.weight, mean=0, std=1)
-        # constant_(self.price_lin_mu.bias, 1)
-
-    def forward(self, state, edge_index, batch, deterministic=False):
+    def forward(self, state, edge_index, deterministic=False):
+        """Forward pass for the actor."""
         out = F.relu(self.conv1(state, edge_index))
         x = out + state
         x = x.reshape(-1, self.act_dim, self.in_channels)
@@ -206,90 +207,11 @@ class GNNActor(nn.Module):
 #########################################
 
 
-class GNNCritic1(nn.Module):
-    """
-    Architecture 1, GNN, Pointwise Multiplication, Readout, FC
-    """
-
-    def __init__(self, in_channels, hidden_size=256, act_dim=6):
-        super().__init__()
-        self.act_dim = act_dim
-        self.in_channels = in_channels
-        self.conv1 = GCNConv(in_channels, in_channels)
-        self.lin1 = nn.Linear(in_channels, hidden_size)
-        self.lin2 = nn.Linear(hidden_size, hidden_size)
-        self.lin3 = nn.Linear(hidden_size, 1)
-
-    def forward(self, state, edge_index, action):
-        out = F.relu(self.conv1(state, edge_index))
-        x = out + state
-        x = x.reshape(-1, self.act_dim, self.in_channels)  # (B,N,21)
-        action = action * 10
-        action = action.unsqueeze(-1)  # (B,N,1)
-        x = x * action  # pointwise multiplication (B,N,21)
-        x = x.sum(dim=1)  # (B,21)
-        x = F.relu(self.lin1(x))  # (B,H)
-        x = F.relu(self.lin2(x))  # (B,H)
-        x = self.lin3(x).squeeze(-1)  # (B)
-        return x
-
-
-class GNNCritic2(nn.Module):
-    """
-    Architecture 2, GNN, Readout, Concatenation, FC
-    """
-
-    def __init__(self, in_channels, hidden_size=256, act_dim=6):
-        super().__init__()
-        self.act_dim = act_dim
-        self.conv1 = GCNConv(in_channels, in_channels)
-        self.lin1 = nn.Linear(in_channels + act_dim, hidden_size)
-        self.lin2 = nn.Linear(hidden_size, hidden_size)
-        self.lin3 = nn.Linear(hidden_size, 1)
-
-    def forward(self, state, edge_index, action):
-        out = F.relu(self.conv1(state, edge_index))
-        x = out + state
-        x = x.reshape(-1, self.act_dim, 21)  # (B,N,21)
-        x = torch.sum(x, dim=1)  # (B, 21)
-        concat = torch.cat([x, action], dim=-1)  # (B, 21+N)
-        x = F.relu(self.lin1(concat))  # (B,H)
-        x = F.relu(self.lin2(x))  # (B,H)
-        x = self.lin3(x).squeeze(-1)  # B
-        return x
-
-
-class GNNCritic3(nn.Module):
-    """
-    Architecture 3: Concatenation, GNN, Readout, FC
-    """
+class GNNCritic(nn.Module):
+    """Architecture: GNN, Concatenation, FC, Readout."""
 
     def __init__(self, in_channels, hidden_size=32, act_dim=6):
-        super().__init__()
-        self.act_dim = act_dim
-        self.conv1 = GCNConv(22, 22)
-        self.lin1 = nn.Linear(22, hidden_size)
-        self.lin2 = nn.Linear(hidden_size, hidden_size)
-        self.lin3 = nn.Linear(hidden_size, 1)
-
-    def forward(self, state, edge_index, action):
-        cat = torch.cat([state, action.unsqueeze(-1)], dim=-1)  # (B,N,22)
-        out = F.relu(self.conv1(cat, edge_index))
-        x = out + cat
-        x = x.reshape(-1, self.act_dim, 22)  # (B,N,22)
-        x = F.relu(self.lin1(x))  # (B, H)
-        x = F.relu(self.lin2(x))  # (B, H)
-        x = torch.sum(x, dim=1)  # (B, 22)
-        x = self.lin3(x).squeeze(-1)  # (B)
-        return x
-
-
-class GNNCritic4(nn.Module):
-    """
-    Architecture 4: GNN, Concatenation, FC, Readout
-    """
-
-    def __init__(self, in_channels, hidden_size=32, act_dim=6):
+        """Init for the critic."""
         super().__init__()
         self.act_dim = act_dim
         self.conv1 = GCNConv(in_channels, in_channels)
@@ -299,6 +221,7 @@ class GNNCritic4(nn.Module):
         self.in_channels = in_channels
 
     def forward(self, state, edge_index, action, price=None):
+        """Forward pass for the critic."""
         out = F.relu(self.conv1(state, edge_index))
         x = out + state
         x = x.reshape(-1, self.act_dim, self.in_channels)  # (B,N,21)
@@ -331,43 +254,13 @@ class GNNCritic4(nn.Module):
         return x
 
 
-class GNNCritic5(nn.Module):
-    """
-    Architecture 5, GNN, Pointwise Multiplication, FC, Readout
-    """
-
-    def __init__(self, in_channels, hidden_size=256, act_dim=6):
-        super().__init__()
-        self.act_dim = act_dim
-        self.in_channels = in_channels
-        self.conv1 = GCNConv(in_channels, in_channels)
-        self.lin1 = nn.Linear(in_channels, hidden_size)
-        self.lin2 = nn.Linear(hidden_size, hidden_size)
-        self.lin3 = nn.Linear(hidden_size, 1)
-
-    def forward(self, state, edge_index, action):
-        out = F.relu(self.conv1(state, edge_index))
-        x = out + state
-        x = x.reshape(-1, self.act_dim, self.in_channels)  # (B,N,21)
-        action = action + 1
-        action = action.unsqueeze(-1)  # (B,N,1)
-        x = x * action  # pointwise multiplication (B,N,21)
-        x = F.relu(self.lin1(x))  # (B,N,H)
-        x = F.relu(self.lin2(x))  # (B,N,H)
-        x = x.sum(dim=1)  # (B,H)
-        x = self.lin3(x).squeeze(-1)  # (B)
-        return x
-
-
 #########################################
 ############## A2C AGENT ################
 #########################################
 
 
 class SAC(nn.Module):
-    """
-    Advantage Actor Critic algorithm for the AMoD control problem.
-    """
+    """Advantage Actor Critic algorithm for the AMoD control problem."""
 
     def __init__(
         self,
@@ -390,8 +283,8 @@ class SAC(nn.Module):
         device=torch.device("cpu"),
         min_q_version: int = 3,
         clip: int = 200,
-        critic_version: int = 4,
     ):
+        """Init method for the SAC algorithm."""
         super(SAC, self).__init__()
         self.env = env
         self.eps = eps
@@ -438,16 +331,6 @@ class SAC(nn.Module):
             self.config, self.input_size, self.hidden_size, act_dim=self.act_dim
         )
 
-        if critic_version == 1:
-            GNNCritic = GNNCritic1
-        if critic_version == 2:
-            GNNCritic = GNNCritic2
-        if critic_version == 3:
-            GNNCritic = GNNCritic3
-        if critic_version == 4:
-            GNNCritic = GNNCritic4
-        if critic_version == 5:
-            GNNCritic = GNNCritic5
         self.critic1 = GNNCritic(
             self.input_size, self.hidden_size, act_dim=self.act_dim
         )
@@ -493,17 +376,17 @@ class SAC(nn.Module):
             )
 
     def parse_obs(self, obs: GraphState):
+        """Parse observations from graph."""
         state = self.obs_parser.parse_obs(obs)
         return state
 
     def select_action(self, data, deterministic=False):
+        """Select action with actor."""
         with torch.no_grad():
             if self.config.include_price:
-                a, _, price, _ = self.actor(
-                    data.x, data.edge_index, data.batch, deterministic
-                )
+                a, _, price, _ = self.actor(data.x, data.edge_index, deterministic)
             else:
-                a, _ = self.actor(data.x, data.edge_index, data.batch, deterministic)
+                a, _ = self.actor(data.x, data.edge_index, deterministic)
         a = a.squeeze(-1)
         a = a.detach().cpu().numpy()[0]
         if self.config.include_price:
@@ -512,6 +395,7 @@ class SAC(nn.Module):
         return list(a)
 
     def compute_loss_q(self, data):
+        """Loss for the critic."""
         (
             state_batch,
             edge_index,
@@ -539,7 +423,8 @@ class SAC(nn.Module):
             # Target actions come from *current* policy
             if self.config.include_price:
                 a2, logp_a2, _, logp_p = self.actor(
-                    next_state_batch, edge_index2, data.batch
+                    next_state_batch,
+                    edge_index2,
                 )
                 if self.config.dynamic_scaling:
                     logp_a2 *= float(torch.abs(logp_p.mean() / logp_a2.mean()))
@@ -556,7 +441,7 @@ class SAC(nn.Module):
                     q_pi_targ - self.alpha * (logp_a2 + logp_p)
                 )
             else:
-                a2, logp_a2 = self.actor(next_state_batch, edge_index2, data.batch)
+                a2, logp_a2 = self.actor(next_state_batch, edge_index2)
                 q1_pi_targ = self.critic1_target(next_state_batch, edge_index2, a2)
                 q2_pi_targ = self.critic2_target(next_state_batch, edge_index2, a2)
                 q_pi_targ = torch.min(q1_pi_targ, q2_pi_targ)
@@ -568,13 +453,14 @@ class SAC(nn.Module):
         return loss_q1, loss_q2
 
     def compute_loss_pi(self, data):
+        """Loss for the actor."""
         state_batch, edge_index = (
             data.x_s,
             data.edge_index_s,
         )
         actor_val = 0
         if self.config.include_price:
-            actions, logp_a, price, logp_p = self.actor(state_batch, edge_index, data)
+            actions, logp_a, price, logp_p = self.actor(state_batch, edge_index)
             price = price[:, :, 0]
             logp_a *= float(torch.abs(logp_p.mean() / logp_a.mean()))
             # @TODO Investigate the magnitude of the logprobs. Maybe find magic number.
@@ -585,7 +471,7 @@ class SAC(nn.Module):
             q2_a = self.critic2(state_batch, edge_index, actions, price)
             q_a = torch.min(q1_1, q2_a)
         else:
-            actions, logp_a = self.actor(state_batch, edge_index, data.batch)
+            actions, logp_a = self.actor(state_batch, edge_index)
             actor_val = self.alpha * logp_a
             q1_1 = self.critic1(state_batch, edge_index, actions)
             q2_a = self.critic2(state_batch, edge_index, actions)
@@ -605,6 +491,7 @@ class SAC(nn.Module):
         return loss_pi
 
     def update(self, data):
+        """Update the model weights and biases."""
         loss_q1, loss_q2 = self.compute_loss_q(data)
 
         self.optimizers["c1_optimizer"].zero_grad()
@@ -652,6 +539,7 @@ class SAC(nn.Module):
             p.requires_grad = True
 
     def configure_optimizers(self):
+        """Configure optimizers for the sac algorithm."""
         optimizers = dict()
         actor_params = list(self.actor.parameters())
         critic1_params = list(self.critic1.parameters())
@@ -664,6 +552,7 @@ class SAC(nn.Module):
         return optimizers
 
     def test_agent(self, test_episodes, env, cplexpath, directory, parser):
+        """Legacy method for testing the agent. Not in use."""
         epochs = range(test_episodes)  # epoch iterator
         episode_reward = []
         episode_served_demand = []
@@ -712,6 +601,7 @@ class SAC(nn.Module):
         )
 
     def save_checkpoint(self, path="ckpt.pth"):
+        """Save model weights."""
         checkpoint = dict()
         checkpoint["model"] = self.state_dict()
         for key, value in self.optimizers.items():
@@ -719,6 +609,7 @@ class SAC(nn.Module):
         torch.save(checkpoint, path)
 
     def load_checkpoint(self, path="ckpt.pth"):
+        """Load model weights."""
         checkpoint = torch.load(path, map_location=self.device)
         model_dict = self.state_dict()
         pretrained_dict = {
@@ -730,4 +621,5 @@ class SAC(nn.Module):
             self.optimizers[key].load_state_dict(checkpoint[key])
 
     def log(self, log_dict, path="log.pth"):
+        """Log the model."""
         torch.save(log_dict, path)

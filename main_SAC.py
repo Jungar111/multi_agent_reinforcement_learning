@@ -2,16 +2,14 @@
 from __future__ import print_function
 
 import copy
+import json
 from datetime import datetime
 from pathlib import Path
-import torch
 
 import numpy as np
-from tqdm import trange
-
-import json
-
 import pandas as pd
+import torch
+from tqdm import trange
 
 import wandb
 from multi_agent_reinforcement_learning.algos.reb_flow_solver import solveRebFlow
@@ -28,14 +26,14 @@ from multi_agent_reinforcement_learning.envs.amod import AMoD
 from multi_agent_reinforcement_learning.envs.scenario import Scenario
 from multi_agent_reinforcement_learning.utils.init_logger import init_logger
 from multi_agent_reinforcement_learning.utils.minor_utils import dictsum
-from multi_agent_reinforcement_learning.utils.sac_argument_parser import args_to_config
 from multi_agent_reinforcement_learning.utils.price_utils import value_of_time
+from multi_agent_reinforcement_learning.utils.sac_argument_parser import args_to_config
 
 logger = init_logger()
 
 
 def main(config: SACConfig, run_name: str):
-    """Main loop for training and testing."""
+    """Run SAC."""
     advesary_number_of_cars = int(config.total_number_of_cars / 2)
     actor_data = [
         ActorData(

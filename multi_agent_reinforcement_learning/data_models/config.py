@@ -1,11 +1,14 @@
 """Config for the entire project."""
-from pydantic import BaseModel, ConfigDict
-import torch
-from pathlib import Path
 import typing as T
+from pathlib import Path
+
+import torch
+from pydantic import BaseModel, ConfigDict
 
 
 class BaseConfig(BaseModel):
+    """Base class for the config objects."""
+
     model_config = ConfigDict(arbitrary_types_allowed=True, validate_assignment=True)
 
     city: str

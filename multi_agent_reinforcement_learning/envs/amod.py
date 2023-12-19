@@ -7,14 +7,15 @@ from collections import defaultdict
 from copy import deepcopy
 
 import numpy as np
+
 from multi_agent_reinforcement_learning.data_models.actor_data import (
     ActorData,
     PaxStepInfo,
 )
-from multi_agent_reinforcement_learning.envs.scenario import Scenario
-from multi_agent_reinforcement_learning.utils.minor_utils import mat2str
 from multi_agent_reinforcement_learning.data_models.config import BaseConfig
 from multi_agent_reinforcement_learning.data_models.model_data_pair import ModelDataPair
+from multi_agent_reinforcement_learning.envs.scenario import Scenario
+from multi_agent_reinforcement_learning.utils.minor_utils import mat2str
 from multi_agent_reinforcement_learning.utils.price_utils import hill_equation
 
 
@@ -150,7 +151,7 @@ class AMoD:
         paxAction = [flow[i, j] if (i, j) in flow else 0 for i, j in self.edges]
         return paxAction
 
-    def distribute_based_on_price_and_market_share(
+    def distribute_based_on_price(
         self,
         model_data_pairs: T.List[ModelDataPair],
         no_customers: int,
@@ -159,6 +160,7 @@ class AMoD:
         t: int,
         cars_in_area_for_each_company: T.List[int],
     ):
+        """Distribute cars based on price."""
         if self.config.include_price:
             vot = []
             for model_data_pair in model_data_pairs:
@@ -283,7 +285,7 @@ class AMoD:
                 for model_data_pair in model_data_pairs
             ]
 
-            self.distribute_based_on_price_and_market_share(
+            self.distribute_based_on_price(
                 model_data_pairs=model_data_pairs,
                 no_customers=no_customers,
                 cars_in_area_for_each_company=cars_in_area_for_each_company,

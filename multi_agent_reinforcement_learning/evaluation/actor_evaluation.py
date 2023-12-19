@@ -1,15 +1,16 @@
 """Module for testing and evaluating actor performance."""
-import matplotlib.pyplot as plt
-import seaborn as sns
 import typing as T
+
+import holoviews as hv
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import seaborn as sns
 from bokeh.io import show
-import holoviews as hv
 
 from multi_agent_reinforcement_learning.algos.actor_critic_gnn import ActorCritic
-from multi_agent_reinforcement_learning.data_models.model_data_pair import ModelDataPair
 from multi_agent_reinforcement_learning.data_models.config import SACConfig
+from multi_agent_reinforcement_learning.data_models.model_data_pair import ModelDataPair
 
 
 def plot_distribution_at_time_step_t(
@@ -115,6 +116,7 @@ def plot_average_distribution(
 
 
 def _get_price_matrix(price_dicts: T.List, tf=20, n_actors=2) -> np.ndarray:
+    """Convert a price_dict to a np array."""
     n_epochs = len(price_dicts)
     prices = np.zeros((n_actors, n_epochs, tf))
     for idx, price_dict in enumerate(price_dicts):
@@ -125,6 +127,7 @@ def _get_price_matrix(price_dicts: T.List, tf=20, n_actors=2) -> np.ndarray:
 
 
 def plot_price_diff_over_time(price_dicts: T.List, tf=20, n_actors=2) -> None:
+    """Price vs time plot."""
     x = [i for i in range(tf)]
     prices = _get_price_matrix(price_dicts, tf, n_actors)
     n_epochs = len(price_dicts)
@@ -191,6 +194,7 @@ def plot_actions_as_function_of_time(
 def plot_price_distribution(
     model_data_pairs: T.List, data: pd.DataFrame, tf=20, n_actors=2, n_epochs=10
 ):
+    """Price distribution plot."""
     fig, ax = plt.subplots(n_actors, 1)
     for actor_idx, model_data_pair in enumerate(model_data_pairs):
         price = model_data_pair.actor_data.graph_state.price
@@ -212,6 +216,7 @@ def plot_price_distribution(
 
 
 def flatten_data(data: T.List, column_name: str):
+    """Flatten price the specific defaultdict structure we use."""
     return [
         {
             "epoch": epoch,
@@ -230,6 +235,7 @@ def plot_price_vs_other_attribute(
     other_attribute: T.List,
     name_for_other: str,
 ):
+    """Price vs. other attribute plot."""
     df_price = pd.DataFrame(flatten_data(price_dicts, "price"))
     df_demand = pd.DataFrame(flatten_data(other_attribute, name_for_other))
     df = df_price.merge(df_demand, on=["epoch", "time_step", "actor"]).sort_values(
@@ -248,6 +254,7 @@ def plot_price_vs_other_attribute(
 
 
 def chord_chart_of_trips_in_data(data: pd.DataFrame):
+    """Chord chart of org, dest pairs."""
     hv.extension("bokeh")
     hv.output(size=500)
     df = data.groupby(["origin", "destination"]).price.count().reset_index()
