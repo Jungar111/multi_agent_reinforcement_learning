@@ -10,7 +10,7 @@ import typing as T
 import pandas as pd
 
 from multi_agent_reinforcement_learning.data_models.actor_data import ActorData
-from multi_agent_reinforcement_learning.utils.value_of_time import value_of_time
+from multi_agent_reinforcement_learning.utils.price_utils import value_of_time
 
 
 class Scenario:

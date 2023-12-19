@@ -276,7 +276,7 @@ def main(config: SACConfig):
 
     plot_actions_as_function_of_time(
         actions=np.array(actions_over_epoch),
-        chosen_areas=[1, 2, 3],
+        chosen_areas=[8, 9, 10],
         colors=["#8C1C13", "#2F4550", "#A3BBAD"],
     )
     plot_average_distribution(
@@ -285,10 +285,10 @@ def main(config: SACConfig):
 
 
 if __name__ == "__main__":
-    city = City.shenzhen
+    city = City.san_francisco
     config = args_to_config(city, cuda=True)
     config.tf = 20
-    config.max_episodes = 1
+    config.max_episodes = 10
     config.total_number_of_cars = 374
     config.wandb_mode = "disabled"
     main(config)

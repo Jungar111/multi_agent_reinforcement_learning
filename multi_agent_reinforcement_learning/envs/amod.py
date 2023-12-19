@@ -15,7 +15,7 @@ from multi_agent_reinforcement_learning.envs.scenario import Scenario
 from multi_agent_reinforcement_learning.utils.minor_utils import mat2str
 from multi_agent_reinforcement_learning.data_models.config import BaseConfig
 from multi_agent_reinforcement_learning.data_models.model_data_pair import ModelDataPair
-from multi_agent_reinforcement_learning.utils.value_of_time import hill_equation
+from multi_agent_reinforcement_learning.utils.price_utils import hill_equation
 
 
 class AMoD:
@@ -170,8 +170,15 @@ class AMoD:
                     )
                 )
         else:
-            # @TODO, fix det her. Det skal være VOT
-            vot = [self.price[origin, dest][t] for _ in model_data_pairs]
+            vot = []
+            for model_data_pair in model_data_pairs:
+                vot.append(
+                    max(
+                        self.price[origin, dest][t]
+                        / model_data_pair.actor_data.flow.travel_time[origin, dest][t],
+                        1,
+                    )
+                )
 
         rand = np.random.dirichlet(1 / (np.array(vot) + 1e-2), size=no_customers)
         values, counts = np.unique(np.argmax(rand, axis=1), return_counts=True)

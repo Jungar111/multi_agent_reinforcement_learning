@@ -29,7 +29,7 @@ from multi_agent_reinforcement_learning.envs.scenario import Scenario
 from multi_agent_reinforcement_learning.utils.init_logger import init_logger
 from multi_agent_reinforcement_learning.utils.minor_utils import dictsum
 from multi_agent_reinforcement_learning.utils.sac_argument_parser import args_to_config
-from multi_agent_reinforcement_learning.utils.value_of_time import value_of_time
+from multi_agent_reinforcement_learning.utils.price_utils import value_of_time
 
 logger = init_logger()
 
@@ -215,6 +215,15 @@ def main(config: SACConfig, run_name: str):
                     prices[idx].append(price)
                 else:
                     action_rl[idx] = model_data_pair.model.select_action(o[idx])
+                    for i in range(config.n_regions[config.city]):
+                        for j in range(config.n_regions[config.city]):
+                            tt = travel_time_dict.get(
+                                (i, j, step * config.json_tstep), 1
+                            )
+
+                            model_data_pair.actor_data.flow.travel_time[i, j][
+                                step + 1
+                            ] = tt
             for idx, model in enumerate(model_data_pairs):
                 # transform sample from Dirichlet into actual vehicle counts (i.e. (x1*x2*..*xn)*num_vehicles)
                 model.actor_data.flow.desired_acc = {
@@ -349,6 +358,7 @@ if __name__ == "__main__":
     city = City.san_francisco
     config = args_to_config(city, cuda=True)
     config.tf = 20
+
     config.max_episodes = 5000
     config.include_price = True
     config.dynamic_scaling = True

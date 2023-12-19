@@ -132,8 +132,6 @@ class GNNActor(nn.Module):
         self.lin2 = nn.Linear(hidden_size, hidden_size)
         self.dirichlet_concentration_layer = nn.Linear(hidden_size, 1)
         if self.config.include_price:
-            self.price_upper_bound = 10
-            self.price_lower_bound = 0
             self.log_std_min = -20
             self.log_std_max = 2
             self.price_lin_mu = nn.Linear(hidden_size, 1)
@@ -194,7 +192,9 @@ class GNNActor(nn.Module):
             price_tanh = torch.tanh(pi_action_p)
 
             price = map_to_price(
-                price_tanh, lower=self.price_lower_bound, upper=self.price_upper_bound
+                price_tanh,
+                lower=self.config.price_lower_bound,
+                upper=self.config.price_upper_bound,
             )
 
             return action, log_prob, price, log_prob_p
