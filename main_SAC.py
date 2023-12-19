@@ -358,8 +358,10 @@ if __name__ == "__main__":
     city = City.san_francisco
     config = args_to_config(city, cuda=True)
     config.tf = 20
-    config.max_episodes = 16000
-    # config.include_price = False
+
+    config.max_episodes = 5000
+    config.include_price = True
+    config.dynamic_scaling = True
     # config.test = True
     # config.wandb_mode = "disabled"
-    main(config, run_name="Long run - SAC 2 actors")
+    main(config, run_name="Price minimum 10, variable logprob scalar")

@@ -541,7 +541,10 @@ class SAC(nn.Module):
                 a2, logp_a2, _, logp_p = self.actor(
                     next_state_batch, edge_index2, data.batch
                 )
-                logp_a2 *= 0.1
+                if self.config.dynamic_scaling:
+                    logp_a2 *= float(torch.abs(logp_p.mean() / logp_a2.mean()))
+                else:
+                    logp_a2 *= 0.1
                 q1_pi_targ = self.critic1_target(
                     next_state_batch, edge_index2, a2, price
                 )
@@ -573,7 +576,7 @@ class SAC(nn.Module):
         if self.config.include_price:
             actions, logp_a, price, logp_p = self.actor(state_batch, edge_index, data)
             price = price[:, :, 0]
-            logp_a *= 0.1
+            logp_a *= float(torch.abs(logp_p.mean() / logp_a.mean()))
             # @TODO Investigate the magnitude of the logprobs. Maybe find magic number.
             # maybe TODO Look into alpha, may make a difference - 0.1 to 0.3
             actor_val = self.alpha * (logp_a + logp_p)
