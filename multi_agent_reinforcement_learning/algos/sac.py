@@ -541,7 +541,10 @@ class SAC(nn.Module):
                 a2, logp_a2, _, logp_p = self.actor(
                     next_state_batch, edge_index2, data.batch
                 )
-                logp_a2 *= float(torch.abs(logp_p.mean() / logp_a2.mean()))
+                if self.config.dynamic_scaling:
+                    logp_a2 *= float(torch.abs(logp_p.mean() / logp_a2.mean()))
+                else:
+                    logp_a2 *= 0.1
                 q1_pi_targ = self.critic1_target(
                     next_state_batch, edge_index2, a2, price
                 )

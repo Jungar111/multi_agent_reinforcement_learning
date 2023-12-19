@@ -351,6 +351,7 @@ if __name__ == "__main__":
     config.tf = 20
     config.max_episodes = 5000
     config.include_price = True
+    config.dynamic_scaling = True
     # config.test = True
     # config.wandb_mode = "disabled"
     main(config, run_name="Price minimum 10, variable logprob scalar")

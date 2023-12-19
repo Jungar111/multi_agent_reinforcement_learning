@@ -96,5 +96,6 @@ class SACConfig(BaseConfig):
     checkpoint_path: str
     clip: int
 
+    dynamic_scaling: bool = True
     tf: int = 20
     total_number_of_cars: int = 374
