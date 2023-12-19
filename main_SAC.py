@@ -33,7 +33,7 @@ logger = init_logger()
 
 
 def main(config: SACConfig, run_name: str):
-    """Run SAC."""
+    """Run main training loop of SAC."""
     advesary_number_of_cars = int(config.total_number_of_cars / 2)
     actor_data = [
         ActorData(
