@@ -135,13 +135,6 @@ def parse_arguments(cuda):
     )
 
     parser.add_argument(
-        "--critic_version",
-        type=int,
-        default=4,
-        help="critic version (default: 4)",
-    )
-
-    parser.add_argument(
         "-f", "--fff", help="a dummy argument to fool ipython", default="1"
     )
 
