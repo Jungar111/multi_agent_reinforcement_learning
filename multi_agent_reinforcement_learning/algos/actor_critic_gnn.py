@@ -4,21 +4,21 @@ A2C:
     Advantage Actor Critic algorithm using a GNN parametrization for both Actor and Critic.
 """
 
+import typing as T
+
 import numpy as np
 import torch
 import torch.nn.functional as F
 from torch import nn
 from torch.distributions import Dirichlet, Normal
-from multi_agent_reinforcement_learning.data_models.actor_data import GraphState
 
-from multi_agent_reinforcement_learning.envs.amod import AMoD
 from multi_agent_reinforcement_learning.algos.gnn_actor import GNNActor
 from multi_agent_reinforcement_learning.algos.gnn_critic import GNNCritic
 from multi_agent_reinforcement_learning.algos.gnn_parser import GNNParser
-from multi_agent_reinforcement_learning.data_models.config import A2CConfig
 from multi_agent_reinforcement_learning.data_models.actor_critic_data import SavedAction
-import typing as T
-
+from multi_agent_reinforcement_learning.data_models.actor_data import GraphState
+from multi_agent_reinforcement_learning.data_models.config import A2CConfig
+from multi_agent_reinforcement_learning.envs.amod import AMoD
 from multi_agent_reinforcement_learning.utils.price_utils import map_to_price
 
 
@@ -115,6 +115,7 @@ class ActorCritic(nn.Module):
         jitter: float = 1e-20,
         include_price=True,
     ):
+        """Forward factory method for the actor critic."""
         if include_price:
             return self._forward_with_price(data, obs, jitter)
         else:
@@ -139,7 +140,6 @@ class ActorCritic(nn.Module):
         obs: observation of the current distribution of vehicles.
         return: List of the next actions
         """
-
         if self.config.include_price:
             concentration, mu, std, value = self.forward(
                 obs=obs, data=data, include_price=True

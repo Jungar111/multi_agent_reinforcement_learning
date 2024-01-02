@@ -1,7 +1,8 @@
 """Datamodels for saving actions."""
+import typing as T
+
 import torch
 from pydantic import BaseModel, ConfigDict
-import typing as T
 
 
 class SavedAction(BaseModel):

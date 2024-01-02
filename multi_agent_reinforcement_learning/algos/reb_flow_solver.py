@@ -1,11 +1,12 @@
 """RebFlow Solver."""
 import os
 import subprocess
+import typing as T
 from collections import defaultdict
+
+from multi_agent_reinforcement_learning.data_models.model_data_pair import ModelDataPair
 from multi_agent_reinforcement_learning.envs.amod import AMoD
 from multi_agent_reinforcement_learning.utils.minor_utils import mat2str
-from multi_agent_reinforcement_learning.data_models.model_data_pair import ModelDataPair
-import typing as T
 
 
 def solveRebFlow(

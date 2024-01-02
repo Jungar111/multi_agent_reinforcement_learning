@@ -1,14 +1,16 @@
 """Parser for GNN."""
 
+import typing as T
+
 import torch
 from torch_geometric.data import Data
 from torch_geometric.utils import grid
+
 from multi_agent_reinforcement_learning.data_models.actor_data import (
     GraphState,
 )
 from multi_agent_reinforcement_learning.data_models.config import A2CConfig
 from multi_agent_reinforcement_learning.envs.amod import AMoD
-import typing as T
 
 
 class GNNParser:

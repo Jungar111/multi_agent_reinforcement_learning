@@ -1,10 +1,12 @@
 """Function that produces dummy grid for quicker training and testing."""
-from multi_agent_reinforcement_learning.data_models.config import BaseConfig
+import multi_agent_reinforcment_learning  # noqa: F401
 import numpy as np
+
+from multi_agent_reinforcement_learning.data_models.config import BaseConfig
 
 
 def setup_dummy_grid(config: BaseConfig, determ: bool = True):
-    """Setup dummy grid."""
+    """Set up dummy grid."""
     if determ:
         demand_input = {
             (5, 1): 3,

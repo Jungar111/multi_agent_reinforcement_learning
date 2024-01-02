@@ -3,6 +3,7 @@ import numpy as np
 
 
 def map_to_price(x, lower: float, upper: float):
+    """Map from tanh to linear price."""
     return (upper - lower) / 2 * x + (lower + upper) / 2
 
 
@@ -14,14 +15,13 @@ def value_of_time(
 
 
 def hill_equation(x: float, k: float, alpha: float = 4) -> float:
-    """Compute shifted sigmoid"""
+    """Compute shifted sigmoid."""
     return x**alpha / (k**alpha + x**alpha)
 
 
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
     import numpy as np
-    import multi_agent_reinforcement_learning  # noqa: F401
 
     vot = 0.6
     x = np.linspace(0, 1.2, 1000)

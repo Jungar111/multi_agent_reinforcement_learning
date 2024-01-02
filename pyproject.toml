@@ -39,12 +39,10 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.ruff]
 line-length = 120
+select = ["E", "D", "F", "I"]
 
 ignore = ["E711"]
 
-
-[tool.ruff.isort]
-required-imports = ["import multi_agent_reinforcment_learning"]
 
 [tool.ruff.pydocstyle]
 convention = "pep257"

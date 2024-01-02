@@ -1,8 +1,10 @@
 """Temporary document for parser for GNN in the SAC implementation."""
 
 import json
+
 import torch
 from torch_geometric.data import Data
+
 from multi_agent_reinforcement_learning.data_models.actor_data import (
     # ActorData,
     GraphState,
@@ -10,11 +12,10 @@ from multi_agent_reinforcement_learning.data_models.actor_data import (
 
 
 class GNNParser:
-    """
-    Parser converting raw environment observations to agent inputs (s_t).
-    """
+    """Parser converting raw environment observations to agent inputs (s_t)."""
 
     def __init__(self, env, T=10, json_file=None, scale_factor=0.01):
+        """Init for the parser."""
         super().__init__()
         self.env = env
         self.T = T
@@ -25,6 +26,7 @@ class GNNParser:
                 self.data = json.load(file)
 
     def parse_obs(self, obs: GraphState):
+        """Parse observations to provide GNN input."""
         x = (
             torch.cat(
                 (
