@@ -11,6 +11,7 @@ class BaseConfig(BaseModel):
 
     model_config = ConfigDict(arbitrary_types_allowed=True, validate_assignment=True)
 
+    run_name: str
     city: str
     path: str
     json_file: T.Optional[Path]
@@ -22,11 +23,12 @@ class BaseConfig(BaseModel):
     max_episodes: int
     max_steps: int
     no_cuda: bool
+    no_cars: int
+    no_actors: int
     render: bool = True
     city: str = "san_francisco"
     device: torch.device
     tf: int
-    total_number_of_cars: int
     price_lower_bound: int = 0
     price_upper_bound: int = 10
     wandb_mode: str = "online"
@@ -80,7 +82,6 @@ class BaseConfig(BaseModel):
 class A2CConfig(BaseConfig):
     """Config class for the A2C method."""
 
-    total_number_of_cars: int = 1408
     log_interval: int = 10
     tf: int = 60
 
@@ -100,4 +101,3 @@ class SACConfig(BaseConfig):
 
     dynamic_scaling: bool = True
     tf: int = 20
-    total_number_of_cars: int = 374

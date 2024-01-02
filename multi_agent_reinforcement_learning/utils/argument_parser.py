@@ -73,6 +73,34 @@ def parse_arguments(cuda: bool):
         "--no-cuda", type=bool, default=not cuda, help="disables CUDA training"
     )
 
+    parser.add_argument(
+        "--no-cars",
+        type=int,
+        default=374,
+        help="reward scaling factor (default: 0.1)",
+    )
+
+    parser.add_argument(
+        "--no-cars",
+        type=int,
+        default=374,
+        help="Number of cars in total",
+    )
+
+    parser.add_argument(
+        "--no-actors",
+        type=int,
+        default=2,
+        help="Number of actors",
+    )
+
+    parser.add_argument(
+        "--run-name",
+        type=str,
+        default="",
+        help="Name for the run on W&B",
+    )
+
     args = parser.parse_args()
     args.cuda = not args.no_cuda and torch.cuda.is_available()
 

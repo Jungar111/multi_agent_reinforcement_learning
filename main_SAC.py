@@ -34,13 +34,13 @@ logger = init_logger()
 
 def main(config: SACConfig, run_name: str):
     """Run main training loop of SAC."""
-    advesary_number_of_cars = int(config.total_number_of_cars / 2)
+    number_of_cars = int(config.no_cars / config.no_actors)
     actor_data = [
         ActorData(
-            name="RL_1_SAC",
-            no_cars=config.total_number_of_cars - advesary_number_of_cars,
-        ),
-        ActorData(name="RL_2_SAC", no_cars=advesary_number_of_cars),
+            name=f"RL_{i+1}_SAC",
+            no_cars=number_of_cars,
+        )
+        for i in range(config.no_actors)
     ]
 
     wandb.init(
@@ -70,35 +70,24 @@ def main(config: SACConfig, run_name: str):
     # Timehorizon T=6 (K in paper)
     parser = GNNParser(env, T=6, json_file=f"data/scenario_{config.city}.json")
     # Initialise SAC
-    rl1_actor = SAC(
-        env=env,
-        config=config,
-        actor_data=actor_data[0],
-        input_size=13,
-        hidden_size=config.hidden_size,
-        p_lr=config.p_lr,
-        q_lr=config.q_lr,
-        alpha=config.alpha,
-        batch_size=config.batch_size,
-        use_automatic_entropy_tuning=False,
-        clip=config.clip,
-    )
-    rl2_actor = SAC(
-        env=env,
-        config=config,
-        actor_data=actor_data[1],
-        input_size=13,
-        hidden_size=config.hidden_size,
-        p_lr=config.p_lr,
-        q_lr=config.q_lr,
-        alpha=config.alpha,
-        batch_size=config.batch_size,
-        use_automatic_entropy_tuning=False,
-        clip=config.clip,
-    )
+    rl_actors = [
+        SAC(
+            env=env,
+            config=config,
+            actor_data=actor_data[i],
+            input_size=13,
+            hidden_size=config.hidden_size,
+            p_lr=config.p_lr,
+            q_lr=config.q_lr,
+            alpha=config.alpha,
+            batch_size=config.batch_size,
+            use_automatic_entropy_tuning=False,
+            clip=config.clip,
+        )
+        for i in range(config.no_actors)
+    ]
     model_data_pairs = [
-        ModelDataPair(rl1_actor, actor_data[0]),
-        ModelDataPair(rl2_actor, actor_data[1]),
+        ModelDataPair(rl_actors[i], actor_data[i]) for i in range(config.no_actors)
     ]
     train_episodes = config.max_episodes
     # T = config.max_steps
@@ -140,24 +129,22 @@ def main(config: SACConfig, run_name: str):
             model_data_pair.actor_data.model_log = ModelLog()
 
         env.reset(model_data_pairs)  # initialize environment
-        episode_reward = [0, 0]
+        episode_reward = [0 for _ in range(config.no_actors)]
         episode_served_demand = 0
         episode_rebalancing_cost = 0
         done = False
         step = 0
-        o = [None, None]
-        action_rl = [None, None]
-        obs_list = [None, None]
+        o = [None for _ in range(config.no_actors)]
+        action_rl = [None for _ in range(config.no_actors)]
+        obs_list = [None for _ in range(config.no_actors)]
         if config.include_price:
-            prices = {
-                0: [],
-                1: [],
-            }
+            prices = {i: [] for i in range(config.no_actors)}
         while not done:
             # take matching step (Step 1 in paper)
             if step > 0:
-                obs_list[0] = copy.deepcopy(o[0])
-                obs_list[1] = copy.deepcopy(o[1])
+                for i in range(config.no_actors):
+                    obs_list[i] = copy.deepcopy(o[i])
+
             done = env.pax_step(
                 model_data_pairs=model_data_pairs,
                 cplex_path=config.cplex_path,
@@ -278,15 +265,19 @@ def main(config: SACConfig, run_name: str):
                     )
                     model.model.update(data=batch)
 
-        epochs.set_description(
+        description = (
             f"Episode {i_episode+1} | "
-            f"Reward 1: {episode_reward[0]:.2f} | "
-            f"Reward 2: {episode_reward[1]:.2f} | "
             f"ServedDemand: {episode_served_demand:.2f} | "
+            f"Reward 1: {episode_reward[0]:.2f} | "
             # f"Reb. Cost: {episode_rebalancing_cost:.2f} | "
             f"Mean price 1: {np.mean(prices[0]) if config.include_price else 0:.2f} | "
-            f"Mean price 2: {np.mean(prices[1]) if config.include_price else 0:.2f}"
         )
+        if config.no_actors > 1:
+            description += (
+                f"Reward 2: {episode_reward[1]:.2f} |"
+                f" Mean price 2: {np.mean(prices[1]) if config.include_price else 0:.2f}"
+            )
+        epochs.set_description(description)
         # Checkpoint best performing model
         if np.sum(episode_reward) >= best_reward:
             ckpt_paths = [
@@ -355,9 +346,12 @@ if __name__ == "__main__":
     config = args_to_config(city, cuda=True)
     config.tf = 20
 
-    config.max_episodes = 5000
+    if config.run_name == "":
+        config.run_name = "Price minimum 10"
+
+    # config.max_episodes = 5000
     config.include_price = True
     config.dynamic_scaling = False
     # config.test = True
     # config.wandb_mode = "disabled"
-    main(config, run_name="Price minimum 10")
+    main(config, run_name=config.run_name)
