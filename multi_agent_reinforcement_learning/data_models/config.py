@@ -94,7 +94,6 @@ class SACConfig(BaseConfig):
     q_lr: float
     alpha: float
     batch_size: int
-    critic_version: int
     rew_scale: float
     checkpoint_path: str
     clip: int
