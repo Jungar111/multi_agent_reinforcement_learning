@@ -135,6 +135,27 @@ def parse_arguments(cuda):
     )
 
     parser.add_argument(
+        "--no-cars",
+        type=int,
+        default=374,
+        help="Number of cars in total",
+    )
+
+    parser.add_argument(
+        "--no-actors",
+        type=int,
+        default=2,
+        help="Number of actors",
+    )
+
+    parser.add_argument(
+        "--run-name",
+        type=str,
+        default="",
+        help="Name for the run on W&B",
+    )
+
+    parser.add_argument(
         "-f", "--fff", help="a dummy argument to fool ipython", default="1"
     )
 

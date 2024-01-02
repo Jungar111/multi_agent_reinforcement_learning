@@ -185,7 +185,7 @@ class AMoD:
         rand = np.random.dirichlet(1 / (np.array(vot) + 1e-2), size=no_customers)
         values, counts = np.unique(np.argmax(rand, axis=1), return_counts=True)
         chosen_company = {val: co for val, co in zip(values, counts)}
-        for actor_idx in range(2):
+        for actor_idx in range(self.config.no_actors):
             no_customers_for_company = chosen_company.get(actor_idx, 0)
 
             probability_of_taxi = 1 - hill_equation(
