@@ -88,4 +88,4 @@ You can customize the city for simulation by modifying the data source in the sc
 
 ## Acknowledgments
 
-This work was conducted as part of a master thesis at The Technical University of Denmark (DTU). We would like to thank Francisco Camara Pereira, Filipe Rodrigues and Carolin Samanta Schmidt, and DTU for their support and guidance.
+This work was conducted as part of a master thesis at DTU. We would like to thank Francisco Camara Pereira, Filipe Rodrigues, Carolin Samanta Schmidt and DTU for their support, guidance and endless fruitful discussions.
