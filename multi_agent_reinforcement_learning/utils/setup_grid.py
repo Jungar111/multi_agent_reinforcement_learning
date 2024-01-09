@@ -1,5 +1,4 @@
 """Function that produces dummy grid for quicker training and testing."""
-import multi_agent_reinforcment_learning  # noqa: F401
 import numpy as np
 
 from multi_agent_reinforcement_learning.data_models.config import BaseConfig

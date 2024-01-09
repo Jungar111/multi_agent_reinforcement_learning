@@ -462,7 +462,10 @@ class SAC(nn.Module):
         if self.config.include_price:
             actions, logp_a, price, logp_p = self.actor(state_batch, edge_index)
             price = price[:, :, 0]
-            logp_a *= float(torch.abs(logp_p.mean() / logp_a.mean()))
+            if self.config.dynamic_scaling:
+                logp_a *= float(torch.abs(logp_p.mean() / logp_a.mean()))
+            else:
+                logp_a *= 0.1
             # @TODO Investigate the magnitude of the logprobs. Maybe find magic number.
             # maybe TODO Look into alpha, may make a difference - 0.1 to 0.3
             actor_val = self.alpha * (logp_a + logp_p)

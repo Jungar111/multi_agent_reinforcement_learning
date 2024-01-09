@@ -89,6 +89,9 @@ def main(config: SACConfig, run_name: str):
     model_data_pairs = [
         ModelDataPair(rl_actors[i], actor_data[i]) for i in range(config.no_actors)
     ]
+    # model_data_pairs[0].model.load_checkpoint(
+    #     path=f"saved_files/ckpt/{config.path}/{model_data_pairs[0].actor_data.name}_last.pth"
+    # )
     train_episodes = config.max_episodes
     # T = config.max_steps
     epochs = trange(train_episodes)

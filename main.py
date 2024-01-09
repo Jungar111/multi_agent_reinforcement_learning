@@ -255,12 +255,12 @@ def main(config: BaseConfig):
     """Run main training loop."""
     logger.info("Running main loop.")
 
-    advesary_number_of_cars = int(config.total_number_of_cars / 2)
+    advesary_number_of_cars = int(config.no_cars / 2)
 
     actor_data = [
         ActorData(
             name="RL_1_SAC",
-            no_cars=config.total_number_of_cars - advesary_number_of_cars,
+            no_cars=config.no_cars - advesary_number_of_cars,
         ),
         ActorData(
             name="RL_2_SAC",
@@ -356,7 +356,7 @@ if __name__ == "__main__":
     city = City.san_francisco
     config = args_to_config(city, cuda=False)
     # config.wandb_mode = "disabled"
-    config.max_episodes = 300
+    # config.max_episodes = 300
     # config.test = True
     # config.max_episodes = 11
     # config.json_file = None
