@@ -103,6 +103,10 @@ class AMoD:
             actor_data.graph_state.acc,
             actor_data.name,
         )
+
+        if not self.config.include_price:
+            price = self.price
+
         demandAttr = [
             (i, j, demand[i, j][t], price[i, j][t])
             for i, j in demand
@@ -313,7 +317,6 @@ class AMoD:
                     PATH=path,
                     platform=platform,
                     actor_data=model_data_pair.actor_data,
-                    name=model_data_pair.actor_data.name,
                 )
 
         for model_data_pair in model_data_pairs:

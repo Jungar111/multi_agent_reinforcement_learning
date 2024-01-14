@@ -210,13 +210,12 @@ def _train_loop(
                     for model_data_pair in model_data_pairs
                 ]
 
+                for idx, model_data_pair in enumerate(model_data_pairs):
+                    model_data_pair.model.save_checkpoint(ckpt_paths[idx])
+
                 for ckpt_path in ckpt_paths:
                     wandb.save(ckpt_path)
 
-                for model_data_pair in model_data_pairs:
-                    model_data_pair.model.save_checkpoint(
-                        path=f"./{config.directory}/ckpt/{config.path}/a2c_{model_data_pair.actor_data.name}.pth"
-                    )
                     best_reward = sum(
                         [
                             model_data_pair.actor_data.model_log.reward
@@ -259,11 +258,11 @@ def main(config: BaseConfig):
 
     actor_data = [
         ActorData(
-            name="RL_1_SAC",
+            name="RL_1",
             no_cars=config.no_cars - advesary_number_of_cars,
         ),
         ActorData(
-            name="RL_2_SAC",
+            name="RL_2",
             no_cars=advesary_number_of_cars,
         ),
     ]
@@ -277,7 +276,7 @@ def main(config: BaseConfig):
         project="master2023",
         name=f"Test ({datetime.now().strftime('%Y-%m-%d %H:%M')})"
         if config.test
-        else f"A2C with bus ({datetime.now().strftime('%Y-%m-%d %H:%M')})",
+        else f"A2C with bus no price ({datetime.now().strftime('%Y-%m-%d %H:%M')})",
         config=wandb_config_log,
     )
 
@@ -356,7 +355,7 @@ if __name__ == "__main__":
     city = City.san_francisco
     config = args_to_config(city, cuda=False)
     # config.wandb_mode = "disabled"
-    # config.max_episodes = 300
+    config.max_episodes = 16000 * 3
     # config.test = True
     # config.max_episodes = 11
     # config.json_file = None
