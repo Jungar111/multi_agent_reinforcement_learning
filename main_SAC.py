@@ -116,9 +116,9 @@ def main(config: SACConfig, run_name: str):
             f"VOT {value_of_time(df.price, df.travel_time, demand_ratio=config.demand_ratio[config.city]):.2f}"
         )
 
-    # Used for price diff
-    #     init_price_dict = df.groupby(["origin", "destination"]).price.mean().to_dict()
-    #     init_price_mean = df.price.mean()
+        # Used for price diff
+        # init_price_dict = df.groupby(["origin", "destination"]).price.mean().to_dict()
+        # init_price_mean = df.price.mean()
 
     wandb_config_log = {**vars(config)}
     for model in model_data_pairs:
@@ -350,7 +350,7 @@ if __name__ == "__main__":
     config.tf = 20
 
     if config.run_name == "":
-        config.run_name = "Price minimum 10"
+        config.run_name = "Zero diff price SAC"
 
     # config.max_episodes = 5000
     config.include_price = True
