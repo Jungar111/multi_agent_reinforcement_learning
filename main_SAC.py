@@ -89,6 +89,9 @@ def main(config: SACConfig, run_name: str):
     model_data_pairs = [
         ModelDataPair(rl_actors[i], actor_data[i]) for i in range(config.no_actors)
     ]
+    # model_data_pairs[0].model.load_checkpoint(
+    #     path=f"saved_files/ckpt/{config.path}/{model_data_pairs[0].actor_data.name}_last.pth"
+    # )
     train_episodes = config.max_episodes
     # T = config.max_steps
     epochs = trange(train_episodes)
@@ -113,9 +116,9 @@ def main(config: SACConfig, run_name: str):
             f"VOT {value_of_time(df.price, df.travel_time, demand_ratio=config.demand_ratio[config.city]):.2f}"
         )
 
-    # Used for price diff
-    #     init_price_dict = df.groupby(["origin", "destination"]).price.mean().to_dict()
-    #     init_price_mean = df.price.mean()
+        # Used for price diff
+        # init_price_dict = df.groupby(["origin", "destination"]).price.mean().to_dict()
+        # init_price_mean = df.price.mean()
 
     wandb_config_log = {**vars(config)}
     for model in model_data_pairs:
@@ -347,7 +350,7 @@ if __name__ == "__main__":
     config.tf = 20
 
     if config.run_name == "":
-        config.run_name = "Price minimum 10"
+        config.run_name = "Zero diff price SAC"
 
     # config.max_episodes = 5000
     config.include_price = True

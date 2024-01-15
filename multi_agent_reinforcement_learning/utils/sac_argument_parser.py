@@ -61,7 +61,7 @@ def parse_arguments(cuda):
     parser.add_argument(
         "--max_episodes",
         type=int,
-        default=10000,
+        default=5000,
         metavar="N",
         help="number of episodes to train agent (default: 16k)",
     )

@@ -87,9 +87,7 @@ class AMoD:
 
     def matching(
         self,
-        demand: defaultdict,
-        acc: defaultdict,
-        name: str,
+        actor_data: ActorData,
         CPLEXPATH: T.Optional[str] = None,
         PATH: str = "",
         platform: str = "linux",
@@ -99,8 +97,18 @@ class AMoD:
         return: paxAction
         """
         t = self.time
+        price, demand, acc, name = (
+            actor_data.graph_state.price,
+            actor_data.graph_state.demand,
+            actor_data.graph_state.acc,
+            actor_data.name,
+        )
+
+        if not self.config.include_price:
+            price = self.price
+
         demandAttr = [
-            (i, j, demand[i, j][t], self.price[i, j][t])
+            (i, j, demand[i, j][t], price[i, j][t])
             for i, j in demand
             if t in demand[i, j] and demand[i, j][t] > 1e-3
         ]  # Setup demand and price at time t.
@@ -308,9 +316,7 @@ class AMoD:
                     CPLEXPATH=cplex_path,
                     PATH=path,
                     platform=platform,
-                    demand=model_data_pair.actor_data.graph_state.demand,
-                    acc=model_data_pair.actor_data.graph_state.acc,
-                    name=model_data_pair.actor_data.name,
+                    actor_data=model_data_pair.actor_data,
                 )
 
         for model_data_pair in model_data_pairs:

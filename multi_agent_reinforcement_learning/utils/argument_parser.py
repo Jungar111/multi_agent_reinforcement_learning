@@ -74,9 +74,9 @@ def parse_arguments(cuda: bool):
     )
 
     parser.add_argument(
-        "--no-cars",
-        type=int,
-        default=374,
+        "--rew_scale",
+        type=float,
+        default=0.1,
         help="reward scaling factor (default: 0.1)",
     )
 

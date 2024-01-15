@@ -12,7 +12,6 @@ class BaseConfig(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True, validate_assignment=True)
 
     run_name: str
-    city: str
     path: str
     json_file: T.Optional[Path]
     cplex_path: str
