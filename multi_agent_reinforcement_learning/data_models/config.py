@@ -28,7 +28,7 @@ class BaseConfig(BaseModel):
     city: str = "san_francisco"
     device: torch.device
     tf: int
-    price_lower_bound: int = 0
+    price_lower_bound: int = -10 # 0 for optimal model, minus 10 for this model.
     price_upper_bound: int = 10
     wandb_mode: str = "online"
     gamma: float = 0.97

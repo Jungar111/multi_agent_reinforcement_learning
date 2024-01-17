@@ -117,8 +117,8 @@ def main(config: SACConfig, run_name: str):
         )
 
         # Used for price diff
-        # init_price_dict = df.groupby(["origin", "destination"]).price.mean().to_dict()
-        # init_price_mean = df.price.mean()
+        init_price_dict = df.groupby(["origin", "destination"]).price.mean().to_dict()
+        init_price_mean = df.price.mean()
 
     wandb_config_log = {**vars(config)}
     for model in model_data_pairs:
@@ -197,7 +197,7 @@ def main(config: SACConfig, run_name: str):
 
                             model_data_pair.actor_data.graph_state.price[i, j][
                                 step + 1
-                            ] = max((price[0][0] * tt), 10)
+                            ] =  init_price_dict.get((i,j), init_price_mean) + price[0][0] #max((price[0][0] * tt), 10)
                     prices[idx].append(price)
                 else:
                     action_rl[idx] = model_data_pair.model.select_action(o[idx])
@@ -350,9 +350,9 @@ if __name__ == "__main__":
     config.tf = 20
 
     if config.run_name == "":
-        config.run_name = "Zero diff price SAC"
+        config.run_name = "Mean price for OD-pair + price difference for state (eq. 3.37 in pdf) - RUN 1"
 
-    # config.max_episodes = 5000
+    config.max_episodes = 5000
     config.include_price = True
     config.dynamic_scaling = False
     # config.test = True
