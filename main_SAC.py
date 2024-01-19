@@ -101,17 +101,16 @@ def main(config: SACConfig, run_name: str):
     with open(str(env.config.json_file)) as file:
         data = json.load(file)
 
+    df = pd.DataFrame(data["demand"])
+    df["converted_time_stamp"] = (
+        df["time_stamp"] - config.json_hr[config.city] * 60
+    ) // config.json_tstep
+    travel_time_dict = (
+        df.groupby(["origin", "destination", "converted_time_stamp"])["travel_time"]
+        .mean()
+        .to_dict()
+    )
     if config.include_price:
-        df = pd.DataFrame(data["demand"])
-        df["converted_time_stamp"] = (
-            df["time_stamp"] - config.json_hr[config.city] * 60
-        ) // config.json_tstep
-        travel_time_dict = (
-            df.groupby(["origin", "destination", "converted_time_stamp"])["travel_time"]
-            .mean()
-            .to_dict()
-        )
-
         logger.info(
             f"VOT {value_of_time(df.price, df.travel_time, demand_ratio=config.demand_ratio[config.city]):.2f}"
         )
@@ -350,11 +349,11 @@ if __name__ == "__main__":
     config.tf = 20
 
     if config.run_name == "":
-        config.run_name = "Zero diff price SAC"
+        config.run_name = "TEST PRICE DIFF"
 
     # config.max_episodes = 5000
     config.include_price = True
-    config.dynamic_scaling = False
+    config.dynamic_scaling = True
     # config.test = True
     # config.wandb_mode = "disabled"
     main(config, run_name=config.run_name)

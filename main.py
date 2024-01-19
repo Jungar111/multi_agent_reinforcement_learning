@@ -262,7 +262,7 @@ def main(config: BaseConfig):
             no_cars=config.no_cars - advesary_number_of_cars,
         ),
         ActorData(
-            name="RL_2",
+            name="RL_2_",
             no_cars=advesary_number_of_cars,
         ),
     ]
@@ -354,7 +354,7 @@ def main(config: BaseConfig):
 if __name__ == "__main__":
     city = City.san_francisco
     config = args_to_config(city, cuda=False)
-    # config.wandb_mode = "disabled"
+    config.wandb_mode = "disabled"
     config.max_episodes = 16000 * 3
     # config.test = True
     # config.max_episodes = 11
