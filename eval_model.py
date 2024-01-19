@@ -1,6 +1,7 @@
 """Main file for testing model."""
 import copy
 import json
+from collections import defaultdict
 
 import numpy as np
 import pandas as pd
@@ -19,10 +20,11 @@ from multi_agent_reinforcement_learning.data_models.model_data_pair import Model
 from multi_agent_reinforcement_learning.envs.amod import AMoD
 from multi_agent_reinforcement_learning.envs.scenario import Scenario
 from multi_agent_reinforcement_learning.evaluation.actor_evaluation import (
+    get_summary_stats,
     plot_actions_as_function_of_time,
     plot_average_distribution,
-    plot_price_diff_over_time,
     plot_price_distribution,
+    plot_price_over_time,
     plot_price_vs_other_attribute,
 )
 from multi_agent_reinforcement_learning.utils.init_logger import init_logger
@@ -32,13 +34,13 @@ from multi_agent_reinforcement_learning.utils.sac_argument_parser import args_to
 logger = init_logger()
 
 
-def main(config: SACConfig):
+def main(config: SACConfig, run_name: str):
     """Train SAC algorithm."""
-    advesary_number_of_cars = int(config.total_number_of_cars / 2)
+    advesary_number_of_cars = int(config.no_cars / 2)
     actor_data = [
         ActorData(
             name="RL_1_SAC",
-            no_cars=config.total_number_of_cars - advesary_number_of_cars,
+            no_cars=config.no_cars - advesary_number_of_cars,
         ),
         ActorData(name="RL_2_SAC", no_cars=advesary_number_of_cars),
     ]
@@ -74,7 +76,6 @@ def main(config: SACConfig):
         batch_size=config.batch_size,
         use_automatic_entropy_tuning=False,
         clip=config.clip,
-        critic_version=config.critic_version,
     )
     rl2_actor = SAC(
         env=env,
@@ -88,7 +89,6 @@ def main(config: SACConfig):
         batch_size=config.batch_size,
         use_automatic_entropy_tuning=False,
         clip=config.clip,
-        critic_version=config.critic_version,
     )
     model_data_pairs = [
         ModelDataPair(rl1_actor, actor_data[0]),
@@ -128,6 +128,8 @@ def main(config: SACConfig):
     )
     epoch_served_demand = []
     epoch_unmet_demand = []
+    epoch_rewards = defaultdict(list)
+    model_data_pair_prices = defaultdict(list)
     for i_episode in epochs:
         for model_data_pair in model_data_pairs:
             model_data_pair.actor_data.model_log = ModelLog()
@@ -142,18 +144,15 @@ def main(config: SACConfig):
 
         env.reset(model_data_pairs)  # initialize environment
         episode_reward = [0, 0]
-        episode_served_demand = {0: [], 1: []}
-        episode_unmet_demand = {0: [], 1: []}
+        episode_served_demand = defaultdict(list)
+        episode_unmet_demand = defaultdict(list)
+        prices = defaultdict(list)
         episode_rebalancing_cost = 0
         done = False
         step = 0
         o = [None, None]
         action_rl = [None, None]
         obs_list = [None, None]
-        prices = {
-            0: [],
-            1: [],
-        }
         while not done:
             # take matching step (Step 1 in paper)
             if step > 0:
@@ -183,13 +182,14 @@ def main(config: SACConfig):
                 action_rl[idx], price = model_data_pair.model.select_action(o[idx])
                 for i in range(config.n_regions[config.city]):
                     for j in range(config.n_regions[config.city]):
-                        tt = travel_time_dict.get((i, j, step * config.json_tstep), 0)
+                        tt = travel_time_dict.get((i, j, step * config.json_tstep), 1)
                         model_data_pair.actor_data.flow.value_of_time[i, j][
                             step + 1
                         ] = price[0][0]
-                        model_data_pair.actor_data.graph_state.price[i, j][step + 1] = (
-                            price[0][0] * tt
-                        )
+                        model_data_pair.actor_data.graph_state.price[i, j][
+                            step + 1
+                        ] = max((price[0][0] * tt), 10)
+                        model_data_pair.actor_data.flow.travel_time[i, j][step + 1] = tt
 
                         # model_data_pair.actor_data.graph_state.price[i, j][step + 1] = (
                         #     init_price_dict.get((i, j), init_price_mean) + price[0][0]
@@ -264,23 +264,40 @@ def main(config: SACConfig):
             f"Reb. Cost: {episode_rebalancing_cost:.2f} | "
             f"Mean price: {np.mean(prices[0]):.2f}"
         )
+
+        for idx in range(len(model_data_pairs)):
+            epoch_rewards[idx].append(episode_reward[idx])
+            model_data_pair_prices[idx].append(model_data_pairs[idx])
+
         epoch_prices.append(prices)
         epoch_served_demand.append(episode_served_demand)
         epoch_unmet_demand.append(episode_unmet_demand)
 
-    plot_price_diff_over_time(epoch_prices)
-    plot_price_distribution(model_data_pairs=model_data_pairs, data=df)
+    get_summary_stats(epoch_prices, epoch_rewards, run_name)
+    plot_price_over_time(epoch_prices, name=run_name)
+    plot_price_distribution(
+        model_data_pair_prices=model_data_pair_prices, data=df, name=run_name
+    )
 
-    plot_price_vs_other_attribute(epoch_prices, epoch_served_demand, "served_demand")
-    plot_price_vs_other_attribute(epoch_prices, epoch_unmet_demand, "unmet_demand")
+    plot_price_vs_other_attribute(
+        epoch_prices, epoch_served_demand, "served_demand", plot_name=run_name
+    )
+    plot_price_vs_other_attribute(
+        epoch_prices, epoch_unmet_demand, "unmet_demand", plot_name=run_name
+    )
 
     plot_actions_as_function_of_time(
         actions=np.array(actions_over_epoch),
         chosen_areas=[8, 9, 10],
         colors=["#8C1C13", "#2F4550", "#A3BBAD"],
+        name=run_name,
     )
     plot_average_distribution(
-        config=config, actions=all_actions, T=20, model_data_pairs=model_data_pairs
+        config=config,
+        actions=all_actions,
+        T=20,
+        model_data_pairs=model_data_pairs,
+        name=run_name,
     )
 
 
@@ -289,6 +306,6 @@ if __name__ == "__main__":
     config = args_to_config(city, cuda=True)
     config.tf = 20
     config.max_episodes = 10
-    config.total_number_of_cars = 374
+    # config.total_number_of_cars = 374
     config.wandb_mode = "disabled"
-    main(config)
+    main(config, run_name="400_cars")

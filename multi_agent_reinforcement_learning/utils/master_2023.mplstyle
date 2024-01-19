@@ -1,15 +1,16 @@
-# master_2023.mplstyle
+# master_1823.mplstyle
 
 ### FIGURE
 figure.facecolor: white
 figure.dpi: 100
 figure.titlesize: 14
+figure.figsize: 14, 10
 
 ### LINES
 lines.linewidth: 1.5
 
 ### LEGEND
-legend.fontsize: 20
+legend.fontsize: 18
 
 ### TICKS
 xtick.direction: out
@@ -17,16 +18,16 @@ ytick.direction: out
 
 ### FONTS
 font.family: sans-serif
-font.size: 20
+font.size: 18
 
 ### AXES
 axes.grid: False
 axes.facecolor: white
 axes.linewidth: 1.0
-axes.titlesize: 20
-axes.titlepad: 20
+axes.titlesize: 18
+axes.titlepad: 18
 axes.titleweight: bold
-axes.labelsize: 20
+axes.labelsize: 18
 axes.spines.top: True
 axes.spines.right: True
 axes.prop_cycle: cycler('color', ["#8C1C13", "#2F4550", "#A3BBAD", "#C49991", "#F7A072"])

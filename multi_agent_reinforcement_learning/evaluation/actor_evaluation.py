@@ -1,5 +1,7 @@
 """Module for testing and evaluating actor performance."""
+import json
 import typing as T
+from collections import defaultdict
 
 import holoviews as hv
 import matplotlib.pyplot as plt
@@ -43,6 +45,7 @@ def plot_distribution_at_time_step_t(
 def plot_average_distribution(
     config: SACConfig,
     actions: np.ndarray,
+    name: str,
     T: int,
     model_data_pairs: T.List[ModelDataPair],
 ):
@@ -105,13 +108,14 @@ def plot_average_distribution(
                     fontsize=8,
                 )
         ax[idx].matshow(actor_actions.mean(axis=0), norm=norm, cmap="bone")
-        ax[idx].set_title(f"Actor: {model.actor_data.name}")
+        # ax[idx].set_title(f"Actor: {model.actor_data.name}")
     fig.subplots_adjust(right=0.8)
     fig.supxlabel("Actor specific demand / actor specific unmet demand", fontsize=12)
     fig.colorbar(
         sc, ax=ax.ravel().tolist(), label="Mean # of cars departing from", cmap="bone"
     )
 
+    plt.savefig(f"figs/grid_demand_{name}.png", dpi=400)
     plt.show()
 
 
@@ -126,13 +130,13 @@ def _get_price_matrix(price_dicts: T.List, tf=20, n_actors=2) -> np.ndarray:
     return prices
 
 
-def plot_price_diff_over_time(price_dicts: T.List, tf=20, n_actors=2) -> None:
+def plot_price_over_time(price_dicts: T.List, name: str, tf=20, n_actors=2) -> None:
     """Price vs time plot."""
     x = [i for i in range(tf)]
     prices = _get_price_matrix(price_dicts, tf, n_actors)
     n_epochs = len(price_dicts)
 
-    fig, ax = plt.subplots(n_actors, 1)
+    _, ax = plt.subplots(n_actors, 1)
     for actor_idx in range(n_actors):
         mean_price = prices[actor_idx, ...].mean(axis=0)
         ax[actor_idx].plot(mean_price, label="Mean price")
@@ -151,18 +155,19 @@ def plot_price_diff_over_time(price_dicts: T.List, tf=20, n_actors=2) -> None:
             )
 
         ax[actor_idx].legend()
-        ax[actor_idx].set_title(f"Price difference over time - Actor {actor_idx + 1}")
+        ax[actor_idx].set_title(f"Price over time - Actor {actor_idx + 1}")
 
     plt.xlabel("Time")
     plt.ylabel("Delta price")
+    plt.savefig(f"figs/price_over_time_{name}.png", dpi=400)
     plt.show()
 
 
 def plot_actions_as_function_of_time(
-    actions: np.ndarray, chosen_areas: T.List[int], colors: T.List[str]
+    actions: np.ndarray, chosen_areas: T.List[int], colors: T.List[str], name: str
 ):
     """Plot boxplot."""
-    fig, ax = plt.subplots(actions.shape[0], 1, sharey=True)
+    _, ax = plt.subplots(actions.shape[0], 1, sharey=True)
     for actor_idx in range(actions.shape[0]):
         box_plots = []
         actual_areas = [x - 1 for x in chosen_areas]
@@ -185,33 +190,47 @@ def plot_actions_as_function_of_time(
             [f"Area: {area}" for area in chosen_areas],
             loc="upper right",
         )
-        ax[actor_idx].set_title(f"Actor {actor_idx+1}", fontsize=16)
+        # ax[actor_idx].set_title(f"Actor {actor_idx+1}", fontsize=16)
         ax[actor_idx].set_ylabel("Concentration")
     plt.xlabel("Time")
+    plt.savefig(f"figs/box_plot_{name}.png", dpi=400)
     plt.show()
 
 
 def plot_price_distribution(
-    model_data_pairs: T.List, data: pd.DataFrame, tf=20, n_actors=2, n_epochs=10
+    model_data_pair_prices: defaultdict[int, T.List[ModelDataPair]],
+    name: str,
+    data: pd.DataFrame,
+    n_actors=2,
 ):
     """Price distribution plot."""
-    fig, ax = plt.subplots(n_actors, 1)
-    for actor_idx, model_data_pair in enumerate(model_data_pairs):
-        price = model_data_pair.actor_data.graph_state.price
-        prices = [
-            value
-            for inner_dict in price.values()
-            for value in inner_dict.values()
-            if value != 0
-        ]
+    _, ax = plt.subplots(n_actors, 1, sharex=True)
 
-        price_actor = prices
-        sns.kdeplot(x=price_actor, ax=ax[actor_idx], label="Estimated price")
+    all_prices = defaultdict(list)
+    for idx, rl_actor in model_data_pair_prices.items():
+        # Note to self here i loop over actors, so epoch is a list of 10 model_data_pair objects for actor i
+
+        prices = []
+        for epoch in rl_actor:
+            epoch_price = epoch.actor_data.graph_state.price
+            epoch_travel_time = epoch.actor_data.flow.travel_time
+            for od, od_prices in epoch_price.items():
+                if od_prices[0] == 0:
+                    continue
+                for t, od_price in od_prices.items():
+                    if epoch_travel_time[od][t] > 1:
+                        all_prices[idx].append(od_price)
+
+    for actor_idx in range(n_actors):
+        prices = all_prices[actor_idx]
+        sns.kdeplot(x=prices, ax=ax[actor_idx], label="Estimated price")
         sns.kdeplot(x="price", data=data, ax=ax[actor_idx], label="Price in data")
         # sns.histplot(x=price_actor, stat="density", alpha=0.4, ax=ax[actor_idx])
-        ax[actor_idx].set_title(f"Price distribution - Actor {actor_idx + 1}")
+        # ax[actor_idx].set_title(f"Price distribution - Actor {actor_idx + 1}")
         ax[actor_idx].legend()
+        ax[actor_idx].set_xlabel("Price")
 
+    plt.savefig(f"figs/price_distribution_{name}.png", dpi=400)
     plt.show()
 
 
@@ -231,9 +250,7 @@ def flatten_data(data: T.List, column_name: str):
 
 
 def plot_price_vs_other_attribute(
-    price_dicts: T.List,
-    other_attribute: T.List,
-    name_for_other: str,
+    price_dicts: T.List, other_attribute: T.List, name_for_other: str, plot_name: str
 ):
     """Price vs. other attribute plot."""
     df_price = pd.DataFrame(flatten_data(price_dicts, "price"))
@@ -250,6 +267,7 @@ def plot_price_vs_other_attribute(
     plt.xlabel("Price")
     plt.ylabel(name_for_other.replace("_", " ").capitalize())
     plt.title(f"Price vs. {name_for_other.replace('_', ' ').capitalize()}")
+    plt.savefig(f"figs/price_vs_{name_for_other}_{plot_name}.png", dpi=400)
     plt.show()
 
 
@@ -261,3 +279,36 @@ def chord_chart_of_trips_in_data(data: pd.DataFrame):
     df.columns = ["source", "target", "value"]
     chord = hv.Chord(df)
     show(hv.render(chord))
+
+
+def get_summary_stats(
+    prices: T.List[defaultdict[int, list]],
+    epoch_rewards: defaultdict[int, list],
+    run_name: str,
+):
+    """Get summary stats for a test run."""
+    mean_prices = defaultdict(list)
+    for price_dict in prices:
+        for key, val in price_dict.items():
+            mean_prices[key].append(np.mean(val))
+
+    mean_prices = {key: np.mean(val) for key, val in mean_prices.items()}
+    mean_rewards = {key: np.mean(val) for key, val in epoch_rewards.items()}
+    std_prices = {key: np.std(val) for key, val in mean_prices.items()}
+    std_rewards = {key: np.std(val) for key, val in epoch_rewards.items()}
+    cov_rewards = np.cov(epoch_rewards[0], epoch_rewards[1])[0, 1]
+    std_sum_rewards = np.sqrt(
+        std_rewards[0] ** 2 + std_rewards[1] ** 2 + 2 * cov_rewards
+    )
+
+    output = {
+        "mean_prices": mean_prices,
+        "mean_rewards": mean_rewards,
+        "std_prices": std_prices,
+        "std_rewards": std_rewards,
+        "mean_total_reward": sum(list(mean_rewards.values())),
+        "std_total_reward": std_sum_rewards,
+    }
+
+    with open(f"run_stats/{run_name}.json", "w+") as f:
+        json.dump(output, f)
