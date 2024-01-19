@@ -102,8 +102,8 @@ def main(config: SACConfig, run_name: str):
         data = json.load(file)
 
     df = pd.DataFrame(data["demand"])
-    # init_price_dict = df.groupby(["origin", "destination"]).price.mean().to_dict()
-    # init_price_mean = df.price.mean()
+    init_price_dict = df.groupby(["origin", "destination"]).price.mean().to_dict()
+    init_price_mean = df.price.mean()
     df["converted_time_stamp"] = (
         df["time_stamp"] - config.json_hr[config.city] * 60
     ) // config.json_tstep
@@ -188,7 +188,7 @@ def main(config: SACConfig, run_name: str):
                         ] = price[0][0]
                         model_data_pair.actor_data.graph_state.price[i, j][
                             step + 1
-                        ] = max((price[0][0] * tt), 10)
+                        ] = init_price_dict.get((i,j), init_price_mean) #max((price[0][0] * tt), 10)
                         model_data_pair.actor_data.flow.travel_time[i, j][step + 1] = tt
 
                         # model_data_pair.actor_data.graph_state.price[i, j][step + 1] = (
@@ -308,4 +308,4 @@ if __name__ == "__main__":
     config.max_episodes = 10
     # config.total_number_of_cars = 374
     config.wandb_mode = "disabled"
-    main(config, run_name="400_cars")
+    main(config, run_name="Price_strategy_1")
