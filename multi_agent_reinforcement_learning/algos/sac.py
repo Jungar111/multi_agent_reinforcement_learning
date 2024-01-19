@@ -403,7 +403,6 @@ class SAC(nn.Module):
             edge_index2,
             reward_batch,
             action_batch,
-            price,
         ) = (
             data.x_s,
             data.edge_index_s,
@@ -411,9 +410,9 @@ class SAC(nn.Module):
             data.edge_index_t,
             data.reward,
             data.action.reshape(-1, self.nodes),
-            data.price,
         )
         if self.config.include_price:
+            price = data.price
             q1 = self.critic1(state_batch, edge_index, action_batch, price)
             q2 = self.critic2(state_batch, edge_index, action_batch, price)
         else:

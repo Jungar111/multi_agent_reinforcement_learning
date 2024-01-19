@@ -172,13 +172,11 @@ class AMoD:
         if self.config.include_price:
             vot = []
             for model_data_pair in model_data_pairs:
-                vot.append(
-                    max(
-                        model_data_pair.actor_data.graph_state.price[origin, dest][t]
-                        / model_data_pair.actor_data.flow.travel_time[origin, dest][t],
-                        1,
-                    )
-                )
+                price = model_data_pair.actor_data.graph_state.price[origin, dest][t]
+                travel_time = model_data_pair.actor_data.flow.travel_time[origin, dest][
+                    t
+                ]
+                vot.append(max(price / travel_time, 1))
         else:
             vot = []
             for model_data_pair in model_data_pairs:
@@ -507,6 +505,14 @@ class AMoD:
 
             tripAttr = self.scenario.get_random_demand(reset=True)
             # trip attribute (origin, destination, time of request, demand, price)
+            self.price = defaultdict(dict)  # price
+            for i, j, t, d, p in tripAttr:
+                # trip attribute (origin, destination, time of request, demand, price)
+                self.demand[i, j][t] = d
+                self.price[i, j][t] = p
+                self.depDemand[i][t] += d
+                self.arrDemand[i][t + self.demand_time[i, j][t]] += d
+
             for i, j, t, d, p in tripAttr:
                 self.demand[i, j][t] = d
                 model_data_pair.actor_data.graph_state.price[i, j][0] = p
