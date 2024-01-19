@@ -350,9 +350,9 @@ if __name__ == "__main__":
     config.tf = 20
 
     if config.run_name == "":
-        config.run_name = "Mean price for OD-pair + price difference for state (eq. 3.37 in pdf) - RUN 1"
+        config.run_name = "Mean price for OD-pair + price difference for state (eq. 3.37 in pdf) - RUN 2"
 
-    config.max_episodes = 5000
+    config.max_episodes = 1000
     config.include_price = True
     config.dynamic_scaling = False
     # config.test = True

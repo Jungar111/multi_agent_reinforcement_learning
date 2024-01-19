@@ -172,13 +172,9 @@ class AMoD:
         if self.config.include_price:
             vot = []
             for model_data_pair in model_data_pairs:
-                vot.append(
-                    max(
-                        model_data_pair.actor_data.graph_state.price[origin, dest][t]
-                        / model_data_pair.actor_data.flow.travel_time[origin, dest][t],
-                        1,
-                    )
-                )
+                price = model_data_pair.actor_data.graph_state.price[origin, dest][t]
+                travel_time = model_data_pair.actor_data.flow.travel_time[origin, dest][t]
+                vot.append(max(price*2 / travel_time, 1))
         else:
             vot = []
             for model_data_pair in model_data_pairs:
