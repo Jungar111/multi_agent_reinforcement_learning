@@ -258,7 +258,6 @@ def plot_price_vs_other_attribute(
     df = df_price.merge(df_demand, on=["epoch", "time_step", "actor"]).sort_values(
         "price"
     )
-    print(df.head())
 
     df_actor_1 = df[df["actor"] == 0]
     df_actor_2 = df[df["actor"] == 1]
@@ -288,12 +287,12 @@ def get_summary_stats(
     config: SACConfig,
 ):
     """Get summary stats for a test run."""
-    prices = defaultdict(list)
+    all_prices = defaultdict(list)
     mean_prices = defaultdict(list)
     for price_dict in prices:
         for key, val in price_dict.items():
             mean_prices[key].append(np.mean(val))
-            prices[key] += list(val)
+            all_prices[key] += list(val)
 
     mean_prices = {key: np.mean(val) for key, val in mean_prices.items()}
     mean_rewards = {key: np.mean(val) for key, val in epoch_rewards.items()}

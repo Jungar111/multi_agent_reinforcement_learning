@@ -175,7 +175,7 @@ class GNNActor(nn.Module):
             action = (concentration) / (concentration.sum() + 1e-20)
             log_prob = None
             if self.config.include_price:
-                pi_action_p = mu[0, 0].detach()
+                pi_action_p = mu.detach()
         else:
             m = Dirichlet(concentration + 1e-20)
             action = m.rsample()
@@ -187,9 +187,13 @@ class GNNActor(nn.Module):
         if self.config.include_price:
             # Correction formula for Tanh squashing see: https://github.com/openai/spinningup/blob/master/spinup/algos/pytorch/sac/core.py
             # and appendix C in original SAC paper.
-            log_prob_p -= 2 * (
-                np.log(2) - pi_action_p[0] - F.softplus(-2 * pi_action_p[0])
-            )
+            if deterministic:
+                log_prob, log_prob_p = None, None
+            else:
+                log_prob_p -= 2 * (
+                    np.log(2) - pi_action_p[0] - F.softplus(-2 * pi_action_p[0])
+                )
+
             price_tanh = torch.tanh(pi_action_p)
 
             price = map_to_price(
