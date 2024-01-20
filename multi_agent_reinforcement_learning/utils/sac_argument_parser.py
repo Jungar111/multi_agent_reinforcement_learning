@@ -15,18 +15,14 @@ def parse_arguments(cuda):
     if platform.system() == "Linux":
         cplex_path = "/opt/ibm/ILOG/CPLEX_Studio2211/opl/bin/x86-64_linux/"
     elif platform.system() == "Windows":
-        cplex_path = (
-            r"C:\Program Files\IBM\ILOG\CPLEX_Studio2211\\opl\\bin\\x64_win64\\"
-        )
+        cplex_path = r"C:\Program Files\IBM\ILOG\CPLEX_Studio2211\\opl\\bin\\x64_win64\\"
     else:
         raise NotImplementedError()
 
     parser = argparse.ArgumentParser(description="SAC-GNN")
 
     # Simulator parameters
-    parser.add_argument(
-        "--seed", type=int, default=10, metavar="S", help="random seed (default: 10)"
-    )
+    parser.add_argument("--seed", type=int, default=10, metavar="S", help="random seed (default: 10)")
 
     parser.add_argument(
         "--json_tstep",
@@ -74,9 +70,7 @@ def parse_arguments(cuda):
         help="number of steps per episode (default: T=20)",
     )
 
-    parser.add_argument(
-        "--no-cuda", type=bool, default=not cuda, help="disables CUDA training"
-    )
+    parser.add_argument("--no-cuda", type=bool, default=not cuda, help="disables CUDA training")
 
     parser.add_argument(
         "--batch_size",
@@ -155,9 +149,7 @@ def parse_arguments(cuda):
         help="Name for the run on W&B",
     )
 
-    parser.add_argument(
-        "-f", "--fff", help="a dummy argument to fool ipython", default="1"
-    )
+    parser.add_argument("-f", "--fff", help="a dummy argument to fool ipython", default="1")
 
     args = parser.parse_args()
     args.cuda = not args.no_cuda and torch.cuda.is_available()

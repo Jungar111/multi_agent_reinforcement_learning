@@ -4,9 +4,7 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 
-style_path = Path(
-    "multi_agent_reinforcement_learning", "utils", "master_2023.mplstyle"
-).absolute()
+style_path = Path("multi_agent_reinforcement_learning", "utils", "master_2023.mplstyle").absolute()
 
 plt.style.use(str(style_path))
 

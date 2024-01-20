@@ -69,9 +69,7 @@ class AMoD:
             for e in self.G.out_edges(i):
                 self.edges.append(e)
         self.edges = list(set(self.edges))
-        self.nedge = [
-            len(self.G.out_edges(n)) + 1 for n in self.region
-        ]  # number of edges leaving each region
+        self.nedge = [len(self.G.out_edges(n)) + 1 for n in self.region]  # number of edges leaving each region
         for i, j in self.G.edges:
             self.G.edges[i, j]["time"] = self.reb_time[i, j][
                 self.time
@@ -108,21 +106,11 @@ class AMoD:
             price = self.price
 
         demandAttr = [
-            (i, j, demand[i, j][t], price[i, j][t])
-            for i, j in demand
-            if t in demand[i, j] and demand[i, j][t] > 1e-3
+            (i, j, demand[i, j][t], price[i, j][t]) for i, j in demand if t in demand[i, j] and demand[i, j][t] > 1e-3
         ]  # Setup demand and price at time t.
         accTuple = [(n, acc[n][t + 1]) for n in acc]
-        modPath = (
-            os.getcwd().replace("\\", "/")
-            + "/multi_agent_reinforcement_learning/cplex_mod/"
-        )
-        matchingPath = (
-            os.getcwd().replace("\\", "/")
-            + "/saved_files/cplex_logs/matching/"
-            + PATH
-            + "/"
-        )
+        modPath = os.getcwd().replace("\\", "/") + "/multi_agent_reinforcement_learning/cplex_mod/"
+        matchingPath = os.getcwd().replace("\\", "/") + "/saved_files/cplex_logs/matching/" + PATH + "/"
         if not os.path.exists(matchingPath):
             os.makedirs(matchingPath)
         datafile = matchingPath + f"data_{name}_{t}.dat"
@@ -141,9 +129,7 @@ class AMoD:
             my_env["LD_LIBRARY_PATH"] = CPLEXPATH
         out_file = matchingPath + f"out_{name}_{t}.dat"
         with open(out_file, "w") as output_f:
-            subprocess.check_call(
-                [CPLEXPATH + "oplrun", modfile, datafile], stdout=output_f, env=my_env
-            )
+            subprocess.check_call([CPLEXPATH + "oplrun", modfile, datafile], stdout=output_f, env=my_env)
         output_f.close()
         flow = defaultdict(float)
         with open(resfile, "r", encoding="utf8") as file:
@@ -173,17 +159,14 @@ class AMoD:
             vot = []
             for model_data_pair in model_data_pairs:
                 price = model_data_pair.actor_data.graph_state.price[origin, dest][t]
-                travel_time = model_data_pair.actor_data.flow.travel_time[origin, dest][
-                    t
-                ]
+                travel_time = model_data_pair.actor_data.flow.travel_time[origin, dest][t]
                 vot.append(max(price / travel_time, 1))
         else:
             vot = []
             for model_data_pair in model_data_pairs:
                 vot.append(
                     max(
-                        self.price[origin, dest][t]
-                        / model_data_pair.actor_data.flow.travel_time[origin, dest][t],
+                        self.price[origin, dest][t] / model_data_pair.actor_data.flow.travel_time[origin, dest][t],
                         1,
                     )
                 )
@@ -195,9 +178,7 @@ class AMoD:
             no_customers_for_company = chosen_company.get(actor_idx, 0)
 
             if self.config.cancellation:
-                probability_of_cancellation = 1 - hill_equation(
-                    x=vot[actor_idx], k=self.scenario.vot
-                )
+                probability_of_cancellation = 1 - hill_equation(x=vot[actor_idx], k=self.scenario.vot)
                 customers_after_cancellation = np.random.binomial(
                     no_customers_for_company, p=probability_of_cancellation
                 )
@@ -209,46 +190,26 @@ class AMoD:
                 customers_after_cancellation,
             )
 
-            model_data_pairs[actor_idx].actor_data.graph_state.demand[origin, dest][
-                t
-            ] = no_cars
+            model_data_pairs[actor_idx].actor_data.graph_state.demand[origin, dest][t] = no_cars
 
-            excess_cars = (
-                chosen_company.get(actor_idx, 0)
-                - cars_in_area_for_each_company[actor_idx]
-            )
+            excess_cars = chosen_company.get(actor_idx, 0) - cars_in_area_for_each_company[actor_idx]
 
-            overflow_lost_cars = (
-                chosen_company.get(actor_idx, 0)
-                - cars_in_area_for_each_company[actor_idx]
-            )
+            overflow_lost_cars = chosen_company.get(actor_idx, 0) - cars_in_area_for_each_company[actor_idx]
             bus_lost_cars = no_customers_for_company - customers_after_cancellation
 
-            model_data_pairs[
-                actor_idx
-            ].actor_data.model_log.bus_unmet_demand += bus_lost_cars
+            model_data_pairs[actor_idx].actor_data.model_log.bus_unmet_demand += bus_lost_cars
 
             if excess_cars > 0:
                 model_data_pairs[actor_idx].actor_data.unmet_demand[origin, dest][t] = (
                     overflow_lost_cars + bus_lost_cars
                 )
-                model_data_pairs[
-                    actor_idx
-                ].actor_data.model_log.overflow_unmet_demand += overflow_lost_cars
+                model_data_pairs[actor_idx].actor_data.model_log.overflow_unmet_demand += overflow_lost_cars
             else:
-                model_data_pairs[actor_idx].actor_data.unmet_demand[origin, dest][
-                    t
-                ] = bus_lost_cars
+                model_data_pairs[actor_idx].actor_data.unmet_demand[origin, dest][t] = bus_lost_cars
 
-            model_data_pairs[
+            model_data_pairs[actor_idx].actor_data.model_log.total_unmet_demand += model_data_pairs[
                 actor_idx
-            ].actor_data.model_log.total_unmet_demand += model_data_pairs[
-                actor_idx
-            ].actor_data.unmet_demand[
-                origin, dest
-            ][
-                t
-            ]
+            ].actor_data.unmet_demand[origin, dest][t]
 
     # pax step
     def pax_step(
@@ -290,8 +251,7 @@ class AMoD:
         for (origin, dest), area_demand in self.demand.items():
             no_customers = area_demand[t]
             cars_in_area_for_each_company = [
-                int(model_data_pair.actor_data.graph_state.acc[origin][t])
-                for model_data_pair in model_data_pairs
+                int(model_data_pair.actor_data.graph_state.acc[origin][t]) for model_data_pair in model_data_pairs
             ]
 
             self.distribute_based_on_price(
@@ -305,9 +265,7 @@ class AMoD:
         self.ext_reward = np.zeros(self.nregion)
         for i in self.region:
             for model_data_pair in model_data_pairs:
-                model_data_pair.actor_data.graph_state.acc[i][
-                    t + 1
-                ] = model_data_pair.actor_data.graph_state.acc[i][t]
+                model_data_pair.actor_data.graph_state.acc[i][t + 1] = model_data_pair.actor_data.graph_state.acc[i][t]
 
         if pax_action is None:
             # default matching algorithm used if isMatching is True, matching method will need the
@@ -340,51 +298,36 @@ class AMoD:
                     < model_data_pair.actor_data.graph_state.acc[i][t + 1] + 1e-3
                 )
                 # define servedDemand as the current passenger action
-                model_data_pair.actor_data.flow.served_demand[i, j][
-                    t
-                ] = model_data_pair.actor_data.actions.pax_action[k]
+                model_data_pair.actor_data.flow.served_demand[i, j][t] = model_data_pair.actor_data.actions.pax_action[
+                    k
+                ]
                 model_data_pair.actor_data.flow.pax_flow[i, j][
                     t + self.demand_time[i, j][t]
                 ] = model_data_pair.actor_data.actions.pax_action[k]
                 model_data_pair.actor_data.info.operating_cost += (
-                    self.demand_time[i, j][t]
-                    * self.beta
-                    * model_data_pair.actor_data.actions.pax_action[k]
+                    self.demand_time[i, j][t] * self.beta * model_data_pair.actor_data.actions.pax_action[k]
                 )
                 # define the cost of picking up the current passenger
-                model_data_pair.actor_data.graph_state.acc[i][
-                    t + 1
-                ] -= model_data_pair.actor_data.actions.pax_action[k]
+                model_data_pair.actor_data.graph_state.acc[i][t + 1] -= model_data_pair.actor_data.actions.pax_action[k]
                 # Add to served_demand
-                model_data_pair.actor_data.info.served_demand += (
-                    model_data_pair.actor_data.flow.served_demand[i, j][t]
-                )
+                model_data_pair.actor_data.info.served_demand += model_data_pair.actor_data.flow.served_demand[i, j][t]
                 model_data_pair.actor_data.graph_state.dacc[j][
                     t + self.demand_time[i, j][t]
-                ] += model_data_pair.actor_data.flow.pax_flow[i, j][
-                    t + self.demand_time[i, j][t]
-                ]
+                ] += model_data_pair.actor_data.flow.pax_flow[i, j][t + self.demand_time[i, j][t]]
                 # add to reward
                 if self.config.include_price:
-                    model_data_pair.actor_data.rewards.pax_reward += (
-                        model_data_pair.actor_data.actions.pax_action[k]
-                        * (
-                            model_data_pair.actor_data.graph_state.price[i, j][t]
-                            - self.demand_time[i, j][t] * self.beta
-                        )
-                    )
-                    model_data_pair.actor_data.info.revenue += (
-                        model_data_pair.actor_data.actions.pax_action[k]
-                        * (model_data_pair.actor_data.graph_state.price[i, j][t])
+                    model_data_pair.actor_data.rewards.pax_reward += model_data_pair.actor_data.actions.pax_action[
+                        k
+                    ] * (model_data_pair.actor_data.graph_state.price[i, j][t] - self.demand_time[i, j][t] * self.beta)
+                    model_data_pair.actor_data.info.revenue += model_data_pair.actor_data.actions.pax_action[k] * (
+                        model_data_pair.actor_data.graph_state.price[i, j][t]
                     )
                 else:
-                    model_data_pair.actor_data.rewards.pax_reward += (
-                        model_data_pair.actor_data.actions.pax_action[k]
-                        * (self.price[i, j][t] - self.demand_time[i, j][t] * self.beta)
-                    )
-                    model_data_pair.actor_data.info.revenue += (
-                        model_data_pair.actor_data.actions.pax_action[k]
-                        * (self.price[i, j][t])
+                    model_data_pair.actor_data.rewards.pax_reward += model_data_pair.actor_data.actions.pax_action[
+                        k
+                    ] * (self.price[i, j][t] - self.demand_time[i, j][t] * self.beta)
+                    model_data_pair.actor_data.info.revenue += model_data_pair.actor_data.actions.pax_action[k] * (
+                        self.price[i, j][t]
                     )
 
             # Update time
@@ -423,20 +366,12 @@ class AMoD:
                 model_data_pair.actor_data.flow.reb_flow[i, j][
                     t + self.reb_time[i, j][t]
                 ] = model_data_pair.actor_data.actions.reb_action[k]
-                model_data_pair.actor_data.graph_state.acc[i][
-                    t + 1
-                ] -= model_data_pair.actor_data.actions.reb_action[k]
+                model_data_pair.actor_data.graph_state.acc[i][t + 1] -= model_data_pair.actor_data.actions.reb_action[k]
                 model_data_pair.actor_data.graph_state.dacc[j][
                     t + self.reb_time[i, j][t]
-                ] += model_data_pair.actor_data.flow.reb_flow[i, j][
-                    t + self.reb_time[i, j][t]
-                ]
+                ] += model_data_pair.actor_data.flow.reb_flow[i, j][t + self.reb_time[i, j][t]]
 
-                reb_cost = (
-                    self.reb_time[i, j][t]
-                    * self.beta
-                    * model_data_pair.actor_data.actions.reb_action[k]
-                )
+                reb_cost = self.reb_time[i, j][t] * self.beta * model_data_pair.actor_data.actions.reb_action[k]
 
                 model_data_pair.actor_data.info.rebalancing_cost += reb_cost
                 model_data_pair.actor_data.info.operating_cost += reb_cost
@@ -451,20 +386,18 @@ class AMoD:
                 # this means that after pax arrived, vehicles can only be rebalanced in the next time step, let me
                 # know if you have different opinion
                 i, j = self.edges[k]
-                if (
-                    (i, j) in model_data_pair.actor_data.flow.reb_flow
-                    and t in model_data_pair.actor_data.flow.reb_flow[i, j]
-                ):
-                    model_data_pair.actor_data.graph_state.acc[j][
-                        t + 1
-                    ] += model_data_pair.actor_data.flow.reb_flow[i, j][t]
-                if (
-                    (i, j) in model_data_pair.actor_data.flow.pax_flow
-                    and t in model_data_pair.actor_data.flow.pax_flow[i, j]
-                ):
-                    model_data_pair.actor_data.graph_state.acc[j][
-                        t + 1
-                    ] += model_data_pair.actor_data.flow.pax_flow[i, j][t]
+                if (i, j) in model_data_pair.actor_data.flow.reb_flow and t in model_data_pair.actor_data.flow.reb_flow[
+                    i, j
+                ]:
+                    model_data_pair.actor_data.graph_state.acc[j][t + 1] += model_data_pair.actor_data.flow.reb_flow[
+                        i, j
+                    ][t]
+                if (i, j) in model_data_pair.actor_data.flow.pax_flow and t in model_data_pair.actor_data.flow.pax_flow[
+                    i, j
+                ]:
+                    model_data_pair.actor_data.graph_state.acc[j][t + 1] += model_data_pair.actor_data.flow.pax_flow[
+                        i, j
+                    ][t]
 
         self.time += 1
 

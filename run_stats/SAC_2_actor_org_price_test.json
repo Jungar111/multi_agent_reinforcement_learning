@@ -1,38 +1,38 @@
 {
     "mean_prices": {
-        "0": 2.4920685410499575,
-        "1": 2.0306111478805544
+        "0": 5.654148976802826,
+        "1": 6.103549609184265
     },
     "mean_served_demand": {
-        "0": 379.8,
-        "1": 476.2
+        "0": 454.5,
+        "1": 456.2
     },
     "mean_cancelled_demand": {
-        "0": 154.4,
-        "1": 120.4
+        "0": 119.4,
+        "1": 125.5
     },
     "mean_unmet_demand": {
-        "0": 223.1,
-        "1": 218.3
+        "0": 187.6,
+        "1": 211.8
     },
     "mean_rewards": {
-        "0": 8587.326076378822,
-        "1": 8857.887168116567
+        "0": 8080.298727843391,
+        "1": 8228.37092483272
     },
     "std_prices": {
-        "0": 0.05498267330554249,
-        "1": 0.013058394543420285
+        "0": 0.008304058455703449,
+        "1": 0.014019815167709287
     },
     "std_rewards": {
-        "0": 369.47350090977557,
-        "1": 304.499085301624
+        "0": 240.06601036920503,
+        "1": 354.4500105583116
     },
-    "mean_total_reward": 17445.21324449539,
-    "mean_total_served_demand": 856.0,
-    "mean_total_cancelled_demand": 274.8,
-    "mean_total_unmet_demand": 441.4,
-    "std_total_reward": 318.74409482573793,
-    "std_sum_served_demand": 11.188684760357972,
-    "std_sum_cancelled_demand": 13.042324264571182,
-    "std_sum_unmet_demand": 29.652993103563766
+    "mean_total_reward": 16308.669652676112,
+    "mean_total_served_demand": 910.7,
+    "mean_total_cancelled_demand": 244.9,
+    "mean_total_unmet_demand": 399.4,
+    "std_total_reward": 447.3844432881125,
+    "std_sum_served_demand": 22.46797721202334,
+    "std_sum_cancelled_demand": 13.772799279739758,
+    "std_sum_unmet_demand": 18.699376103674336
 }

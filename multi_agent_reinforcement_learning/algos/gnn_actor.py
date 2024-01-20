@@ -50,15 +50,11 @@ class GNNActor(nn.Module):
         if self.config.include_price:
             price_pool = global_mean_pool(
                 last_hidden_layer,
-                torch.tensor(
-                    [0 for i in range(int(self.config.n_regions[self.config.city]))]
-                ),
+                torch.tensor([0 for i in range(int(self.config.n_regions[self.config.city]))]),
             )
             # outputs mu and sigma for a normal distribution
             mu = self.price_lin_mu(price_pool)  # [-1,1]
-            log_std = torch.clamp(
-                self.price_lin_std(price_pool), self.log_std_min, self.log_std_max
-            )
+            log_std = torch.clamp(self.price_lin_std(price_pool), self.log_std_min, self.log_std_max)
             sigma = torch.exp(log_std)
 
             return a_out, mu, sigma

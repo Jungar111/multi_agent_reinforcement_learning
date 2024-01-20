@@ -39,19 +39,11 @@ class PaxStepInfo:
 class GraphState:
     """Input to the GNNs."""
 
-    price: defaultdict[T.Tuple[int, int], T.Dict[int, float]] = field(
-        default_factory=lambda: defaultdict(dict)
-    )
+    price: defaultdict[T.Tuple[int, int], T.Dict[int, float]] = field(default_factory=lambda: defaultdict(dict))
     time: int = 0
-    demand: defaultdict[T.Tuple[int, int], T.Dict[int, float]] = field(
-        default_factory=lambda: defaultdict(dict)
-    )
-    acc: defaultdict[T.Tuple[int, int], T.Dict[int, float]] = field(
-        default_factory=lambda: defaultdict(dict)
-    )
-    dacc: defaultdict[T.Tuple[int, int], T.Dict[int, float]] = field(
-        default_factory=lambda: defaultdict(dict)
-    )
+    demand: defaultdict[T.Tuple[int, int], T.Dict[int, float]] = field(default_factory=lambda: defaultdict(dict))
+    acc: defaultdict[T.Tuple[int, int], T.Dict[int, float]] = field(default_factory=lambda: defaultdict(dict))
+    dacc: defaultdict[T.Tuple[int, int], T.Dict[int, float]] = field(default_factory=lambda: defaultdict(dict))
 
 
 @dataclass
@@ -74,23 +66,13 @@ class Rewards:
 class Flow:
     """Describes the flow, and other stats for the actor."""
 
-    reb_flow: defaultdict[T.Tuple[int, int], T.Dict[int, float]] = field(
-        default_factory=lambda: defaultdict(dict)
-    )
-    pax_flow: defaultdict[T.Tuple[int, int], T.Dict[int, float]] = field(
-        default_factory=lambda: defaultdict(dict)
-    )
+    reb_flow: defaultdict[T.Tuple[int, int], T.Dict[int, float]] = field(default_factory=lambda: defaultdict(dict))
+    pax_flow: defaultdict[T.Tuple[int, int], T.Dict[int, float]] = field(default_factory=lambda: defaultdict(dict))
     desired_acc: T.Dict[int, int] = field(default_factory=dict)
-    served_demand: defaultdict[T.Tuple[int, int], T.Dict[int, int]] = field(
-        default_factory=lambda: defaultdict(dict)
-    )
+    served_demand: defaultdict[T.Tuple[int, int], T.Dict[int, int]] = field(default_factory=lambda: defaultdict(dict))
     market_share: float = 0
-    value_of_time: defaultdict[T.Tuple[int, int], T.Dict[int, float]] = field(
-        default_factory=lambda: defaultdict(dict)
-    )
-    travel_time: defaultdict[T.Tuple[int, int], T.Dict[int, float]] = field(
-        default_factory=lambda: defaultdict(dict)
-    )
+    value_of_time: defaultdict[T.Tuple[int, int], T.Dict[int, float]] = field(default_factory=lambda: defaultdict(dict))
+    travel_time: defaultdict[T.Tuple[int, int], T.Dict[int, float]] = field(default_factory=lambda: defaultdict(dict))
 
 
 @dataclass
@@ -108,9 +90,7 @@ class ActorData:
     name: str
     no_cars: int
     graph_state: GraphState = field(default_factory=GraphState)
-    unmet_demand: defaultdict[T.Tuple[int, int], T.Dict[int, float]] = field(
-        default_factory=lambda: defaultdict(dict)
-    )
+    unmet_demand: defaultdict[T.Tuple[int, int], T.Dict[int, float]] = field(default_factory=lambda: defaultdict(dict))
     actions: Actions = field(default_factory=Actions)
     flow: Flow = field(default_factory=Flow)
     model_log: ModelLog = field(default_factory=ModelLog)

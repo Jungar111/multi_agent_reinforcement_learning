@@ -64,9 +64,7 @@ class ActorCritic(nn.Module):
         self.rewards = []
         self.to(self.config.device)
 
-    def _forward_with_price(
-        self, data: T.Optional[T.Dict], obs: GraphState, jitter: float = 1e-20
-    ):
+    def _forward_with_price(self, data: T.Optional[T.Dict], obs: GraphState, jitter: float = 1e-20):
         """Forward of both actor and critic in the current enviorenment defined by data.
 
         softplus used on the actor along with 'jitter'.
@@ -86,9 +84,7 @@ class ActorCritic(nn.Module):
         value = self.critic(x)
         return concentration, mu, std, value
 
-    def _forward_without_price(
-        self, data: T.Optional[T.Dict], obs: GraphState, jitter: float = 1e-20
-    ):
+    def _forward_without_price(self, data: T.Optional[T.Dict], obs: GraphState, jitter: float = 1e-20):
         """Forward of both actor and critic in the current enviorenment defined by data.
 
         softplus used on the actor along with 'jitter'.
@@ -131,9 +127,7 @@ class ActorCritic(nn.Module):
 
         return state
 
-    def select_action(
-        self, obs: GraphState, data: T.Optional[T.Dict], probabilistic: bool
-    ):
+    def select_action(self, obs: GraphState, data: T.Optional[T.Dict], probabilistic: bool):
         """Select an action based on the distribution of the vehicles with Dirichlet.
 
         Saves the log of the new action along with the value computed by the critic
@@ -141,9 +135,7 @@ class ActorCritic(nn.Module):
         return: List of the next actions
         """
         if self.config.include_price:
-            concentration, mu, std, value = self.forward(
-                obs=obs, data=data, include_price=True
-            )
+            concentration, mu, std, value = self.forward(obs=obs, data=data, include_price=True)
         else:
             concentration, value = self.forward(obs=obs, data=data, include_price=False)
 
@@ -170,9 +162,7 @@ class ActorCritic(nn.Module):
                     )
                 )
             else:
-                self.saved_actions.append(
-                    SavedAction(log_prob=m.log_prob(action), value=value)
-                )
+                self.saved_actions.append(SavedAction(log_prob=m.log_prob(action), value=value))
         else:
             action = (concentration) / (concentration.sum() + 1e-20)
             action = action.detach()
@@ -200,17 +190,13 @@ class ActorCritic(nn.Module):
             returns.insert(0, R)
 
         returns = torch.tensor(np.array(returns)).to(self.config.device)
-        returns = (returns - returns.mean()) / (
-            returns.std() + self.eps
-        )  # Standadize the returns object
+        returns = (returns - returns.mean()) / (returns.std() + self.eps)  # Standadize the returns object
 
         for saved_action, R in zip(saved_actions, returns):
             advantage = R - saved_action.value.item()
 
             # calculate actor (policy) loss
-            policy_losses.append(
-                -saved_action.log_prob.to(self.config.device) * advantage
-            )
+            policy_losses.append(-saved_action.log_prob.to(self.config.device) * advantage)
 
             # calculate critic (value) loss using L1 smooth loss
             value_losses.append(

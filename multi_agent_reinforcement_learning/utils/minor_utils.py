@@ -4,14 +4,7 @@ import numpy as np
 
 def mat2str(mat):
     """Mat2Str method."""
-    return (
-        str(mat)
-        .replace("'", '"')
-        .replace("(", "<")
-        .replace(")", ">")
-        .replace("[", "{")
-        .replace("]", "}")
-    )
+    return str(mat).replace("'", '"').replace("(", "<").replace(")", ">").replace("[", "{").replace("]", "}")
 
 
 def dictsum(dic, t):

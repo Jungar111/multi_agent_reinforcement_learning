@@ -39,29 +39,17 @@ class GNNParser:
 
         Return the data object called 'data' which is used in the Actors and critc forward pass.
         """
-        first_t = torch.tensor(
-            [obs.acc[n][self.env.time + 1] * self.s for n in self.env.region]
-        )
+        first_t = torch.tensor([obs.acc[n][self.env.time + 1] * self.s for n in self.env.region])
         second_t = torch.tensor(
             [
-                [
-                    (obs.acc[n][self.env.time + 1] + obs.dacc[n][t]) * self.s
-                    for n in self.env.region
-                ]
+                [(obs.acc[n][self.env.time + 1] + obs.dacc[n][t]) * self.s for n in self.env.region]
                 for t in range(self.env.time + 1, self.env.time + self.T + 1)
             ]
         )
         third_t = torch.tensor(
             [
                 [
-                    sum(
-                        [
-                            (self.demand_input[i, j][t])
-                            * (self.env.price[i, j][t])
-                            * self.s
-                            for j in self.env.region
-                        ]
-                    )
+                    sum([(self.demand_input[i, j][t]) * (self.env.price[i, j][t]) * self.s for j in self.env.region])
                     for i in self.env.region
                 ]
                 for t in range(self.env.time + 1, self.env.time + self.T + 1)
@@ -84,12 +72,8 @@ class GNNParser:
         if config.json_file is not None and "4x4" not in str(config.json_file):
             edge_index = torch.vstack(
                 (
-                    torch.tensor([edge["i"] for edge in data["topology_graph"]]).view(
-                        1, -1
-                    ),
-                    torch.tensor([edge["j"] for edge in data["topology_graph"]]).view(
-                        1, -1
-                    ),
+                    torch.tensor([edge["i"] for edge in data["topology_graph"]]).view(1, -1),
+                    torch.tensor([edge["j"] for edge in data["topology_graph"]]).view(1, -1),
                 )
             ).long()
         else:
