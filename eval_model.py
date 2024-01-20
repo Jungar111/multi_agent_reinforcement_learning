@@ -181,7 +181,9 @@ def main(config: SACConfig, run_name: str):
                             None,
                         )
                 if config.include_price:
-                    action_rl[idx], price = model_data_pair.model.select_action(o[idx])
+                    action_rl[idx], price = model_data_pair.model.select_action(
+                        o[idx], deterministic=True
+                    )
 
                     for i in range(config.n_regions[config.city]):
                         for j in range(config.n_regions[config.city]):
