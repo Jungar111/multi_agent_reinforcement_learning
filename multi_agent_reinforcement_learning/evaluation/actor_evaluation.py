@@ -280,6 +280,13 @@ def chord_chart_of_trips_in_data(data: pd.DataFrame):
     show(hv.render(chord))
 
 
+def std_of_two_random_variables(variable1, variable2):
+    """Calculate std of two random variables."""
+    cov = np.cov(variable1, variable2)[0, 1]
+    std_sum = np.sqrt(np.std(variable1) ** 2 + np.std(variable2) ** 2 + 2 * cov)
+    return std_sum
+
+
 def get_summary_stats(
     prices: T.List[defaultdict[int, list]],
     epoch_rewards: defaultdict[int, list],
@@ -293,7 +300,6 @@ def get_summary_stats(
     for price_dict in prices:
         for key, val in price_dict.items():
             all_prices[key] += list(val)
-
 
     mean_served_demand = defaultdict(list)
     for served_demand_dict in epoch_served_demand:
@@ -314,12 +320,16 @@ def get_summary_stats(
     std_prices = {key: np.std(val) for key, val in all_prices.items()}
     std_rewards = {key: np.std(val) for key, val in epoch_rewards.items()}
     if config.no_actors == 2:
-        cov_rewards = np.cov(epoch_rewards[0], epoch_rewards[1])[0, 1]
-        std_sum_rewards = np.sqrt(
-            std_rewards[0] ** 2 + std_rewards[1] ** 2 + 2 * cov_rewards
+        std_sum_rewards = std_of_two_random_variables(
+            epoch_rewards[0], epoch_rewards[1]
+        )
+        std_sum_served_demand = std_of_two_random_variables(
+            mean_served_demand[0], mean_served_demand[1]
+        )
+        std_sum_cancelled_demand = std_of_two_random_variables(
+            mean_cancelled_demand[0], mean_cancelled_demand[1]
         )
     else:
-        cov_rewards = 0
         std_sum_rewards = 0
 
     output = {
@@ -331,6 +341,8 @@ def get_summary_stats(
         "std_rewards": std_rewards,
         "mean_total_reward": sum(list(mean_rewards.values())),
         "std_total_reward": std_sum_rewards,
+        "std_sum_served_demand": std_sum_served_demand,
+        "std_sum_cancelled_demand": std_sum_cancelled_demand,
     }
 
     with open(f"run_stats/{run_name}.json", "w+") as f:
