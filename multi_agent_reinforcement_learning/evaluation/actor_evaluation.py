@@ -285,21 +285,28 @@ def get_summary_stats(
     prices: T.List[defaultdict[int, list]],
     epoch_rewards: defaultdict[int, list],
     run_name: str,
+    config: SACConfig,
 ):
     """Get summary stats for a test run."""
+    prices = defaultdict(list)
     mean_prices = defaultdict(list)
     for price_dict in prices:
         for key, val in price_dict.items():
             mean_prices[key].append(np.mean(val))
+            prices[key] += list(val)
 
     mean_prices = {key: np.mean(val) for key, val in mean_prices.items()}
     mean_rewards = {key: np.mean(val) for key, val in epoch_rewards.items()}
     std_prices = {key: np.std(val) for key, val in mean_prices.items()}
     std_rewards = {key: np.std(val) for key, val in epoch_rewards.items()}
-    cov_rewards = np.cov(epoch_rewards[0], epoch_rewards[1])[0, 1]
-    std_sum_rewards = np.sqrt(
-        std_rewards[0] ** 2 + std_rewards[1] ** 2 + 2 * cov_rewards
-    )
+    if config.no_actors == 2:
+        cov_rewards = np.cov(epoch_rewards[0], epoch_rewards[1])[0, 1]
+        std_sum_rewards = np.sqrt(
+            std_rewards[0] ** 2 + std_rewards[1] ** 2 + 2 * cov_rewards
+        )
+    else:
+        cov_rewards = 0
+        std_sum_rewards = 0
 
     output = {
         "mean_prices": mean_prices,
@@ -312,3 +319,6 @@ def get_summary_stats(
 
     with open(f"run_stats/{run_name}.json", "w+") as f:
         json.dump(output, f)
+
+    with open(f"run_stats/{run_name}_prices.json", "w+") as f:
+        json.dump(prices, f)
