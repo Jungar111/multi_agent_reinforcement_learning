@@ -188,7 +188,7 @@ def main(config: SACConfig, run_name: str, price_model: PriceModel):
                                 model_data_pair.actor_data.graph_state.price[i, j][step + 1] = (
                                     init_price_dict.get((i, j), init_price_mean) + price[0][0]
                                 )
-                            elif price_model == PriceModel.DIFF_MODEL:
+                            elif price_model == PriceModel.ZERO_DIFF_MODEL:
                                 model_data_pair.actor_data.graph_state.price[i, j][step + 1] = init_price_dict.get(
                                     (i, j), init_price_mean
                                 )
