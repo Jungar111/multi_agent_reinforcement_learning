@@ -1,0 +1,24 @@
+{
+    "mean_prices": {},
+    "mean_served_demand": {
+        "0": 483.9,
+        "1": 501.2
+    },
+    "mean_cancelled_demand": {
+        "0": 0.0,
+        "1": 0.0
+    },
+    "mean_rewards": {
+        "0": 6963.600000000001,
+        "1": 7220.9400000000005
+    },
+    "std_prices": {},
+    "std_rewards": {
+        "0": 342.0261247331849,
+        "1": 221.23050060965792
+    },
+    "mean_total_reward": 14184.54,
+    "std_total_reward": 298.3658715216758,
+    "std_sum_served_demand": 26.39370716246162,
+    "std_sum_cancelled_demand": 0.0
+}

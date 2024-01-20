@@ -280,38 +280,101 @@ def chord_chart_of_trips_in_data(data: pd.DataFrame):
     show(hv.render(chord))
 
 
+def std_of_two_random_variables(variable1, variable2):
+    """Calculate std of two random variables."""
+    cov = np.cov(variable1, variable2)[0, 1]
+    std_sum = np.sqrt(np.std(variable1) ** 2 + np.std(variable2) ** 2 + 2 * cov)
+    return std_sum
+
+
+def concat_stat_dict(
+    stat_dict: T.List[defaultdict[int, T.List[float]]],
+    is_cumulative_sum: bool = False,
+    is_sum: bool = False,
+) -> defaultdict[int, T.List[float]]:
+    """Concat defaultdicts for easier stats."""
+    all_stats: defaultdict[int, T.List[float]] = defaultdict(list)
+    if is_cumulative_sum:
+        for stat_epoch in stat_dict:
+            for key in stat_epoch.keys():
+                all_stats[key].append(stat_epoch[key][-1])
+
+        return all_stats
+    if is_sum:
+        for stat_epoch in stat_dict:
+            for key in stat_epoch.keys():
+                all_stats[key].append(np.sum(stat_epoch[key]))
+
+        return all_stats
+
+    for stat_epoch in stat_dict:
+        for key, val in stat_epoch.items():
+            all_stats[key] += list(val)
+
+    return all_stats
+
+
 def get_summary_stats(
     prices: T.List[defaultdict[int, list]],
     epoch_rewards: defaultdict[int, list],
+    epoch_served_demand: T.List[defaultdict[int, list]],
+    epoch_cancelled_demand: T.List[defaultdict[int, list]],
+    epoch_unmet_demand: T.List[defaultdict[int, list]],
     run_name: str,
     config: SACConfig,
 ):
     """Get summary stats for a test run."""
-    all_prices = defaultdict(list)
-    for price_dict in prices:
-        for key, val in price_dict.items():
-            all_prices[key] += list(val)
+    all_prices = concat_stat_dict(prices)
+    all_served_demand = concat_stat_dict(epoch_served_demand, is_sum=True)
+    all_cancelled_demand = concat_stat_dict(
+        epoch_cancelled_demand, is_cumulative_sum=True
+    )
+    all_unmet_demand = concat_stat_dict(epoch_unmet_demand, is_cumulative_sum=True)
 
+    mean_served_demand = {key: np.mean(val) for key, val in all_served_demand.items()}
+    mean_cancelled_demand = {
+        key: np.mean(val) for key, val in all_cancelled_demand.items()
+    }
+    mean_unmet_demand = {key: np.mean(val) for key, val in all_unmet_demand.items()}
     mean_prices = {key: np.mean(val) for key, val in all_prices.items()}
     mean_rewards = {key: np.mean(val) for key, val in epoch_rewards.items()}
     std_prices = {key: np.std(val) for key, val in all_prices.items()}
     std_rewards = {key: np.std(val) for key, val in epoch_rewards.items()}
+
+    std_sum_rewards = 0
+    std_sum_served_demand = 0
+    std_sum_cancelled_demand = 0
+    std_sum_unmet_demand = 0
     if config.no_actors == 2:
-        cov_rewards = np.cov(epoch_rewards[0], epoch_rewards[1])[0, 1]
-        std_sum_rewards = np.sqrt(
-            std_rewards[0] ** 2 + std_rewards[1] ** 2 + 2 * cov_rewards
+        std_sum_rewards = std_of_two_random_variables(
+            epoch_rewards[0], epoch_rewards[1]
         )
-    else:
-        cov_rewards = 0
-        std_sum_rewards = 0
+        std_sum_served_demand = std_of_two_random_variables(
+            all_served_demand[0], all_served_demand[1]
+        )
+        std_sum_cancelled_demand = std_of_two_random_variables(
+            all_cancelled_demand[0], all_cancelled_demand[1]
+        )
+        std_sum_unmet_demand = std_of_two_random_variables(
+            all_unmet_demand[0], all_unmet_demand[1]
+        )
 
     output = {
         "mean_prices": mean_prices,
+        "mean_served_demand": mean_served_demand,
+        "mean_cancelled_demand": mean_cancelled_demand,
+        "mean_unmet_demand": mean_unmet_demand,
         "mean_rewards": mean_rewards,
         "std_prices": std_prices,
         "std_rewards": std_rewards,
         "mean_total_reward": sum(list(mean_rewards.values())),
+        "mean_total_served_demand": sum(list(mean_served_demand.values())),
+        "mean_total_cancelled_demand": sum(list(mean_cancelled_demand.values())),
+        "mean_total_unmet_demand": sum(list(mean_unmet_demand.values())),
         "std_total_reward": std_sum_rewards,
+        "std_sum_served_demand": std_sum_served_demand,
+        "std_sum_cancelled_demand": std_sum_cancelled_demand,
+        "std_sum_unmet_demand": std_sum_unmet_demand,
     }
 
     with open(f"run_stats/{run_name}.json", "w+") as f:

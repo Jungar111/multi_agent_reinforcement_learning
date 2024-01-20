@@ -118,6 +118,7 @@ def main(config: SACConfig, run_name: str):
         (2, config.n_regions[config.city], test_episodes, config.tf)
     )
     epoch_served_demand = []
+    epoch_cancelled_demand = []
     epoch_unmet_demand = []
     epoch_rewards = defaultdict(list)
     model_data_pair_prices = defaultdict(list)
@@ -136,6 +137,7 @@ def main(config: SACConfig, run_name: str):
         env.reset(model_data_pairs)  # initialize environment
         episode_reward = [0 for _ in range(config.no_actors)]
         episode_served_demand = defaultdict(list)
+        episode_cancelled_demand = defaultdict(list)
         episode_unmet_demand = defaultdict(list)
         prices = defaultdict(list)
         episode_rebalancing_cost = 0
@@ -251,6 +253,9 @@ def main(config: SACConfig, run_name: str):
                     for inner_dict in model.actor_data.unmet_demand.values()
                 )
                 episode_served_demand[idx].append(model.actor_data.info.served_demand)
+                episode_cancelled_demand[idx].append(
+                    model.actor_data.model_log.bus_unmet_demand
+                )
                 episode_unmet_demand[idx].append(unmet_demand)
                 episode_rebalancing_cost += model.actor_data.info.rebalancing_cost
 
@@ -291,9 +296,18 @@ def main(config: SACConfig, run_name: str):
 
         epoch_prices.append(prices)
         epoch_served_demand.append(episode_served_demand)
+        epoch_cancelled_demand.append(episode_cancelled_demand)
         epoch_unmet_demand.append(episode_unmet_demand)
 
-    get_summary_stats(epoch_prices, epoch_rewards, run_name, config)
+    get_summary_stats(
+        epoch_prices,
+        epoch_rewards,
+        epoch_served_demand,
+        epoch_cancelled_demand,
+        epoch_unmet_demand,
+        run_name,
+        config,
+    )
 
     if config.no_actors > 1:
         plot_price_over_time(epoch_prices, name=run_name)
@@ -333,4 +347,4 @@ if __name__ == "__main__":
     config.include_price = True
     config.no_actors = 2
     config.cancellation = True
-    main(config, run_name="two_SAC_price_reg_org_cars")
+    main(config, run_name="SAC_2_actor_org_price_test")
