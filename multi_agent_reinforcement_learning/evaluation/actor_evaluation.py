@@ -288,15 +288,13 @@ def get_summary_stats(
 ):
     """Get summary stats for a test run."""
     all_prices = defaultdict(list)
-    mean_prices = defaultdict(list)
     for price_dict in prices:
         for key, val in price_dict.items():
-            mean_prices[key].append(np.mean(val))
             all_prices[key] += list(val)
 
-    mean_prices = {key: np.mean(val) for key, val in mean_prices.items()}
+    mean_prices = {key: np.mean(val) for key, val in all_prices.items()}
     mean_rewards = {key: np.mean(val) for key, val in epoch_rewards.items()}
-    std_prices = {key: np.std(val) for key, val in mean_prices.items()}
+    std_prices = {key: np.std(val) for key, val in all_prices.items()}
     std_rewards = {key: np.std(val) for key, val in epoch_rewards.items()}
     if config.no_actors == 2:
         cov_rewards = np.cov(epoch_rewards[0], epoch_rewards[1])[0, 1]
