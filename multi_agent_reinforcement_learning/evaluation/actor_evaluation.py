@@ -290,11 +290,10 @@ def get_summary_stats(
 ):
     """Get summary stats for a test run."""
     all_prices = defaultdict(list)
-    mean_prices = defaultdict(list)
     for price_dict in prices:
         for key, val in price_dict.items():
-            mean_prices[key].append(np.mean(val))
             all_prices[key] += list(val)
+
 
     mean_served_demand = defaultdict(list)
     for served_demand_dict in epoch_served_demand:
@@ -306,13 +305,13 @@ def get_summary_stats(
         for key, val in cancelled_demand_dict.items():
             mean_cancelled_demand[key].append(np.sum(val))
 
-    mean_prices = {key: np.mean(val) for key, val in mean_prices.items()}
     total_served_demand = {key: np.mean(val) for key, val in mean_served_demand.items()}
     total_cancelled_demand = {
         key: np.mean(val) for key, val in mean_cancelled_demand.items()
     }
+    mean_prices = {key: np.mean(val) for key, val in all_prices.items()}
     mean_rewards = {key: np.mean(val) for key, val in epoch_rewards.items()}
-    std_prices = {key: np.std(val) for key, val in mean_prices.items()}
+    std_prices = {key: np.std(val) for key, val in all_prices.items()}
     std_rewards = {key: np.std(val) for key, val in epoch_rewards.items()}
     if config.no_actors == 2:
         cov_rewards = np.cov(epoch_rewards[0], epoch_rewards[1])[0, 1]
@@ -335,7 +334,7 @@ def get_summary_stats(
     }
 
     with open(f"run_stats/{run_name}.json", "w+") as f:
-        json.dump(output, f)
+        json.dump(output, f, indent=4)
 
     with open(f"run_stats/{run_name}_prices.json", "w+") as f:
-        json.dump(prices, f)
+        json.dump(prices, f, indent=4)
