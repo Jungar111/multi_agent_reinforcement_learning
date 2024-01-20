@@ -294,31 +294,33 @@ def main(config: SACConfig, run_name: str):
         epoch_unmet_demand.append(episode_unmet_demand)
 
     get_summary_stats(epoch_prices, epoch_rewards, run_name, config)
-    plot_price_over_time(epoch_prices, name=run_name)
-    plot_price_distribution(
-        model_data_pair_prices=model_data_pair_prices, data=df, name=run_name
-    )
 
-    plot_price_vs_other_attribute(
-        epoch_prices, epoch_served_demand, "served_demand", plot_name=run_name
-    )
-    plot_price_vs_other_attribute(
-        epoch_prices, epoch_unmet_demand, "unmet_demand", plot_name=run_name
-    )
+    if config.no_actors > 1:
+        plot_price_over_time(epoch_prices, name=run_name)
+        plot_price_distribution(
+            model_data_pair_prices=model_data_pair_prices, data=df, name=run_name
+        )
 
-    plot_actions_as_function_of_time(
-        actions=np.array(actions_over_epoch),
-        chosen_areas=[8, 9, 10],
-        colors=["#8C1C13", "#2F4550", "#A3BBAD"],
-        name=run_name,
-    )
-    plot_average_distribution(
-        config=config,
-        actions=all_actions,
-        T=20,
-        model_data_pairs=model_data_pairs,
-        name=run_name,
-    )
+        plot_price_vs_other_attribute(
+            epoch_prices, epoch_served_demand, "served_demand", plot_name=run_name
+        )
+        plot_price_vs_other_attribute(
+            epoch_prices, epoch_unmet_demand, "unmet_demand", plot_name=run_name
+        )
+
+        plot_actions_as_function_of_time(
+            actions=np.array(actions_over_epoch),
+            chosen_areas=[8, 9, 10],
+            colors=["#8C1C13", "#2F4550", "#A3BBAD"],
+            name=run_name,
+        )
+        plot_average_distribution(
+            config=config,
+            actions=all_actions,
+            T=20,
+            model_data_pairs=model_data_pairs,
+            name=run_name,
+        )
 
 
 if __name__ == "__main__":
@@ -330,4 +332,5 @@ if __name__ == "__main__":
     config.wandb_mode = "disabled"
     config.include_price = True
     config.no_actors = 2
-    main(config, run_name="test")
+    config.cancellation = True
+    main(config, run_name="two_SAC_price_reg_org_cars")
