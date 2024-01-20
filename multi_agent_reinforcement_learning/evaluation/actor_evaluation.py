@@ -315,7 +315,7 @@ def get_summary_stats(
     }
 
     with open(f"run_stats/{run_name}.json", "w+") as f:
-        json.dump(output, f)
+        json.dump(output, f, indent=4)
 
     with open(f"run_stats/{run_name}_prices.json", "w+") as f:
-        json.dump(prices, f)
+        json.dump(prices, f, indent=4)
