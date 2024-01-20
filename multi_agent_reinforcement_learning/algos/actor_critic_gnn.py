@@ -113,7 +113,7 @@ class ActorCritic(nn.Module):
         data: T.Optional[T.Dict],
         obs: GraphState,
         jitter: float = 1e-20,
-        include_price=True,
+        include_price=False,
     ):
         """Forward factory method for the actor critic."""
         if include_price:
@@ -176,7 +176,6 @@ class ActorCritic(nn.Module):
         else:
             action = (concentration) / (concentration.sum() + 1e-20)
             action = action.detach()
-            price = mu.detach()
 
         if self.config.include_price:
             return (

@@ -283,6 +283,8 @@ def chord_chart_of_trips_in_data(data: pd.DataFrame):
 def get_summary_stats(
     prices: T.List[defaultdict[int, list]],
     epoch_rewards: defaultdict[int, list],
+    epoch_served_demand: T.List[defaultdict[int, list]],
+    epoch_cancelled_demand: T.List[defaultdict[int, list]],
     run_name: str,
     config: SACConfig,
 ):
@@ -294,7 +296,21 @@ def get_summary_stats(
             mean_prices[key].append(np.mean(val))
             all_prices[key] += list(val)
 
+    mean_served_demand = defaultdict(list)
+    for served_demand_dict in epoch_served_demand:
+        for key, val in served_demand_dict.items():
+            mean_served_demand[key].append(np.sum(val))
+
+    mean_cancelled_demand = defaultdict(list)
+    for cancelled_demand_dict in epoch_cancelled_demand:
+        for key, val in cancelled_demand_dict.items():
+            mean_cancelled_demand[key].append(np.sum(val))
+
     mean_prices = {key: np.mean(val) for key, val in mean_prices.items()}
+    total_served_demand = {key: np.mean(val) for key, val in mean_served_demand.items()}
+    total_cancelled_demand = {
+        key: np.mean(val) for key, val in mean_cancelled_demand.items()
+    }
     mean_rewards = {key: np.mean(val) for key, val in epoch_rewards.items()}
     std_prices = {key: np.std(val) for key, val in mean_prices.items()}
     std_rewards = {key: np.std(val) for key, val in epoch_rewards.items()}
@@ -309,6 +325,8 @@ def get_summary_stats(
 
     output = {
         "mean_prices": mean_prices,
+        "mean_served_demand": total_served_demand,
+        "mean_cancelled_demand": total_cancelled_demand,
         "mean_rewards": mean_rewards,
         "std_prices": std_prices,
         "std_rewards": std_rewards,
