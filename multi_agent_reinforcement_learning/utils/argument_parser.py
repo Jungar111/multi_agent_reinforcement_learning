@@ -16,18 +16,14 @@ def parse_arguments(cuda: bool):
     if platform.system() == "Linux":
         cplex_path = "/opt/ibm/ILOG/CPLEX_Studio2211/opl/bin/x86-64_linux/"
     elif platform.system() == "Windows":
-        cplex_path = (
-            r"C:\Program Files\IBM\ILOG\CPLEX_Studio2211\\opl\\bin\\x64_win64\\"
-        )
+        cplex_path = r"C:\Program Files\IBM\ILOG\CPLEX_Studio2211\\opl\\bin\\x64_win64\\"
     else:
         raise NotImplementedError()
 
     parser = argparse.ArgumentParser(description="A2C-GNN")
 
     # Simulator parameters
-    parser.add_argument(
-        "--seed", type=int, default=10, metavar="S", help="random seed (default: 10)"
-    )
+    parser.add_argument("--seed", type=int, default=10, metavar="S", help="random seed (default: 10)")
     parser.add_argument(
         "--json_tstep",
         type=int,
@@ -69,9 +65,7 @@ def parse_arguments(cuda: bool):
         metavar="N",
         help="number of steps per episode (default: T=60)",
     )
-    parser.add_argument(
-        "--no-cuda", type=bool, default=not cuda, help="disables CUDA training"
-    )
+    parser.add_argument("--no-cuda", type=bool, default=not cuda, help="disables CUDA training")
 
     parser.add_argument(
         "--rew_scale",

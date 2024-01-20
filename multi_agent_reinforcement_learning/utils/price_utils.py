@@ -7,9 +7,7 @@ def map_to_price(x, lower: float, upper: float):
     return (upper - lower) / 2 * x + (lower + upper) / 2
 
 
-def value_of_time(
-    price: np.ndarray, duration: np.ndarray, demand_ratio: float
-) -> np.float64:
+def value_of_time(price: np.ndarray, duration: np.ndarray, demand_ratio: float) -> np.float64:
     """Compute value of time (vot)."""
     return np.max(price / duration)  # * demand_ratio
 

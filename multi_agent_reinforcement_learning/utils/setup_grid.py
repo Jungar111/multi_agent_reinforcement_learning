@@ -29,9 +29,7 @@ def setup_dummy_grid(config: BaseConfig, determ: bool = True):
     else:
         n1 = config.grid_size_x
         n2 = config.grid_size_y
-        demand_ratio = {
-            i: np.random.randint(1, 5, n1 * n2 * 2).tolist() for i in range(n1 * n2)
-        }
+        demand_ratio = {i: np.random.randint(1, 5, n1 * n2 * 2).tolist() for i in range(n1 * n2)}
         demand_input = {
             (
                 np.random.randint(0, n1 * n2 - 1),

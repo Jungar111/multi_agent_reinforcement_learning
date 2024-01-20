@@ -81,7 +81,7 @@ You can customize the city for simulation by modifying the data source in the sc
       - `scenario_{city}`
    - `cplex_logs`
       - `matching`
-         - `scenario_{city}` 
+         - `scenario_{city}`
       - `rebalancing`
          - `scenario_{city}`
 

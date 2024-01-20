@@ -47,3 +47,6 @@ ignore = ["E711"]
 
 [tool.ruff.pydocstyle]
 convention = "pep257"
+
+[tool.black]
+line-length = 120

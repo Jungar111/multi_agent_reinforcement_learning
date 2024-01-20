@@ -97,9 +97,7 @@ class ReplayData:
             batch.reward = (batch.reward - mean) / (std + 1e-16)
             return batch.to(self.device)
         else:
-            return Batch.from_data_list(data, follow_batch=["x_s", "x_t"]).to(
-                self.device
-            )
+            return Batch.from_data_list(data, follow_batch=["x_s", "x_t"]).to(self.device)
 
 
 class Scalar(nn.Module):
@@ -153,22 +151,16 @@ class GNNActor(nn.Module):
         x = F.leaky_relu(self.lin1(x))
         last_hidden_layer = F.leaky_relu(self.lin2(x))
 
-        concentration = F.softplus(
-            self.dirichlet_concentration_layer(last_hidden_layer)
-        ).squeeze(-1)
+        concentration = F.softplus(self.dirichlet_concentration_layer(last_hidden_layer)).squeeze(-1)
 
         if self.config.include_price:
             price_pool = global_mean_pool(
                 last_hidden_layer,
-                torch.tensor(
-                    [0 for i in range(int(self.config.n_regions[self.config.city]))]
-                ),
+                torch.tensor([0 for i in range(int(self.config.n_regions[self.config.city]))]),
             )
             # outputs mu and sigma for a normal distribution
             mu = self.price_lin_mu(price_pool)  # [-1,1]
-            log_std = torch.clamp(
-                self.price_lin_std(price_pool), self.log_std_min, self.log_std_max
-            )
+            log_std = torch.clamp(self.price_lin_std(price_pool), self.log_std_min, self.log_std_max)
             sigma = torch.exp(log_std)
 
         if deterministic:
@@ -190,9 +182,7 @@ class GNNActor(nn.Module):
             if deterministic:
                 log_prob, log_prob_p = None, None
             else:
-                log_prob_p -= 2 * (
-                    np.log(2) - pi_action_p[0] - F.softplus(-2 * pi_action_p[0])
-                )
+                log_prob_p -= 2 * (np.log(2) - pi_action_p[0] - F.softplus(-2 * pi_action_p[0]))
 
             price_tanh = torch.tanh(pi_action_p)
 
@@ -249,9 +239,7 @@ class GNNCritic(nn.Module):
         # [0.251, 1.23]
         if price is not None:
             concat = torch.cat([x, action.unsqueeze(-1)], dim=-1)
-            concat = torch.concat(
-                [concat, price.repeat(1, action.size(1)).unsqueeze(-1)], dim=-1
-            )
+            concat = torch.concat([concat, price.repeat(1, action.size(1)).unsqueeze(-1)], dim=-1)
         else:
             concat = torch.cat([x, action.unsqueeze(-1)], dim=-1)
         x = F.relu(self.lin1(concat))
@@ -335,9 +323,7 @@ class SAC(nn.Module):
 
         self.replay_buffer = ReplayData(device=device)
         # nnets
-        self.actor = GNNActor(
-            self.config, self.input_size, self.hidden_size, act_dim=self.act_dim
-        )
+        self.actor = GNNActor(self.config, self.input_size, self.hidden_size, act_dim=self.act_dim)
 
         self.critic1 = GNNCritic(
             self.input_size,
@@ -391,9 +377,7 @@ class SAC(nn.Module):
         if self.use_automatic_entropy_tuning:
             self.target_entropy = -np.prod(self.act_dim).item()
             self.log_alpha = Scalar(0.0)
-            self.alpha_optimizer = torch.optim.Adam(
-                self.log_alpha.parameters(), lr=1e-3
-            )
+            self.alpha_optimizer = torch.optim.Adam(self.log_alpha.parameters(), lr=1e-3)
 
     def parse_obs(self, obs: GraphState):
         """Parse observations from graph."""
@@ -449,16 +433,10 @@ class SAC(nn.Module):
                     logp_a2 *= float(torch.abs(logp_p.mean() / logp_a2.mean()))
                 else:
                     logp_a2 *= 0.1
-                q1_pi_targ = self.critic1_target(
-                    next_state_batch, edge_index2, a2, price
-                )
-                q2_pi_targ = self.critic2_target(
-                    next_state_batch, edge_index2, a2, price
-                )
+                q1_pi_targ = self.critic1_target(next_state_batch, edge_index2, a2, price)
+                q2_pi_targ = self.critic2_target(next_state_batch, edge_index2, a2, price)
                 q_pi_targ = torch.min(q1_pi_targ, q2_pi_targ)
-                backup = reward_batch + self.gamma * (
-                    q_pi_targ - self.alpha * (logp_a2 + logp_p)
-                )
+                backup = reward_batch + self.gamma * (q_pi_targ - self.alpha * (logp_a2 + logp_p))
             else:
                 a2, logp_a2 = self.actor(next_state_batch, edge_index2)
                 q1_pi_targ = self.critic1_target(next_state_batch, edge_index2, a2)
@@ -500,9 +478,7 @@ class SAC(nn.Module):
             q_a = torch.min(q1_1, q2_a)
 
         if self.use_automatic_entropy_tuning:
-            alpha_loss = -(
-                self.log_alpha() * (logp_a + self.target_entropy).detach()
-            ).mean()
+            alpha_loss = -(self.log_alpha() * (logp_a + self.target_entropy).detach()).mean()
             self.alpha_optimizer.zero_grad()
             alpha_loss.backward()
             self.alpha_optimizer.step()
@@ -529,14 +505,10 @@ class SAC(nn.Module):
 
         # Update target networks by polyak averaging.
         with torch.no_grad():
-            for p, p_targ in zip(
-                self.critic1.parameters(), self.critic1_target.parameters()
-            ):
+            for p, p_targ in zip(self.critic1.parameters(), self.critic1_target.parameters()):
                 p_targ.data.mul_(self.polyak)
                 p_targ.data.add_((1 - self.polyak) * p.data)
-            for p, p_targ in zip(
-                self.critic2.parameters(), self.critic2_target.parameters()
-            ):
+            for p, p_targ in zip(self.critic2.parameters(), self.critic2_target.parameters()):
                 p_targ.data.mul_(self.polyak)
                 p_targ.data.add_((1 - self.polyak) * p.data)
 
@@ -600,13 +572,10 @@ class SAC(nn.Module):
                 actions.append(action_rl)
 
                 desiredAcc = {
-                    env.region[i]: int(action_rl[i] * dictsum(env.acc, env.time + 1))
-                    for i in range(len(env.region))
+                    env.region[i]: int(action_rl[i] * dictsum(env.acc, env.time + 1)) for i in range(len(env.region))
                 }
 
-                rebAction = solveRebFlow(
-                    env, "scenario_sac_brooklyn", desiredAcc, cplexpath, directory
-                )
+                rebAction = solveRebFlow(env, "scenario_sac_brooklyn", desiredAcc, cplexpath, directory)
 
                 _, rebreward, done, info, _, _ = env.reb_step(rebAction)
                 eps_reward += rebreward
@@ -634,9 +603,7 @@ class SAC(nn.Module):
         """Load model weights."""
         checkpoint = torch.load(path, map_location=self.device)
         model_dict = self.state_dict()
-        pretrained_dict = {
-            k: v for k, v in checkpoint["model"].items() if k in model_dict
-        }
+        pretrained_dict = {k: v for k, v in checkpoint["model"].items() if k in model_dict}
         model_dict.update(pretrained_dict)
         self.load_state_dict(model_dict)
         for key, value in self.optimizers.items():

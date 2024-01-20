@@ -30,24 +30,13 @@ class GNNParser:
         x = (
             torch.cat(
                 (
-                    torch.tensor(
-                        [
-                            obs.acc[n][self.env.time + 1] * self.s
-                            for n in self.env.region
-                        ]
-                    )
+                    torch.tensor([obs.acc[n][self.env.time + 1] * self.s for n in self.env.region])
                     .view(1, 1, self.env.nregion)
                     .float(),
                     torch.tensor(
                         [
-                            [
-                                (obs.acc[n][self.env.time + 1] + obs.dacc[n][t])
-                                * self.s
-                                for n in self.env.region
-                            ]
-                            for t in range(
-                                self.env.time + 1, self.env.time + self.T + 1
-                            )
+                            [(obs.acc[n][self.env.time + 1] + obs.dacc[n][t]) * self.s for n in self.env.region]
+                            for t in range(self.env.time + 1, self.env.time + self.T + 1)
                         ]
                     )
                     .view(1, self.T, self.env.nregion)
@@ -57,17 +46,13 @@ class GNNParser:
                             [
                                 sum(
                                     [
-                                        (self.env.scenario.demand_input[i, j][t])
-                                        * (self.env.price[i, j][t])
-                                        * self.s
+                                        (self.env.scenario.demand_input[i, j][t]) * (self.env.price[i, j][t]) * self.s
                                         for j in self.env.region
                                     ]
                                 )
                                 for i in self.env.region
                             ]
-                            for t in range(
-                                self.env.time + 1, self.env.time + self.T + 1
-                            )
+                            for t in range(self.env.time + 1, self.env.time + self.T + 1)
                         ]
                     )
                     .view(1, self.T, self.env.nregion)
@@ -82,12 +67,8 @@ class GNNParser:
         if self.json_file is not None:
             edge_index = torch.vstack(
                 (
-                    torch.tensor(
-                        [edge["i"] for edge in self.data["topology_graph"]]
-                    ).view(1, -1),
-                    torch.tensor(
-                        [edge["j"] for edge in self.data["topology_graph"]]
-                    ).view(1, -1),
+                    torch.tensor([edge["i"] for edge in self.data["topology_graph"]]).view(1, -1),
+                    torch.tensor([edge["j"] for edge in self.data["topology_graph"]]).view(1, -1),
                 )
             ).long()
         else:

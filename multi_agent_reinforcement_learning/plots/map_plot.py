@@ -13,9 +13,7 @@ from multi_agent_reinforcement_learning.data_models.actor_data import ActorData
 from multi_agent_reinforcement_learning.data_models.config import A2CConfig
 
 
-def make_map_plot(
-    G: nx.Graph, actor_data: ActorData, t: int, timeEnd: int, config: A2CConfig
-):
+def make_map_plot(G: nx.Graph, actor_data: ActorData, t: int, timeEnd: int, config: A2CConfig):
     """Make a mapplot to visualize the distribution of cars over time.
 
     G: Graph

@@ -17,6 +17,7 @@ from multi_agent_reinforcement_learning.data_models.actor_data import (
 from multi_agent_reinforcement_learning.data_models.city_enum import City
 from multi_agent_reinforcement_learning.data_models.config import SACConfig
 from multi_agent_reinforcement_learning.data_models.model_data_pair import ModelDataPair
+from multi_agent_reinforcement_learning.data_models.price_model import PriceModel
 from multi_agent_reinforcement_learning.envs.amod import AMoD
 from multi_agent_reinforcement_learning.envs.scenario import Scenario
 from multi_agent_reinforcement_learning.evaluation.actor_evaluation import (
@@ -34,7 +35,7 @@ from multi_agent_reinforcement_learning.utils.sac_argument_parser import args_to
 logger = init_logger()
 
 
-def main(config: SACConfig, run_name: str):
+def main(config: SACConfig, run_name: str, price_model: PriceModel):
     """Train SAC algorithm."""
     number_of_cars = int(config.no_cars / config.no_actors)
     actor_data = [
@@ -81,9 +82,7 @@ def main(config: SACConfig, run_name: str):
         )
         for i in range(config.no_actors)
     ]
-    model_data_pairs = [
-        ModelDataPair(rl_actors[i], actor_data[i]) for i in range(config.no_actors)
-    ]
+    model_data_pairs = [ModelDataPair(rl_actors[i], actor_data[i]) for i in range(config.no_actors)]
 
     test_episodes = config.max_episodes
     # T = config.max_steps
@@ -93,30 +92,20 @@ def main(config: SACConfig, run_name: str):
         data = json.load(file)
 
     df = pd.DataFrame(data["demand"])
-    # init_price_dict = df.groupby(["origin", "destination"]).price.mean().to_dict()
-    # init_price_mean = df.price.mean()
-    df["converted_time_stamp"] = (
-        df["time_stamp"] - config.json_hr[config.city] * 60
-    ) // config.json_tstep
-    travel_time_dict = (
-        df.groupby(["origin", "destination", "converted_time_stamp"])["travel_time"]
-        .mean()
-        .to_dict()
-    )
+    init_price_dict = df.groupby(["origin", "destination"]).price.mean().to_dict()
+    init_price_mean = df.price.mean()
+    df["converted_time_stamp"] = (df["time_stamp"] - config.json_hr[config.city] * 60) // config.json_tstep
+    travel_time_dict = df.groupby(["origin", "destination", "converted_time_stamp"])["travel_time"].mean().to_dict()
 
     for idx, model_data_pair in enumerate(model_data_pairs):
-        logger.info(
-            f"Loading from saved_files/ckpt/{config.path}/{model_data_pair.actor_data.name}.pth"
-        )
+        logger.info(f"Loading from saved_files/ckpt/{config.path}/{model_data_pair.actor_data.name}.pth")
         model_data_pair.model.load_checkpoint(
             path=f"saved_files/ckpt/{config.path}/{model_data_pair.actor_data.name}.pth"
         )
 
     epoch_prices = []
     # actions_over_epoch = []
-    actions_over_epoch = np.zeros(
-        (2, config.n_regions[config.city], test_episodes, config.tf)
-    )
+    actions_over_epoch = np.zeros((2, config.n_regions[config.city], test_episodes, config.tf))
     epoch_served_demand = []
     epoch_cancelled_demand = []
     epoch_unmet_demand = []
@@ -163,8 +152,7 @@ def main(config: SACConfig, run_name: str):
                 if step > 0:
                     # store transition in memory
                     rl_reward = (
-                        model_data_pair.actor_data.rewards.pax_reward
-                        + model_data_pair.actor_data.rewards.reb_reward
+                        model_data_pair.actor_data.rewards.pax_reward + model_data_pair.actor_data.rewards.reb_reward
                     )
                     if config.include_price:
                         model_data_pair.model.replay_buffer.store(
@@ -183,40 +171,35 @@ def main(config: SACConfig, run_name: str):
                             None,
                         )
                 if config.include_price:
-                    action_rl[idx], price = model_data_pair.model.select_action(
-                        o[idx], deterministic=True
-                    )
+                    action_rl[idx], price = model_data_pair.model.select_action(o[idx], deterministic=True)
 
                     for i in range(config.n_regions[config.city]):
                         for j in range(config.n_regions[config.city]):
-                            tt = travel_time_dict.get(
-                                (i, j, step * config.json_tstep), 1
-                            )
-                            model_data_pair.actor_data.flow.value_of_time[i, j][
-                                step + 1
-                            ] = price[0][0]
+                            tt = travel_time_dict.get((i, j, step * config.json_tstep), 1)
+                            model_data_pair.actor_data.flow.value_of_time[i, j][step + 1] = price[0][0]
 
-                            model_data_pair.actor_data.flow.travel_time[i, j][
-                                step + 1
-                            ] = tt
+                            model_data_pair.actor_data.flow.travel_time[i, j][step + 1] = tt
 
-                            model_data_pair.actor_data.graph_state.price[i, j][
-                                step + 1
-                            ] = max((price[0][0] * tt), 10)
+                            if price_model == PriceModel.REG_MODEL:
+                                model_data_pair.actor_data.graph_state.price[i, j][step + 1] = max(
+                                    (price[0][0] * tt), 10
+                                )
+                            elif price_model == PriceModel.DIFF_MODEL:
+                                model_data_pair.actor_data.graph_state.price[i, j][step + 1] = (
+                                    init_price_dict.get((i, j), init_price_mean) + price[0][0]
+                                )
+                            elif price_model == PriceModel.DIFF_MODEL:
+                                model_data_pair.actor_data.graph_state.price[i, j][step + 1] = init_price_dict.get(
+                                    (i, j), init_price_mean
+                                )
                     prices[idx].append(price[0][0])
                 else:
-                    action_rl[idx] = model_data_pair.model.select_action(
-                        o[idx], deterministic=True
-                    )
+                    action_rl[idx] = model_data_pair.model.select_action(o[idx], deterministic=True)
                     for i in range(config.n_regions[config.city]):
                         for j in range(config.n_regions[config.city]):
-                            tt = travel_time_dict.get(
-                                (i, j, step * config.json_tstep), 1
-                            )
+                            tt = travel_time_dict.get((i, j, step * config.json_tstep), 1)
 
-                            model_data_pair.actor_data.flow.travel_time[i, j][
-                                step + 1
-                            ] = tt
+                            model_data_pair.actor_data.flow.travel_time[i, j][step + 1] = tt
 
                 # price = price[0][0] if config.include_price else 0
                 actions_over_epoch[idx, :, i_episode, step] = action_rl[idx]
@@ -224,15 +207,10 @@ def main(config: SACConfig, run_name: str):
             for idx, model in enumerate(model_data_pairs):
                 # transform sample from Dirichlet into actual vehicle counts (i.e. (x1*x2*..*xn)*num_vehicles)
                 model.actor_data.flow.desired_acc = {
-                    env.region[i]: int(
-                        action_rl[idx][i]
-                        * dictsum(model.actor_data.graph_state.acc, env.time + 1)
-                    )
+                    env.region[i]: int(action_rl[idx][i] * dictsum(model.actor_data.graph_state.acc, env.time + 1))
                     for i in range(len(env.region))
                 }
-                all_actions[idx, step, :] = list(
-                    model_data_pairs[idx].actor_data.flow.desired_acc.values()
-                )
+                all_actions[idx, step, :] = list(model_data_pairs[idx].actor_data.flow.desired_acc.values())
 
             # solve minimum rebalancing distance problem (Step 3 in paper)
             solveRebFlow(
@@ -248,44 +226,30 @@ def main(config: SACConfig, run_name: str):
                 episode_reward[idx] += model.actor_data.rewards.reb_reward
             # track performance over episode
             for idx, model in enumerate(model_data_pairs):
-                unmet_demand = sum(
-                    sum(inner_dict.values())
-                    for inner_dict in model.actor_data.unmet_demand.values()
-                )
+                unmet_demand = sum(sum(inner_dict.values()) for inner_dict in model.actor_data.unmet_demand.values())
                 episode_served_demand[idx].append(model.actor_data.info.served_demand)
-                episode_cancelled_demand[idx].append(
-                    model.actor_data.model_log.bus_unmet_demand
-                )
+                episode_cancelled_demand[idx].append(model.actor_data.model_log.bus_unmet_demand)
                 episode_unmet_demand[idx].append(unmet_demand)
                 episode_rebalancing_cost += model.actor_data.info.rebalancing_cost
 
             # track performance over episode
             for model_data_pair in model_data_pairs:
                 reward_for_episode = (
-                    model_data_pair.actor_data.rewards.pax_reward
-                    + model_data_pair.actor_data.rewards.reb_reward
+                    model_data_pair.actor_data.rewards.pax_reward + model_data_pair.actor_data.rewards.reb_reward
                 )
                 model_data_pair.actor_data.model_log.reward += reward_for_episode
 
-                model_data_pair.actor_data.model_log.revenue_reward += (
-                    model_data_pair.actor_data.rewards.pax_reward
-                )
-                model_data_pair.actor_data.model_log.rebalancing_reward += (
-                    model_data_pair.actor_data.rewards.reb_reward
-                )
+                model_data_pair.actor_data.model_log.revenue_reward += model_data_pair.actor_data.rewards.pax_reward
+                model_data_pair.actor_data.model_log.rebalancing_reward += model_data_pair.actor_data.rewards.reb_reward
 
-                model_data_pair.actor_data.model_log.served_demand += (
-                    model_data_pair.actor_data.info.served_demand
-                )
+                model_data_pair.actor_data.model_log.served_demand += model_data_pair.actor_data.info.served_demand
                 model_data_pair.actor_data.model_log.rebalancing_cost += (
                     model_data_pair.actor_data.info.rebalancing_cost
                 )
                 model_data_pair.model.rewards.append(reward_for_episode)
             step += 1
 
-        description = (
-            f"Episode {i_episode+1} | " f"Reward 1: {episode_reward[0]:.2f} | "
-        )
+        description = f"Episode {i_episode+1} | " f"Reward 1: {episode_reward[0]:.2f} | "
         if config.no_actors > 1:
             description += f"Reward 2: {episode_reward[1]:.2f} |"
         epochs.set_description(description)
@@ -311,16 +275,10 @@ def main(config: SACConfig, run_name: str):
 
     if config.no_actors > 1:
         plot_price_over_time(epoch_prices, name=run_name)
-        plot_price_distribution(
-            model_data_pair_prices=model_data_pair_prices, data=df, name=run_name
-        )
+        plot_price_distribution(model_data_pair_prices=model_data_pair_prices, data=df, name=run_name)
 
-        plot_price_vs_other_attribute(
-            epoch_prices, epoch_served_demand, "served_demand", plot_name=run_name
-        )
-        plot_price_vs_other_attribute(
-            epoch_prices, epoch_unmet_demand, "unmet_demand", plot_name=run_name
-        )
+        plot_price_vs_other_attribute(epoch_prices, epoch_served_demand, "served_demand", plot_name=run_name)
+        plot_price_vs_other_attribute(epoch_prices, epoch_unmet_demand, "unmet_demand", plot_name=run_name)
 
         plot_actions_as_function_of_time(
             actions=np.array(actions_over_epoch),
@@ -347,4 +305,5 @@ if __name__ == "__main__":
     config.include_price = True
     config.no_actors = 2
     config.cancellation = True
-    main(config, run_name="SAC_2_actor_org_price_test")
+    price_model = PriceModel.DIFF_MODEL
+    main(config, run_name="SAC_2_actor_org_price_test", price_model=price_model)

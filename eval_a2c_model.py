@@ -77,12 +77,8 @@ def _train_loop(
                 path=config.path,
             )
             for model_data_pair in model_data_pairs:
-                model_data_pair.actor_data.model_log.reward += (
-                    model_data_pair.actor_data.rewards.pax_reward
-                )
-                model_data_pair.actor_data.model_log.revenue_reward += (
-                    model_data_pair.actor_data.rewards.pax_reward
-                )
+                model_data_pair.actor_data.model_log.reward += model_data_pair.actor_data.rewards.pax_reward
+                model_data_pair.actor_data.model_log.revenue_reward += model_data_pair.actor_data.rewards.pax_reward
             # use GNN-RL policy (Step 2 in paper)
 
             actions = []
@@ -97,15 +93,9 @@ def _train_loop(
 
                     for i in range(config.n_regions[config.city]):
                         for j in range(config.n_regions[config.city]):
-                            tt = travel_time_dict.get(
-                                (i, j, step * config.json_tstep), 1
-                            )
-                            model_data_pair.actor_data.flow.value_of_time[i, j][
-                                step + 1
-                            ] = price[0][0][0]
-                            model_data_pair.actor_data.graph_state.price[i, j][
-                                step + 1
-                            ] = (price[0][0][0] * tt)
+                            tt = travel_time_dict.get((i, j, step * config.json_tstep), 1)
+                            model_data_pair.actor_data.flow.value_of_time[i, j][step + 1] = price[0][0][0]
+                            model_data_pair.actor_data.graph_state.price[i, j][step + 1] = price[0][0][0] * tt
 
                     prices.append(price)
                 else:
@@ -116,13 +106,9 @@ def _train_loop(
                     )
                     for i in range(config.n_regions[config.city]):
                         for j in range(config.n_regions[config.city]):
-                            tt = travel_time_dict.get(
-                                (i, j, step * config.json_tstep), 1
-                            )
+                            tt = travel_time_dict.get((i, j, step * config.json_tstep), 1)
 
-                            model_data_pair.actor_data.flow.travel_time[i, j][
-                                step + 1
-                            ] = tt
+                            model_data_pair.actor_data.flow.travel_time[i, j][step + 1] = tt
 
                 actions.append(action)
 
@@ -139,9 +125,7 @@ def _train_loop(
                     for i in range(n_actions)
                 }
 
-                all_actions[idx, step, :] = list(
-                    model_data_pairs[idx].actor_data.flow.desired_acc.values()
-                )
+                all_actions[idx, step, :] = list(model_data_pairs[idx].actor_data.flow.desired_acc.values())
 
             # solve minimum rebalancing distance problem (Step 3 in paper)
 
@@ -153,26 +137,19 @@ def _train_loop(
             )
             for idx, model in enumerate(model_data_pairs):
                 episode_served_demand[idx].append(model.actor_data.info.served_demand)
-                episode_cancelled_demand[idx].append(
-                    model.actor_data.model_log.bus_unmet_demand
-                )
+                episode_cancelled_demand[idx].append(model.actor_data.model_log.bus_unmet_demand)
 
             done = env.reb_step(model_data_pairs=model_data_pairs)
 
             # track performance over episode
             for model_data_pair in model_data_pairs:
-                model_data_pair.actor_data.model_log.reward += (
-                    model_data_pair.actor_data.rewards.reb_reward
-                )
-                model_data_pair.actor_data.model_log.served_demand += (
-                    model_data_pair.actor_data.info.served_demand
-                )
+                model_data_pair.actor_data.model_log.reward += model_data_pair.actor_data.rewards.reb_reward
+                model_data_pair.actor_data.model_log.served_demand += model_data_pair.actor_data.info.served_demand
                 model_data_pair.actor_data.model_log.rebalancing_cost += (
                     model_data_pair.actor_data.info.rebalancing_cost
                 )
                 model_data_pair.model.rewards.append(
-                    model_data_pair.actor_data.rewards.pax_reward
-                    + model_data_pair.actor_data.rewards.reb_reward
+                    model_data_pair.actor_data.rewards.pax_reward + model_data_pair.actor_data.rewards.reb_reward
                 )
 
             # stop episode if terminating conditions are met
@@ -180,9 +157,7 @@ def _train_loop(
                 break
 
         # Send current statistics to screen
-        epochs.set_description(
-            f"Episode {i_episode+1} | Reward: {model_data_pairs[0].actor_data.model_log.reward:.2f}"
-        )
+        epochs.set_description(f"Episode {i_episode+1} | Reward: {model_data_pairs[0].actor_data.model_log.reward:.2f}")
         for idx in range(len(model_data_pairs)):
             epoch_rewards[idx].append(model_data_pairs[idx].actor_data.model_log.reward)
 
@@ -251,9 +226,7 @@ def main(config: BaseConfig):
         ModelDataPair(rl2_actor, actor_data[1]),
     ]
     for idx, model_data_pair in enumerate(model_data_pairs):
-        logger.info(
-            f"Loading from saved_files/ckpt/{config.path}/{model_data_pair.actor_data.name}.pth"
-        )
+        logger.info(f"Loading from saved_files/ckpt/{config.path}/{model_data_pair.actor_data.name}.pth")
         model_data_pair.model.load_checkpoint(
             path=f"saved_files/ckpt/{config.path}/{model_data_pair.actor_data.name}.pth"
         )
@@ -264,14 +237,8 @@ def main(config: BaseConfig):
         data = json.load(file)
 
     df = pd.DataFrame(data["demand"])
-    df["converted_time_stamp"] = (
-        df["time_stamp"] - config.json_hr[config.city] * 60
-    ) // config.json_tstep
-    travel_time_dict = (
-        df.groupby(["origin", "destination", "converted_time_stamp"])["travel_time"]
-        .mean()
-        .to_dict()
-    )
+    df["converted_time_stamp"] = (df["time_stamp"] - config.json_hr[config.city] * 60) // config.json_tstep
+    travel_time_dict = df.groupby(["origin", "destination", "converted_time_stamp"])["travel_time"].mean().to_dict()
 
     train_episodes = config.max_episodes  # set max number of training episodes
 

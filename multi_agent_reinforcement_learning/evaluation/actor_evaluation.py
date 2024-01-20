@@ -66,13 +66,9 @@ def plot_average_distribution(
                 actions[idx, :, :],
                 pad_width=((0, 0), (0, config.n_regions[config.city] + 1 - no_regions)),
             )
-            actor_actions = actor_actions.reshape(
-                T, config.grid_size_x[config.city], config.grid_size_y[config.city]
-            )
+            actor_actions = actor_actions.reshape(T, config.grid_size_x[config.city], config.grid_size_y[config.city])
         else:
-            actor_actions = actions[idx].reshape(
-                T, config.grid_size_x[config.city], config.grid_size_y[config.city]
-            )
+            actor_actions = actions[idx].reshape(T, config.grid_size_x[config.city], config.grid_size_y[config.city])
         for i in range(config.grid_size_x[config.city]):
             for j in range(config.grid_size_y[config.city]):
                 # Computes demand from i to all other grids
@@ -80,9 +76,7 @@ def plot_average_distribution(
                     [
                         np.array(
                             list(
-                                model.actor_data.graph_state.demand[
-                                    i * config.grid_size_y[config.city] + j, k
-                                ].values()
+                                model.actor_data.graph_state.demand[i * config.grid_size_y[config.city] + j, k].values()
                             )
                         )
                         for k in range(no_regions)
@@ -91,11 +85,7 @@ def plot_average_distribution(
                 unmet_demand_from_grid = np.array(
                     [
                         np.array(
-                            list(
-                                model.actor_data.unmet_demand[
-                                    i * config.grid_size_y[config.city] + j, k
-                                ].values()
-                            )
+                            list(model.actor_data.unmet_demand[i * config.grid_size_y[config.city] + j, k].values())
                         )
                         for k in range(no_regions)
                     ]
@@ -111,9 +101,7 @@ def plot_average_distribution(
         # ax[idx].set_title(f"Actor: {model.actor_data.name}")
     fig.subplots_adjust(right=0.8)
     fig.supxlabel("Actor specific demand / actor specific unmet demand", fontsize=12)
-    fig.colorbar(
-        sc, ax=ax.ravel().tolist(), label="Mean # of cars departing from", cmap="bone"
-    )
+    fig.colorbar(sc, ax=ax.ravel().tolist(), label="Mean # of cars departing from", cmap="bone")
 
     plt.savefig(f"figs/grid_demand_{name}.png", dpi=400)
     plt.show()
@@ -144,15 +132,9 @@ def plot_price_over_time(price_dicts: T.List, name: str, tf=20, n_actors=2) -> N
             std_price = prices[actor_idx, ...].std(axis=0)
             upper_bound = mean_price + 1.96 * std_price
             lower_bound = mean_price - 1.96 * std_price
-            ax[actor_idx].fill_between(
-                x, lower_bound, upper_bound, alpha=0.6, label="95% CI", color="#2F4550"
-            )
-            ax[actor_idx].plot(
-                x, lower_bound, alpha=0.8, linestyle="dashed", color="#2F4550"
-            )
-            ax[actor_idx].plot(
-                x, upper_bound, alpha=0.8, linestyle="dashed", color="#2F4550"
-            )
+            ax[actor_idx].fill_between(x, lower_bound, upper_bound, alpha=0.6, label="95% CI", color="#2F4550")
+            ax[actor_idx].plot(x, lower_bound, alpha=0.8, linestyle="dashed", color="#2F4550")
+            ax[actor_idx].plot(x, upper_bound, alpha=0.8, linestyle="dashed", color="#2F4550")
 
         ax[actor_idx].legend()
         ax[actor_idx].set_title(f"Price over time - Actor {actor_idx + 1}")
@@ -163,9 +145,7 @@ def plot_price_over_time(price_dicts: T.List, name: str, tf=20, n_actors=2) -> N
     plt.show()
 
 
-def plot_actions_as_function_of_time(
-    actions: np.ndarray, chosen_areas: T.List[int], colors: T.List[str], name: str
-):
+def plot_actions_as_function_of_time(actions: np.ndarray, chosen_areas: T.List[int], colors: T.List[str], name: str):
     """Plot boxplot."""
     _, ax = plt.subplots(actions.shape[0], 1, sharey=True)
     for actor_idx in range(actions.shape[0]):
@@ -249,15 +229,11 @@ def flatten_data(data: T.List, column_name: str):
     ]
 
 
-def plot_price_vs_other_attribute(
-    price_dicts: T.List, other_attribute: T.List, name_for_other: str, plot_name: str
-):
+def plot_price_vs_other_attribute(price_dicts: T.List, other_attribute: T.List, name_for_other: str, plot_name: str):
     """Price vs. other attribute plot."""
     df_price = pd.DataFrame(flatten_data(price_dicts, "price"))
     df_demand = pd.DataFrame(flatten_data(other_attribute, name_for_other))
-    df = df_price.merge(df_demand, on=["epoch", "time_step", "actor"]).sort_values(
-        "price"
-    )
+    df = df_price.merge(df_demand, on=["epoch", "time_step", "actor"]).sort_values("price")
 
     df_actor_1 = df[df["actor"] == 0]
     df_actor_2 = df[df["actor"] == 1]
@@ -326,15 +302,11 @@ def get_summary_stats(
     """Get summary stats for a test run."""
     all_prices = concat_stat_dict(prices)
     all_served_demand = concat_stat_dict(epoch_served_demand, is_sum=True)
-    all_cancelled_demand = concat_stat_dict(
-        epoch_cancelled_demand, is_cumulative_sum=True
-    )
+    all_cancelled_demand = concat_stat_dict(epoch_cancelled_demand, is_cumulative_sum=True)
     all_unmet_demand = concat_stat_dict(epoch_unmet_demand, is_cumulative_sum=True)
 
     mean_served_demand = {key: np.mean(val) for key, val in all_served_demand.items()}
-    mean_cancelled_demand = {
-        key: np.mean(val) for key, val in all_cancelled_demand.items()
-    }
+    mean_cancelled_demand = {key: np.mean(val) for key, val in all_cancelled_demand.items()}
     mean_unmet_demand = {key: np.mean(val) for key, val in all_unmet_demand.items()}
     mean_prices = {key: np.mean(val) for key, val in all_prices.items()}
     mean_rewards = {key: np.mean(val) for key, val in epoch_rewards.items()}
@@ -346,18 +318,10 @@ def get_summary_stats(
     std_sum_cancelled_demand = 0
     std_sum_unmet_demand = 0
     if config.no_actors == 2:
-        std_sum_rewards = std_of_two_random_variables(
-            epoch_rewards[0], epoch_rewards[1]
-        )
-        std_sum_served_demand = std_of_two_random_variables(
-            all_served_demand[0], all_served_demand[1]
-        )
-        std_sum_cancelled_demand = std_of_two_random_variables(
-            all_cancelled_demand[0], all_cancelled_demand[1]
-        )
-        std_sum_unmet_demand = std_of_two_random_variables(
-            all_unmet_demand[0], all_unmet_demand[1]
-        )
+        std_sum_rewards = std_of_two_random_variables(epoch_rewards[0], epoch_rewards[1])
+        std_sum_served_demand = std_of_two_random_variables(all_served_demand[0], all_served_demand[1])
+        std_sum_cancelled_demand = std_of_two_random_variables(all_cancelled_demand[0], all_cancelled_demand[1])
+        std_sum_unmet_demand = std_of_two_random_variables(all_unmet_demand[0], all_unmet_demand[1])
 
     output = {
         "mean_prices": mean_prices,

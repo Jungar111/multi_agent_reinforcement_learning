@@ -22,6 +22,7 @@ from multi_agent_reinforcement_learning.data_models.actor_data import (
 from multi_agent_reinforcement_learning.data_models.city_enum import City
 from multi_agent_reinforcement_learning.data_models.config import SACConfig
 from multi_agent_reinforcement_learning.data_models.model_data_pair import ModelDataPair
+from multi_agent_reinforcement_learning.data_models.price_model import PriceModel
 from multi_agent_reinforcement_learning.envs.amod import AMoD
 from multi_agent_reinforcement_learning.envs.scenario import Scenario
 from multi_agent_reinforcement_learning.utils.init_logger import init_logger
@@ -32,7 +33,7 @@ from multi_agent_reinforcement_learning.utils.sac_argument_parser import args_to
 logger = init_logger()
 
 
-def main(config: SACConfig, run_name: str):
+def main(config: SACConfig, run_name: str, price_model: PriceModel):
     """Run main training loop of SAC."""
     number_of_cars = int(config.no_cars / config.no_actors)
     actor_data = [
@@ -86,9 +87,7 @@ def main(config: SACConfig, run_name: str):
         )
         for i in range(config.no_actors)
     ]
-    model_data_pairs = [
-        ModelDataPair(rl_actors[i], actor_data[i]) for i in range(config.no_actors)
-    ]
+    model_data_pairs = [ModelDataPair(rl_actors[i], actor_data[i]) for i in range(config.no_actors)]
     # model_data_pairs[0].model.load_checkpoint(
     #     path=f"saved_files/ckpt/{config.path}/{model_data_pairs[0].actor_data.name}_last.pth"
     # )
@@ -102,22 +101,14 @@ def main(config: SACConfig, run_name: str):
         data = json.load(file)
 
     df = pd.DataFrame(data["demand"])
-    df["converted_time_stamp"] = (
-        df["time_stamp"] - config.json_hr[config.city] * 60
-    ) // config.json_tstep
-    travel_time_dict = (
-        df.groupby(["origin", "destination", "converted_time_stamp"])["travel_time"]
-        .mean()
-        .to_dict()
-    )
+    df["converted_time_stamp"] = (df["time_stamp"] - config.json_hr[config.city] * 60) // config.json_tstep
+    travel_time_dict = df.groupby(["origin", "destination", "converted_time_stamp"])["travel_time"].mean().to_dict()
     if config.include_price:
-        logger.info(
-            f"VOT {value_of_time(df.price, df.travel_time, demand_ratio=config.demand_ratio[config.city]):.2f}"
-        )
+        logger.info(f"VOT {value_of_time(df.price, df.travel_time, demand_ratio=config.demand_ratio[config.city]):.2f}")
 
         # Used for price diff
-        # init_price_dict = df.groupby(["origin", "destination"]).price.mean().to_dict()
-        # init_price_mean = df.price.mean()
+        init_price_dict = df.groupby(["origin", "destination"]).price.mean().to_dict()
+        init_price_mean = df.price.mean()
 
     wandb_config_log = {**vars(config)}
     for model in model_data_pairs:
@@ -158,8 +149,7 @@ def main(config: SACConfig, run_name: str):
                 if step > 0:
                     # store transition in memory
                     rl_reward = (
-                        model_data_pair.actor_data.rewards.pax_reward
-                        + model_data_pair.actor_data.rewards.reb_reward
+                        model_data_pair.actor_data.rewards.pax_reward + model_data_pair.actor_data.rewards.reb_reward
                     )
                     if config.include_price:
                         model_data_pair.model.replay_buffer.store(
@@ -183,39 +173,35 @@ def main(config: SACConfig, run_name: str):
 
                     for i in range(config.n_regions[config.city]):
                         for j in range(config.n_regions[config.city]):
-                            tt = travel_time_dict.get(
-                                (i, j, step * config.json_tstep), 1
-                            )
-                            model_data_pair.actor_data.flow.value_of_time[i, j][
-                                step + 1
-                            ] = price[0][0]
+                            tt = travel_time_dict.get((i, j, step * config.json_tstep), 1)
+                            model_data_pair.actor_data.flow.value_of_time[i, j][step + 1] = price[0][0]
 
-                            model_data_pair.actor_data.flow.travel_time[i, j][
-                                step + 1
-                            ] = tt
+                            model_data_pair.actor_data.flow.travel_time[i, j][step + 1] = tt
 
-                            model_data_pair.actor_data.graph_state.price[i, j][
-                                step + 1
-                            ] = max((price[0][0] * tt), 10)
+                            if price_model == PriceModel.REG_MODEL:
+                                model_data_pair.actor_data.graph_state.price[i, j][step + 1] = max(
+                                    (price[0][0] * tt), 10
+                                )
+                            elif price_model == PriceModel.DIFF_MODEL:
+                                model_data_pair.actor_data.graph_state.price[i, j][step + 1] = (
+                                    init_price_dict.get((i, j), init_price_mean) + price[0][0]
+                                )
+                            elif price_model == PriceModel.DIFF_MODEL:
+                                model_data_pair.actor_data.graph_state.price[i, j][step + 1] = init_price_dict.get(
+                                    (i, j), init_price_mean
+                                )
                     prices[idx].append(price)
                 else:
                     action_rl[idx] = model_data_pair.model.select_action(o[idx])
                     for i in range(config.n_regions[config.city]):
                         for j in range(config.n_regions[config.city]):
-                            tt = travel_time_dict.get(
-                                (i, j, step * config.json_tstep), 1
-                            )
+                            tt = travel_time_dict.get((i, j, step * config.json_tstep), 1)
 
-                            model_data_pair.actor_data.flow.travel_time[i, j][
-                                step + 1
-                            ] = tt
+                            model_data_pair.actor_data.flow.travel_time[i, j][step + 1] = tt
             for idx, model in enumerate(model_data_pairs):
                 # transform sample from Dirichlet into actual vehicle counts (i.e. (x1*x2*..*xn)*num_vehicles)
                 model.actor_data.flow.desired_acc = {
-                    env.region[i]: int(
-                        action_rl[idx][i]
-                        * dictsum(model.actor_data.graph_state.acc, env.time + 1)
-                    )
+                    env.region[i]: int(action_rl[idx][i] * dictsum(model.actor_data.graph_state.acc, env.time + 1))
                     for i in range(len(env.region))
                 }
 
@@ -239,21 +225,14 @@ def main(config: SACConfig, run_name: str):
             # track performance over episode
             for model_data_pair in model_data_pairs:
                 reward_for_episode = (
-                    model_data_pair.actor_data.rewards.pax_reward
-                    + model_data_pair.actor_data.rewards.reb_reward
+                    model_data_pair.actor_data.rewards.pax_reward + model_data_pair.actor_data.rewards.reb_reward
                 )
                 model_data_pair.actor_data.model_log.reward += reward_for_episode
 
-                model_data_pair.actor_data.model_log.revenue_reward += (
-                    model_data_pair.actor_data.rewards.pax_reward
-                )
-                model_data_pair.actor_data.model_log.rebalancing_reward += (
-                    model_data_pair.actor_data.rewards.reb_reward
-                )
+                model_data_pair.actor_data.model_log.revenue_reward += model_data_pair.actor_data.rewards.pax_reward
+                model_data_pair.actor_data.model_log.rebalancing_reward += model_data_pair.actor_data.rewards.reb_reward
 
-                model_data_pair.actor_data.model_log.served_demand += (
-                    model_data_pair.actor_data.info.served_demand
-                )
+                model_data_pair.actor_data.model_log.served_demand += model_data_pair.actor_data.info.served_demand
                 model_data_pair.actor_data.model_log.rebalancing_cost += (
                     model_data_pair.actor_data.info.rebalancing_cost
                 )
@@ -262,9 +241,7 @@ def main(config: SACConfig, run_name: str):
             for model in model_data_pairs:
                 if i_episode > 10:
                     # sample from memory and update model
-                    batch = model.model.replay_buffer.sample_batch(
-                        config.batch_size, norm=False
-                    )
+                    batch = model.model.replay_buffer.sample_batch(config.batch_size, norm=False)
                     model.model.update(data=batch)
 
         description = (
@@ -295,9 +272,7 @@ def main(config: SACConfig, run_name: str):
             ]
 
             for model in model_data_pairs:
-                model.model.save_checkpoint(
-                    path=f"saved_files/ckpt/{config.path}/{model.actor_data.name}.pth"
-                )
+                model.model.save_checkpoint(path=f"saved_files/ckpt/{config.path}/{model.actor_data.name}.pth")
 
             for ckpt_path in ckpt_paths:
                 wandb.save(ckpt_path)
@@ -306,19 +281,9 @@ def main(config: SACConfig, run_name: str):
             logging_dict.update({"Best Reward": best_reward})
 
         for idx, model_data_pair in enumerate(model_data_pairs):
-            logging_dict.update(
-                model_data_pair.actor_data.model_log.dict(
-                    model_data_pair.actor_data.name
-                )
-            )
+            logging_dict.update(model_data_pair.actor_data.model_log.dict(model_data_pair.actor_data.name))
             if config.include_price:
-                logging_dict.update(
-                    {
-                        f"{model_data_pair.actor_data.name} Mean Price": np.mean(
-                            prices[idx]
-                        )
-                    }
-                )
+                logging_dict.update({f"{model_data_pair.actor_data.name} Mean Price": np.mean(prices[idx])})
         if i_episode + 1 == train_episodes:
             ckpt_paths = [
                 str(
@@ -333,9 +298,7 @@ def main(config: SACConfig, run_name: str):
             ]
 
             for model in model_data_pairs:
-                model.model.save_checkpoint(
-                    path=f"saved_files/ckpt/{config.path}/{model.actor_data.name}_last.pth"
-                )
+                model.model.save_checkpoint(path=f"saved_files/ckpt/{config.path}/{model.actor_data.name}_last.pth")
 
             for ckpt_path in ckpt_paths:
                 wandb.save(ckpt_path)
@@ -356,4 +319,5 @@ if __name__ == "__main__":
     config.dynamic_scaling = False
     # config.test = True
     # config.wandb_mode = "disabled"
-    main(config, run_name=config.run_name)
+    price_model = PriceModel.REG_MODEL
+    main(config, run_name=config.run_name, price_model=price_model)

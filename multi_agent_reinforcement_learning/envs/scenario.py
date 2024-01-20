@@ -72,29 +72,21 @@ class Scenario:
             for i, j in self.edges:
                 for t in range(0, self.tf * 2):
                     self.demand_time[i, j][t] = (
-                        abs(i // self.N1 - j // self.N1)
-                        + abs(i % self.N1 - j % self.N1)
+                        abs(i // self.N1 - j // self.N1) + abs(i % self.N1 - j % self.N1)
                     ) * grid_travel_time
 
                     self.reb_time[i, j][t] = (
-                        abs(i // self.N1 - j // self.N1)
-                        + abs(i % self.N1 - j % self.N1)
+                        abs(i // self.N1 - j // self.N1) + abs(i % self.N1 - j % self.N1)
                     ) * grid_travel_time
 
             for actor in actor_data:
                 for n in self.G.nodes:
-                    self.G.nodes[n][f"acc_init_{actor.name}"] = int(
-                        actor.no_cars // len(self.G.nodes)
-                    )
+                    self.G.nodes[n][f"acc_init_{actor.name}"] = int(actor.no_cars // len(self.G.nodes))
 
                 self.tf = config.tf
                 self.demand_ratio = defaultdict(list)
 
-            if (
-                demand_ratio == None
-                or isinstance(demand_ratio, list)
-                or isinstance(demand_ratio, dict)
-            ):
+            if demand_ratio == None or isinstance(demand_ratio, list) or isinstance(demand_ratio, dict):
                 for i, j in self.edges:
                     if isinstance(demand_ratio, list):
                         self.demand_ratio[i, j] = (
@@ -163,9 +155,7 @@ class Scenario:
             if self.fix_price:  # fix price
                 self.p = defaultdict(dict)
                 for i, j in self.edges:
-                    self.p[i, j] = (np.random.rand() * 2 + 1) * (
-                        self.demand_time[i, j][0] + 1
-                    )
+                    self.p[i, j] = (np.random.rand() * 2 + 1) * (self.demand_time[i, j][0] + 1)
             if tripAttr != None:  # given demand as a defaultdict(dict)
                 self.tripAttr = deepcopy(tripAttr)
             else:
@@ -212,9 +202,7 @@ class Scenario:
                     item["travel_time"],
                     item["price"],
                 )
-                if json_regions != None and (
-                    o not in json_regions or d not in json_regions
-                ):
+                if json_regions != None and (o not in json_regions or d not in json_regions):
                     continue
                 if (o, d) not in self.demand_input:
                     self.demand_input[o, d], self.p[o, d], self.demand_time[o, d] = (
@@ -223,24 +211,16 @@ class Scenario:
                         defaultdict(float),
                     )
 
-                self.demand_input[o, d][(t - self.json_start) // json_tstep] += (
-                    v * demand_ratio
-                )
-                self.p[o, d][(t - self.json_start) // json_tstep] += (
-                    p * v * demand_ratio
-                )
-                self.demand_time[o, d][(t - self.json_start) // json_tstep] += (
-                    tt * v * demand_ratio / json_tstep
-                )
+                self.demand_input[o, d][(t - self.json_start) // json_tstep] += v * demand_ratio
+                self.p[o, d][(t - self.json_start) // json_tstep] += p * v * demand_ratio
+                self.demand_time[o, d][(t - self.json_start) // json_tstep] += tt * v * demand_ratio / json_tstep
 
             for o, d in self.edges:
                 for t in range(0, self.tf * 2):
                     if t in self.demand_input[o, d]:
                         self.p[o, d][t] /= self.demand_input[o, d][t]
                         self.demand_time[o, d][t] /= self.demand_input[o, d][t]
-                        self.demand_time[o, d][t] = max(
-                            int(round(self.demand_time[o, d][t])), 1
-                        )
+                        self.demand_time[o, d][t] = max(int(round(self.demand_time[o, d][t])), 1)
                     else:
                         self.demand_input[o, d][t] = 0
                         self.p[o, d][t] = 0
@@ -253,9 +233,7 @@ class Scenario:
                     item["destination"],
                     item["reb_time"],
                 )
-                if json_regions != None and (
-                    o not in json_regions or d not in json_regions
-                ):
+                if json_regions != None and (o not in json_regions or d not in json_regions):
                     continue
                 if varying_time:
                     t0 = int((hr * 60 - self.json_start) // json_tstep)
@@ -272,9 +250,7 @@ class Scenario:
                     hr = item["hour"]
                     if hr == json_hr + int(round(json_tstep / 2 * self.tf / 60)):
                         for n in self.G.nodes:
-                            self.G.nodes[n][f"acc_init_{actor.name}"] = int(
-                                actor.no_cars // len(self.G)
-                            )
+                            self.G.nodes[n][f"acc_init_{actor.name}"] = int(actor.no_cars // len(self.G))
                 self.tripAttr = self.get_random_demand()
 
         # Set value of time form the data.
@@ -322,32 +298,19 @@ class Scenario:
                 for i in self.G.nodes:
                     J = [j for _, j in self.G.out_edges(i)]
                     J.append(i)
-                    prob = np.array(
-                        [
-                            np.exp(
-                                -self.reb_time[i, j][0] * self.trip_length_preference
-                            )
-                            for j in J
-                        ]
-                    )
+                    prob = np.array([np.exp(-self.reb_time[i, j][0] * self.trip_length_preference) for j in J])
                     prob = prob / sum(prob)
                     for idx in range(len(J)):
-                        self.static_demand[i, J[idx]] = (
-                            self.region_demand[i] * prob[idx]
-                        )
+                        self.static_demand[i, J[idx]] = self.region_demand[i] * prob[idx]
             elif type(self.demand_input) in [dict, defaultdict]:
                 for i, j in self.edges:
                     self.static_demand[i, j] = (
-                        self.demand_input[i, j]
-                        if (i, j) in self.demand_input
-                        else self.demand_input["default"]
+                        self.demand_input[i, j] if (i, j) in self.demand_input else self.demand_input["default"]
                     )
 
                     self.static_demand[i, j] *= region_rand[i]
             else:
-                raise Exception(
-                    "demand_input should be number, array-like, or dictionary-like values"
-                )
+                raise Exception("demand_input should be number, array-like, or dictionary-like values")
 
             # generating demand and prices
             if self.fix_price:
@@ -355,19 +318,12 @@ class Scenario:
             self.demand_input2 = defaultdict(dict)
             for t in range(0, self.tf * 2):
                 for i, j in self.edges:
-                    demand[i, j][t] = np.random.poisson(
-                        self.static_demand[i, j] * self.demand_ratio[i, j][t]
-                    )
-                    self.demand_input2[i, j][t] = (
-                        self.static_demand[i, j] * self.demand_ratio[i, j][t]
-                    )
+                    demand[i, j][t] = np.random.poisson(self.static_demand[i, j] * self.demand_ratio[i, j][t])
+                    self.demand_input2[i, j][t] = self.static_demand[i, j] * self.demand_ratio[i, j][t]
                     if self.fix_price:
                         price[i, j][t] = p[i, j]
                     else:
-                        price[i, j][t] = (
-                            min(3, np.random.exponential(2) + 1)
-                            * self.demand_time[i, j][t]
-                        )
+                        price[i, j][t] = min(3, np.random.exponential(2) + 1) * self.demand_time[i, j][t]
                     tripAttr.append((i, j, t, demand[i, j][t], price[i, j][t]))
 
         return tripAttr
