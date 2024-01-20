@@ -304,6 +304,7 @@ def main(config: SACConfig, run_name: str):
         epoch_rewards,
         epoch_served_demand,
         epoch_cancelled_demand,
+        epoch_unmet_demand,
         run_name,
         config,
     )
@@ -343,7 +344,7 @@ if __name__ == "__main__":
     config.max_episodes = 10
     # config.total_number_of_cars = 374
     config.wandb_mode = "disabled"
-    config.include_price = False
+    config.include_price = True
     config.no_actors = 2
-    config.cancellation = False
-    main(config, run_name="SAC_2_actor_no_cancel_no_price")
+    config.cancellation = True
+    main(config, run_name="SAC_2_actor_org_price_test")
