@@ -214,12 +214,16 @@ class GNNActor(nn.Module):
 class GNNCritic(nn.Module):
     """Architecture: GNN, Concatenation, FC, Readout."""
 
-    def __init__(self, in_channels, hidden_size=32, act_dim=6):
+    def __init__(self, in_channels, hidden_size=32, act_dim=6, price: bool = True):
         """Init for the critic."""
         super().__init__()
+        add_to_channel = 1
+        if price:
+            add_to_channel += 1
+
         self.act_dim = act_dim
         self.conv1 = GCNConv(in_channels, in_channels)
-        self.lin1 = nn.Linear(in_channels + 2, hidden_size)
+        self.lin1 = nn.Linear(in_channels + add_to_channel, hidden_size)
         self.lin2 = nn.Linear(hidden_size, hidden_size)
         self.lin3 = nn.Linear(hidden_size, 1)
         self.in_channels = in_channels
@@ -336,19 +340,31 @@ class SAC(nn.Module):
         )
 
         self.critic1 = GNNCritic(
-            self.input_size, self.hidden_size, act_dim=self.act_dim
+            self.input_size,
+            self.hidden_size,
+            act_dim=self.act_dim,
+            price=self.config.include_price,
         )
         self.critic2 = GNNCritic(
-            self.input_size, self.hidden_size, act_dim=self.act_dim
+            self.input_size,
+            self.hidden_size,
+            act_dim=self.act_dim,
+            price=self.config.include_price,
         )
         assert self.critic1.parameters() != self.critic2.parameters()
 
         self.critic1_target = GNNCritic(
-            self.input_size, self.hidden_size, act_dim=self.act_dim
+            self.input_size,
+            self.hidden_size,
+            act_dim=self.act_dim,
+            price=self.config.include_price,
         )
         self.critic1_target.load_state_dict(self.critic1.state_dict())
         self.critic2_target = GNNCritic(
-            self.input_size, self.hidden_size, act_dim=self.act_dim
+            self.input_size,
+            self.hidden_size,
+            act_dim=self.act_dim,
+            price=self.config.include_price,
         )
         self.critic2_target.load_state_dict(self.critic2.state_dict())
 

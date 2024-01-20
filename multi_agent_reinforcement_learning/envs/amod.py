@@ -194,16 +194,19 @@ class AMoD:
         for actor_idx in range(self.config.no_actors):
             no_customers_for_company = chosen_company.get(actor_idx, 0)
 
-            probability_of_taxi = 1 - hill_equation(
-                x=vot[actor_idx], k=self.scenario.vot
-            )
-            customers_after_bus = np.random.binomial(
-                no_customers_for_company, p=probability_of_taxi
-            )
+            if self.config.cancellation:
+                probability_of_cancellation = 1 - hill_equation(
+                    x=vot[actor_idx], k=self.scenario.vot
+                )
+                customers_after_cancellation = np.random.binomial(
+                    no_customers_for_company, p=probability_of_cancellation
+                )
+            else:
+                customers_after_cancellation = no_customers_for_company
 
             no_cars = min(
                 cars_in_area_for_each_company[actor_idx],
-                customers_after_bus,
+                customers_after_cancellation,
             )
 
             model_data_pairs[actor_idx].actor_data.graph_state.demand[origin, dest][
@@ -219,7 +222,7 @@ class AMoD:
                 chosen_company.get(actor_idx, 0)
                 - cars_in_area_for_each_company[actor_idx]
             )
-            bus_lost_cars = no_customers_for_company - customers_after_bus
+            bus_lost_cars = no_customers_for_company - customers_after_cancellation
 
             model_data_pairs[
                 actor_idx
