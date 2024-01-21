@@ -310,6 +310,9 @@ def get_summary_stats(
     mean_unmet_demand = {key: np.mean(val) for key, val in all_unmet_demand.items()}
     mean_prices = {key: np.mean(val) for key, val in all_prices.items()}
     mean_rewards = {key: np.mean(val) for key, val in epoch_rewards.items()}
+    std_served_demand = {key: np.std(val) for key, val in all_served_demand.items()}
+    std_cancelled_demand = {key: np.std(val) for key, val in all_cancelled_demand.items()}
+    std_unmet_demand = {key: np.std(val) for key, val in all_unmet_demand.items()}
     std_prices = {key: np.std(val) for key, val in all_prices.items()}
     std_rewards = {key: np.std(val) for key, val in epoch_rewards.items()}
 
@@ -329,6 +332,9 @@ def get_summary_stats(
         "mean_cancelled_demand": mean_cancelled_demand,
         "mean_unmet_demand": mean_unmet_demand,
         "mean_rewards": mean_rewards,
+        "std_served_demand": std_served_demand,
+        "std_cancelled_demand": std_cancelled_demand,
+        "std_unmet_demand": std_unmet_demand,
         "std_prices": std_prices,
         "std_rewards": std_rewards,
         "mean_total_reward": sum(list(mean_rewards.values())),
