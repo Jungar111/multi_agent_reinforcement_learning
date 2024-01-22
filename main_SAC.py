@@ -312,10 +312,10 @@ if __name__ == "__main__":
     config.tf = 20
 
     if config.run_name == "":
-        config.run_name = "TEST PRICE DIFF"
+        config.run_name = "JPO_TEST: SAC baseline, 2 actors, original prices"
 
-    # config.max_episodes = 5000
-    config.include_price = True
+    config.max_episodes = 5000
+    config.include_price = False
     config.dynamic_scaling = False
     # config.test = True
     # config.wandb_mode = "disabled"

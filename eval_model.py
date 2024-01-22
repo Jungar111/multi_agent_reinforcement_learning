@@ -302,8 +302,8 @@ if __name__ == "__main__":
     config.max_episodes = 10
     # config.total_number_of_cars = 374
     config.wandb_mode = "disabled"
-    config.include_price = True
+    config.include_price = False
     config.no_actors = 2
     config.cancellation = True
     price_model = PriceModel.DIFF_MODEL
-    main(config, run_name="SAC_2_actor_org_price_test", price_model=price_model)
+    main(config, run_name="JPO_DELETE_SAC_baseline", price_model=price_model)
