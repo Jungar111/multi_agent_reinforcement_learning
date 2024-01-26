@@ -88,8 +88,13 @@ def main(config: SACConfig, run_name: str, price_model: PriceModel):
         for i in range(config.no_actors)
     ]
     model_data_pairs = [ModelDataPair(rl_actors[i], actor_data[i]) for i in range(config.no_actors)]
+    for idx, model_data_pair in enumerate(model_data_pairs):
+        logger.info(f"Loading from saved_files/ckpt/{config.path}/{model_data_pair.actor_data.name}.pth")
+        model_data_pair.model.load_checkpoint(
+            path=f"saved_files/ckpt/{config.path}/{model_data_pair.actor_data.name}.pth"
+        )
     # model_data_pairs[0].model.load_checkpoint(
-    #     path=f"saved_files/ckpt/{config.path}/{model_data_pairs[0].actor_data.name}_last.pth"
+    #     path=f"saved_files/ckpt/{config.path}/{model_data_pairs[0].actor_data.name}.pth"
     # )
     train_episodes = config.max_episodes
     # T = config.max_steps
@@ -180,7 +185,7 @@ def main(config: SACConfig, run_name: str, price_model: PriceModel):
 
                             if price_model == PriceModel.REG_MODEL:
                                 model_data_pair.actor_data.graph_state.price[i, j][step + 1] = max(
-                                    (price[0][0] * tt), 10
+                                    (price[0][0] * tt), 0
                                 )
                             elif price_model == PriceModel.DIFF_MODEL:
                                 model_data_pair.actor_data.graph_state.price[i, j][step + 1] = (
@@ -252,10 +257,11 @@ def main(config: SACConfig, run_name: str, price_model: PriceModel):
             f"Mean price 1: {np.mean(prices[0]) if config.include_price else 0:.2f} | "
         )
         if config.no_actors > 1:
-            description += (
-                f"Reward 2: {episode_reward[1]:.2f} |"
-                f" Mean price 2: {np.mean(prices[1]) if config.include_price else 0:.2f}"
-            )
+            for i in range(1, config.no_actors):
+                description += (
+                    f"Reward {i+1}: {episode_reward[i]:.2f} |"
+                    f" Mean price {i+1}: {np.mean(prices[i]) if config.include_price else 0:.2f}"
+                )
         epochs.set_description(description)
         # Checkpoint best performing model
         if np.sum(episode_reward) >= best_reward:
@@ -307,16 +313,19 @@ def main(config: SACConfig, run_name: str, price_model: PriceModel):
 
 if __name__ == "__main__":
     torch.manual_seed(42)
-    city = City.san_francisco
+    city = City.brooklyn
     config = args_to_config(city, cuda=True)
     config.tf = 20
 
     if config.run_name == "":
-        config.run_name = "TEST PRICE DIFF"
+        config.run_name = "Transfer to brooklyn"
 
-    # config.max_episodes = 5000
+    config.max_episodes = 1000
+    config.no_actors = 2
     config.include_price = True
     config.dynamic_scaling = False
+    config.cancellation = True
+    config.no_cars = 1500
     # config.test = True
     # config.wandb_mode = "disabled"
     price_model = PriceModel.REG_MODEL

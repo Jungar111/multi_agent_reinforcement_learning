@@ -2,8 +2,10 @@
 import json
 import typing as T
 from collections import defaultdict
+from datetime import datetime
 
 import holoviews as hv
+import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -118,30 +120,37 @@ def _get_price_matrix(price_dicts: T.List, tf=20, n_actors=2) -> np.ndarray:
     return prices
 
 
-def plot_price_over_time(price_dicts: T.List, name: str, tf=20, n_actors=2) -> None:
+def plot_price_over_time(price_dicts: T.List, data: pd.DataFrame, name: str, tf=20, n_actors=2) -> None:
     """Price vs time plot."""
-    x = [i for i in range(tf)]
+    time_steps = [i * 3 for i in range(tf)]
+    x = [
+        datetime.fromisoformat(f"2008-06-06 08:0{i}") if i < 10 else datetime.fromisoformat(f"2008-06-06 08:{i}")
+        for i in time_steps
+    ]
+
     prices = _get_price_matrix(price_dicts, tf, n_actors)
     n_epochs = len(price_dicts)
+    xformatter = mdates.DateFormatter("%H:%M")
 
-    _, ax = plt.subplots(n_actors, 1)
+    _, ax = plt.subplots(n_actors, 1, sharex=True)
     for actor_idx in range(n_actors):
         mean_price = prices[actor_idx, ...].mean(axis=0)
-        ax[actor_idx].plot(mean_price, label="Mean price")
+        ax[actor_idx].plot(x, mean_price, label="Mean price", color="#8C1C13")
         if n_epochs > 1:
             std_price = prices[actor_idx, ...].std(axis=0)
             upper_bound = mean_price + 1.96 * std_price
             lower_bound = mean_price - 1.96 * std_price
-            ax[actor_idx].fill_between(x, lower_bound, upper_bound, alpha=0.6, label="95% CI", color="#2F4550")
+            ax[actor_idx].fill_between(x, lower_bound, upper_bound, alpha=0.2, label="95% CI", color="#2F4550")
             ax[actor_idx].plot(x, lower_bound, alpha=0.8, linestyle="dashed", color="#2F4550")
             ax[actor_idx].plot(x, upper_bound, alpha=0.8, linestyle="dashed", color="#2F4550")
+            plt.gcf().axes[actor_idx].xaxis.set_major_formatter(xformatter)
 
         ax[actor_idx].legend()
-        ax[actor_idx].set_title(f"Price over time - Actor {actor_idx + 1}")
+        ax[actor_idx].set_title(f"Actor {actor_idx + 1}")
+        ax[actor_idx].set_ylabel("Price difference")
 
     plt.xlabel("Time")
-    plt.ylabel("Delta price")
-    plt.savefig(f"figs/price_over_time_{name}.png", dpi=400)
+    plt.savefig(f"figs/{name}_price_over_time.png", dpi=400)
     plt.show()
 
 

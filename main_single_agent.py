@@ -211,17 +211,12 @@ def main(config: BaseConfig):
     """Run main training loop."""
     logger.info("Running main loop.")
 
-    advesary_number_of_cars = int(config.no_cars / 2)
-
     actor_data = [
-        ActorData(
-            name="RL_1",
-            no_cars=config.no_cars - advesary_number_of_cars,
-        ),
-        ActorData(
-            name="RL_2_",
-            no_cars=advesary_number_of_cars,
-        ),
+        ActorData(name="RL_1", no_cars=config.no_cars),  # - advesary_number_of_cars,
+        # ActorData(
+        #     name="RL_2_",
+        #     no_cars=advesary_number_of_cars,
+        # ),
     ]
 
     wandb_config_log = {**vars(config)}
@@ -231,9 +226,9 @@ def main(config: BaseConfig):
     wandb.init(
         mode=config.wandb_mode,
         project="master2023",
-        name=f"Test ({datetime.now().strftime('%Y-%m-%d %H:%M')})"
+        name=f"A2C_1_actor_no_bus_no_price ({datetime.now().strftime('%Y-%m-%d %H:%M')})"
         if config.test
-        else f"A2C maybe TD(0) ({datetime.now().strftime('%Y-%m-%d %H:%M')})",
+        else f"A2C with bus no price ({datetime.now().strftime('%Y-%m-%d %H:%M')})",
         config=wandb_config_log,
     )
 
@@ -266,11 +261,11 @@ def main(config: BaseConfig):
     )
     # Initialize A2C-GNN
     rl1_actor = ActorCritic(env=env, input_size=21, config=config)
-    rl2_actor = ActorCritic(env=env, input_size=21, config=config)
+    # rl2_actor = ActorCritic(env=env, input_size=21, config=config)
 
     model_data_pairs = [
         ModelDataPair(rl1_actor, actor_data[0]),
-        ModelDataPair(rl2_actor, actor_data[1]),
+        # ModelDataPair(rl2_actor, actor_data[1]),
     ]
     episode_length = config.max_steps  # set episode length
     n_actions = len(env.region)
@@ -305,13 +300,15 @@ def main(config: BaseConfig):
 if __name__ == "__main__":
     city = City.san_francisco
     config = args_to_config(city, cuda=False)
-    config.wandb_mode = "disabled"
+    # config.wandb_mode = "disabled"
     config.max_episodes = 16000 * 3
     # config.test = True
     # config.max_episodes = 11
     # config.json_file = None
     # config.grid_size_x = 2
     # config.grid_size_y = 3
+    config.cancellation = False
+    config.no_actors = 1
     config.tf = 20
     config.include_price = False
     main(config)

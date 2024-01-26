@@ -1,0 +1,25 @@
+{
+    "mean_prices": {},
+    "mean_served_demand": {
+        "0": 1033.3
+    },
+    "mean_cancelled_demand": {
+        "0": 0.0
+    },
+    "mean_unmet_demand": {},
+    "mean_rewards": {
+        "0": 14667.51
+    },
+    "std_prices": {},
+    "std_rewards": {
+        "0": 325.1675212871049
+    },
+    "mean_total_reward": 14667.51,
+    "mean_total_served_demand": 1033.3,
+    "mean_total_cancelled_demand": 0.0,
+    "mean_total_unmet_demand": 0,
+    "std_total_reward": 0,
+    "std_sum_served_demand": 0,
+    "std_sum_cancelled_demand": 0,
+    "std_sum_unmet_demand": 0
+}
