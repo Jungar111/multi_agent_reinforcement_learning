@@ -184,6 +184,9 @@ class ActorCritic(nn.Module):
         returns = []  # list to save the true values
 
         # calculate the true value using rewards returned from the environment
+        # r4
+        # r3 + r4*gamma
+        #
         for r in self.rewards[::-1]:
             # calculate the discounted value
             R = r + self.config.gamma * R

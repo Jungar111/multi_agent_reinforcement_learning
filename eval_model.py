@@ -22,11 +22,7 @@ from multi_agent_reinforcement_learning.envs.amod import AMoD
 from multi_agent_reinforcement_learning.envs.scenario import Scenario
 from multi_agent_reinforcement_learning.evaluation.actor_evaluation import (
     get_summary_stats,
-    plot_actions_as_function_of_time,
-    plot_average_distribution,
-    plot_price_distribution,
     plot_price_over_time,
-    plot_price_vs_other_attribute,
 )
 from multi_agent_reinforcement_learning.utils.init_logger import init_logger
 from multi_agent_reinforcement_learning.utils.minor_utils import dictsum
@@ -274,25 +270,25 @@ def main(config: SACConfig, run_name: str, price_model: PriceModel):
     )
 
     if config.no_actors > 1:
-        plot_price_over_time(epoch_prices, name=run_name)
-        plot_price_distribution(model_data_pair_prices=model_data_pair_prices, data=df, name=run_name)
-
-        plot_price_vs_other_attribute(epoch_prices, epoch_served_demand, "served_demand", plot_name=run_name)
-        plot_price_vs_other_attribute(epoch_prices, epoch_unmet_demand, "unmet_demand", plot_name=run_name)
-
-        plot_actions_as_function_of_time(
-            actions=np.array(actions_over_epoch),
-            chosen_areas=[8, 9, 10],
-            colors=["#8C1C13", "#2F4550", "#A3BBAD"],
-            name=run_name,
-        )
-        plot_average_distribution(
-            config=config,
-            actions=all_actions,
-            T=20,
-            model_data_pairs=model_data_pairs,
-            name=run_name,
-        )
+        plot_price_over_time(epoch_prices, data=df, name=run_name)
+        # plot_price_distribution(model_data_pair_prices=model_data_pair_prices, data=df, name=run_name)
+        #
+        # plot_price_vs_other_attribute(epoch_prices, epoch_served_demand, "served_demand", plot_name=run_name)
+        # plot_price_vs_other_attribute(epoch_prices, epoch_unmet_demand, "unmet_demand", plot_name=run_name)
+        #
+        # plot_actions_as_function_of_time(
+        #     actions=np.array(actions_over_epoch),
+        #     chosen_areas=[8, 9, 10],
+        #     colors=["#8C1C13", "#2F4550", "#A3BBAD"],
+        #     name=run_name,
+        # )
+        # plot_average_distribution(
+        #     config=config,
+        #     actions=all_actions,
+        #     T=20,
+        #     model_data_pairs=model_data_pairs,
+        #     name=run_name,
+        # )
 
 
 if __name__ == "__main__":
@@ -300,10 +296,10 @@ if __name__ == "__main__":
     config = args_to_config(city, cuda=True)
     config.tf = 20
     config.max_episodes = 10
-    # config.total_number_of_cars = 374
+    config.no_cars = 374
     config.wandb_mode = "disabled"
     config.include_price = True
     config.no_actors = 2
     config.cancellation = True
     price_model = PriceModel.DIFF_MODEL
-    main(config, run_name="SAC_2_actor_org_price_test", price_model=price_model)
+    main(config, run_name="FINAL_price_strategy_2", price_model=price_model)
