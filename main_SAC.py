@@ -76,7 +76,7 @@ def main(config: SACConfig, run_name: str, price_model: PriceModel):
             env=env,
             config=config,
             actor_data=actor_data[i],
-            input_size=13,
+            input_size=26,
             hidden_size=config.hidden_size,
             p_lr=config.p_lr,
             q_lr=config.q_lr,
@@ -87,12 +87,16 @@ def main(config: SACConfig, run_name: str, price_model: PriceModel):
         )
         for i in range(config.no_actors)
     ]
+    # rl_actors[1].critic1 = rl_actors[0].critic1
+    # rl_actors[1].critic1_target = rl_actors[0].critic1_target
+    # rl_actors[1].critic2 = rl_actors[0].critic2
+    # rl_actors[1].critic2_target = rl_actors[0].critic2_target
     model_data_pairs = [ModelDataPair(rl_actors[i], actor_data[i]) for i in range(config.no_actors)]
-    for idx, model_data_pair in enumerate(model_data_pairs):
-        logger.info(f"Loading from saved_files/ckpt/{config.path}/{model_data_pair.actor_data.name}.pth")
-        model_data_pair.model.load_checkpoint(
-            path=f"saved_files/ckpt/{config.path}/{model_data_pair.actor_data.name}.pth"
-        )
+    # for idx, model_data_pair in enumerate(model_data_pairs):
+    #     logger.info(f"Loading from saved_files/ckpt/{config.path}/{model_data_pair.actor_data.name}.pth")
+    #     model_data_pair.model.load_checkpoint(
+    #         path=f"saved_files/ckpt/{config.path}/{model_data_pair.actor_data.name}.pth"
+    #     )
     # model_data_pairs[0].model.load_checkpoint(
     #     path=f"saved_files/ckpt/{config.path}/{model_data_pairs[0].actor_data.name}.pth"
     # )
@@ -148,8 +152,15 @@ def main(config: SACConfig, run_name: str, price_model: PriceModel):
                 cplex_path=config.cplex_path,
                 path=config.path,
             )
+            o[0] = parser.parse_obs(model_data_pairs[0].actor_data.graph_state)
+            o[1] = parser.parse_obs(model_data_pairs[1].actor_data.graph_state)
+
+            o_shared = o[0]
+            shared_x = torch.cat((o[0].x, o[1].x), 1)
+            # shared_edge_index = torch.cat((o[0].edge_index, o[1].edge_index),1)
+            o_shared.x = shared_x
+            # o_shared.edge_index = shared_edge_index
             for idx, model_data_pair in enumerate(model_data_pairs):
-                o[idx] = parser.parse_obs(model_data_pair.actor_data.graph_state)
                 episode_reward[idx] += model_data_pair.actor_data.rewards.pax_reward
                 if step > 0:
                     # store transition in memory
@@ -174,8 +185,10 @@ def main(config: SACConfig, run_name: str, price_model: PriceModel):
                         )
 
                 if config.include_price:
-                    action_rl[idx], price = model_data_pair.model.select_action(o[idx])
-
+                    # if step > 0:
+                    action_rl[idx], price = model_data_pair.model.select_action(o_shared)
+                    # else:
+                    #     action_rl[idx], price = model_data_pair.model.select_action(o[idx])
                     for i in range(config.n_regions[config.city]):
                         for j in range(config.n_regions[config.city]):
                             tt = travel_time_dict.get((i, j, step * config.json_tstep), 1)
@@ -313,20 +326,20 @@ def main(config: SACConfig, run_name: str, price_model: PriceModel):
 
 if __name__ == "__main__":
     torch.manual_seed(42)
-    city = City.brooklyn
+    city = City.san_francisco
     config = args_to_config(city, cuda=True)
     config.tf = 20
 
     if config.run_name == "":
-        config.run_name = "Transfer to brooklyn"
+        config.run_name = "Test same critics"
 
-    config.max_episodes = 1000
+    config.max_episodes = 5000
     config.no_actors = 2
     config.include_price = True
     config.dynamic_scaling = False
     config.cancellation = True
-    config.no_cars = 1500
+    # config.no_cars = 374
     # config.test = True
-    # config.wandb_mode = "disabled"
+    config.wandb_mode = "disabled"
     price_model = PriceModel.REG_MODEL
     main(config, run_name=config.run_name, price_model=price_model)

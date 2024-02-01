@@ -212,11 +212,11 @@ class GNNCritic(nn.Module):
             add_to_channel += 1
 
         self.act_dim = act_dim
-        self.conv1 = GCNConv(in_channels, in_channels)
-        self.lin1 = nn.Linear(in_channels + add_to_channel, hidden_size)
+        self.conv1 = GCNConv(13, 13)
+        self.lin1 = nn.Linear(13 + add_to_channel, hidden_size)
         self.lin2 = nn.Linear(hidden_size, hidden_size)
         self.lin3 = nn.Linear(hidden_size, 1)
-        self.in_channels = in_channels
+        self.in_channels = 13
 
     def forward(self, state, edge_index, action, price=None):
         """Forward pass for the critic."""
@@ -417,14 +417,15 @@ class SAC(nn.Module):
         )
         if self.config.include_price:
             price = data.price
-            q1 = self.critic1(state_batch, edge_index, action_batch, price)
-            q2 = self.critic2(state_batch, edge_index, action_batch, price)
+            q1 = self.critic1(state_batch[:, :13], edge_index, action_batch, price)
+            q2 = self.critic2(state_batch[:, :13], edge_index, action_batch, price)
         else:
-            q1 = self.critic1(state_batch, edge_index, action_batch)
-            q2 = self.critic2(state_batch, edge_index, action_batch)
+            q1 = self.critic1(state_batch[:, :13], edge_index, action_batch)
+            q2 = self.critic2(state_batch[:, :13], edge_index, action_batch)
         with torch.no_grad():
             # Target actions come from *current* policy
             if self.config.include_price:
+                # TODO: hvad kan man gøre her? Vi skal have next state fra begge actors?
                 a2, logp_a2, _, logp_p = self.actor(
                     next_state_batch,
                     edge_index2,
@@ -433,8 +434,8 @@ class SAC(nn.Module):
                     logp_a2 *= float(torch.abs(logp_p.mean() / logp_a2.mean()))
                 else:
                     logp_a2 *= 0.1
-                q1_pi_targ = self.critic1_target(next_state_batch, edge_index2, a2, price)
-                q2_pi_targ = self.critic2_target(next_state_batch, edge_index2, a2, price)
+                q1_pi_targ = self.critic1_target(next_state_batch[:, :13], edge_index2, a2, price)
+                q2_pi_targ = self.critic2_target(next_state_batch[:, :13], edge_index2, a2, price)
                 q_pi_targ = torch.min(q1_pi_targ, q2_pi_targ)
                 backup = reward_batch + self.gamma * (q_pi_targ - self.alpha * (logp_a2 + logp_p))
             else:
@@ -467,8 +468,8 @@ class SAC(nn.Module):
             # maybe TODO Look into alpha, may make a difference - 0.1 to 0.3
             actor_val = self.alpha * (logp_a + logp_p)
             # @TODO hallo pris
-            q1_1 = self.critic1(state_batch, edge_index, actions, price)
-            q2_a = self.critic2(state_batch, edge_index, actions, price)
+            q1_1 = self.critic1(state_batch[:, :13], edge_index, actions, price)
+            q2_a = self.critic2(state_batch[:, :13], edge_index, actions, price)
             q_a = torch.min(q1_1, q2_a)
         else:
             actions, logp_a = self.actor(state_batch, edge_index)
