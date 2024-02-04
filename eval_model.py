@@ -305,5 +305,5 @@ if __name__ == "__main__":
     config.include_price = True
     config.no_actors = 2
     config.cancellation = True
-    price_model = PriceModel.DIFF_MODEL
-    main(config, run_name="FINAL_price_strategy_2", price_model=price_model)
+    price_model = PriceModel.REG_MODEL
+    main(config, run_name="Test no look ahead", price_model=price_model)

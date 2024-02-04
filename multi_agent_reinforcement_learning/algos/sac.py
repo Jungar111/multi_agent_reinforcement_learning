@@ -70,15 +70,21 @@ class ReplayData:
 
     def store(self, data1, action, reward, data2, price):
         """Store data in the buffer."""
+        x1 = torch.concat([d.x for d in data1], dim=1)
+        x2 = torch.concat([d.x for d in data2], dim=1)
+        action = torch.concat([torch.tensor(a).unsqueeze(dim=-1) for a in action], dim=1)
+        price = torch.concat([torch.tensor(p) for p in price], dim=1)
+        edge_index1 = data1[0].edge_index
+        edge_index2 = data2[0].edge_index
         self.data_list.append(
             PairData(
-                edge_index_s=data1.edge_index,
-                x_s=data1.x,
+                edge_index_s=edge_index1,
+                x_s=x1,
                 reward=torch.as_tensor(reward),
-                action=torch.as_tensor(action),
-                edge_index_t=data2.edge_index,
-                x_t=data2.x,
-                price=torch.as_tensor(price[0]) if price != None else None,
+                action=action,
+                edge_index_t=edge_index2,
+                x_t=x2,
+                price=price if price != None else None,
             )
         )
         self.rewards.append(reward)
@@ -133,6 +139,7 @@ class GNNActor(nn.Module):
         self.in_channels = in_channels
         self.act_dim = act_dim
         self.conv1 = GCNConv(in_channels, in_channels)
+        self.conv2 = GCNConv(in_channels, in_channels)
         self.lin1 = nn.Linear(in_channels, hidden_size)
         self.lin2 = nn.Linear(hidden_size, hidden_size)
         self.dirichlet_concentration_layer = nn.Linear(hidden_size, 1)
@@ -146,6 +153,7 @@ class GNNActor(nn.Module):
     def forward(self, state, edge_index, deterministic=False):
         """Forward pass for the actor."""
         out = F.relu(self.conv1(state, edge_index))
+        out = F.relu(self.conv2(out, edge_index))
         x = out + state
         x = x.reshape(-1, self.act_dim, self.in_channels)
         x = F.leaky_relu(self.lin1(x))
@@ -209,10 +217,11 @@ class GNNCritic(nn.Module):
         super().__init__()
         add_to_channel = 1
         if price:
-            add_to_channel += 1
+            add_to_channel += 3
 
         self.act_dim = act_dim
         self.conv1 = GCNConv(in_channels, in_channels)
+        self.conv2 = GCNConv(in_channels, in_channels)
         self.lin1 = nn.Linear(in_channels + add_to_channel, hidden_size)
         self.lin2 = nn.Linear(hidden_size, hidden_size)
         self.lin3 = nn.Linear(hidden_size, 1)
@@ -221,6 +230,7 @@ class GNNCritic(nn.Module):
     def forward(self, state, edge_index, action, price=None):
         """Forward pass for the critic."""
         out = F.relu(self.conv1(state, edge_index))
+        out = F.relu(self.conv2(out, edge_index))
         x = out + state
         x = x.reshape(-1, self.act_dim, self.in_channels)  # (B,N,21)
         # (B,N,22)
@@ -238,8 +248,8 @@ class GNNCritic(nn.Module):
         # [0.251, 1.23]
         # [0.251, 1.23]
         if price is not None:
-            concat = torch.cat([x, action.unsqueeze(-1)], dim=-1)
-            concat = torch.concat([concat, price.repeat(1, action.size(1)).unsqueeze(-1)], dim=-1)
+            concat = torch.cat([x, action], dim=-1)
+            concat = torch.concat([concat, price], dim=-1)
         else:
             concat = torch.cat([x, action.unsqueeze(-1)], dim=-1)
         x = F.relu(self.lin1(concat))
@@ -321,7 +331,7 @@ class SAC(nn.Module):
         self.step = 0
         self.nodes = env.nregion
 
-        self.replay_buffer = ReplayData(device=device)
+        self.replay_buffer: ReplayData = ReplayData(device=device)
         # nnets
         self.actor = GNNActor(self.config, self.input_size, self.hidden_size, act_dim=self.act_dim)
 
@@ -384,13 +394,15 @@ class SAC(nn.Module):
         state = self.obs_parser.parse_obs(obs)
         return state
 
-    def select_action(self, data, deterministic=False):
+    def select_action(self, data1, data2, deterministic=False):
         """Select action with actor."""
         with torch.no_grad():
+            x = torch.concat((data1.x, data2.x), dim=1)
+            edge_index = data1.edge_index
             if self.config.include_price:
-                a, _, price, _ = self.actor(data.x, data.edge_index, deterministic)
+                a, _, price, _ = self.actor(x, edge_index, deterministic)
             else:
-                a, _ = self.actor(data.x, data.edge_index, deterministic)
+                a, _ = self.actor(x, edge_index, deterministic)
         a = a.squeeze(-1)
         a = a.detach().cpu().numpy()[0]
         if self.config.include_price:
@@ -398,7 +410,7 @@ class SAC(nn.Module):
             return list(a), price.tolist()
         return list(a)
 
-    def compute_loss_q(self, data):
+    def compute_loss_q(self, data, second_actor):
         """Loss for the critic."""
         (
             state_batch,
@@ -413,10 +425,10 @@ class SAC(nn.Module):
             data.x_t,
             data.edge_index_t,
             data.reward,
-            data.action.reshape(-1, self.nodes),
+            data.action.reshape(-1, self.nodes, self.config.no_actors),
         )
         if self.config.include_price:
-            price = data.price
+            price = data.price.reshape(-1, self.nodes, self.config.no_actors)
             q1 = self.critic1(state_batch, edge_index, action_batch, price)
             q2 = self.critic2(state_batch, edge_index, action_batch, price)
         else:
@@ -425,16 +437,26 @@ class SAC(nn.Module):
         with torch.no_grad():
             # Target actions come from *current* policy
             if self.config.include_price:
-                a2, logp_a2, _, logp_p = self.actor(
+                a2, logp_a2, p2, logp_p = self.actor(
                     next_state_batch,
                     edge_index2,
                 )
+                action_second, _, price_second, _ = second_actor(next_state_batch, edge_index2)
+
+                price_next_state = torch.concat([p2, price_second], dim=-1).reshape(
+                    -1, self.nodes, self.config.no_actors
+                )
+
+                price_next_state = torch.repeat_interleave(price_next_state, 10, dim=0)
+
                 if self.config.dynamic_scaling:
                     logp_a2 *= float(torch.abs(logp_p.mean() / logp_a2.mean()))
                 else:
                     logp_a2 *= 0.1
-                q1_pi_targ = self.critic1_target(next_state_batch, edge_index2, a2, price)
-                q2_pi_targ = self.critic2_target(next_state_batch, edge_index2, a2, price)
+
+                a2 = torch.concat([a2, action_second], dim=-1).reshape(-1, self.nodes, self.config.no_actors)
+                q1_pi_targ = self.critic1_target(next_state_batch, edge_index2, a2, price_next_state)
+                q2_pi_targ = self.critic2_target(next_state_batch, edge_index2, a2, price_next_state)
                 q_pi_targ = torch.min(q1_pi_targ, q2_pi_targ)
                 backup = reward_batch + self.gamma * (q_pi_targ - self.alpha * (logp_a2 + logp_p))
             else:
@@ -449,7 +471,7 @@ class SAC(nn.Module):
 
         return loss_q1, loss_q2
 
-    def compute_loss_pi(self, data):
+    def compute_loss_pi(self, data, second_actor):
         """Loss for the actor."""
         state_batch, edge_index = (
             data.x_s,
@@ -458,7 +480,9 @@ class SAC(nn.Module):
         actor_val = 0
         if self.config.include_price:
             actions, logp_a, price, logp_p = self.actor(state_batch, edge_index)
-            price = price[:, :, 0]
+            actions2, _, price2, _ = second_actor(state_batch, edge_index)
+            # price = price[:, :, 0]
+            # price2 = price2[:, :, 0]
             if self.config.dynamic_scaling:
                 logp_a *= float(torch.abs(logp_p.mean() / logp_a.mean()))
             else:
@@ -467,6 +491,10 @@ class SAC(nn.Module):
             # maybe TODO Look into alpha, may make a difference - 0.1 to 0.3
             actor_val = self.alpha * (logp_a + logp_p)
             # @TODO hallo pris
+            actions = torch.concat([actions, actions2], dim=-1).reshape(-1, self.nodes, self.config.no_actors)
+            price = torch.concat([price, price2], dim=-1).reshape(-1, self.nodes, self.config.no_actors)
+            price = torch.repeat_interleave(price, 10, dim=0)
+
             q1_1 = self.critic1(state_batch, edge_index, actions, price)
             q2_a = self.critic2(state_batch, edge_index, actions, price)
             q_a = torch.min(q1_1, q2_a)
@@ -488,9 +516,9 @@ class SAC(nn.Module):
 
         return loss_pi
 
-    def update(self, data):
+    def update(self, data, second_actor):
         """Update the model weights and biases."""
-        loss_q1, loss_q2 = self.compute_loss_q(data)
+        loss_q1, loss_q2 = self.compute_loss_q(data, second_actor=second_actor)
 
         self.optimizers["c1_optimizer"].zero_grad()
 
@@ -521,7 +549,7 @@ class SAC(nn.Module):
 
         # one gradient descent step for policy network
         self.optimizers["a_optimizer"].zero_grad()
-        loss_pi = self.compute_loss_pi(data)
+        loss_pi = self.compute_loss_pi(data, second_actor)
         loss_pi.backward(retain_graph=False)
         nn.utils.clip_grad_norm_(self.actor.parameters(), 10)
         self.optimizers["a_optimizer"].step()
@@ -531,6 +559,8 @@ class SAC(nn.Module):
             p.requires_grad = True
         for p in self.critic2.parameters():
             p.requires_grad = True
+
+        return np.mean(np.array([loss_q1.detach().numpy(), loss_q2.detach().numpy()]))
 
     def configure_optimizers(self):
         """Configure optimizers for the sac algorithm."""

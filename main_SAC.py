@@ -3,17 +3,19 @@ from __future__ import print_function
 
 import copy
 import json
+import typing as T
 from datetime import datetime
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import torch
+from torch_geometric.data import Data
 from tqdm import trange
 
 import wandb
 from multi_agent_reinforcement_learning.algos.reb_flow_solver import solveRebFlow
-from multi_agent_reinforcement_learning.algos.sac import SAC
+from multi_agent_reinforcement_learning.algos.sac import SAC, ReplayData
 from multi_agent_reinforcement_learning.algos.sac_gnn_parser import GNNParser
 from multi_agent_reinforcement_learning.data_models.actor_data import (
     ActorData,
@@ -76,7 +78,7 @@ def main(config: SACConfig, run_name: str, price_model: PriceModel):
             env=env,
             config=config,
             actor_data=actor_data[i],
-            input_size=13,
+            input_size=13 * 2,
             hidden_size=config.hidden_size,
             p_lr=config.p_lr,
             q_lr=config.q_lr,
@@ -88,11 +90,11 @@ def main(config: SACConfig, run_name: str, price_model: PriceModel):
         for i in range(config.no_actors)
     ]
     model_data_pairs = [ModelDataPair(rl_actors[i], actor_data[i]) for i in range(config.no_actors)]
-    for idx, model_data_pair in enumerate(model_data_pairs):
-        logger.info(f"Loading from saved_files/ckpt/{config.path}/{model_data_pair.actor_data.name}.pth")
-        model_data_pair.model.load_checkpoint(
-            path=f"saved_files/ckpt/{config.path}/{model_data_pair.actor_data.name}.pth"
-        )
+    # for idx, model_data_pair in enumerate(model_data_pairs):
+    #     logger.info(f"Loading from saved_files/ckpt/{config.path}/{model_data_pair.actor_data.name}.pth")
+    #     model_data_pair.model.load_checkpoint(
+    #         path=f"saved_files/ckpt/{config.path}/{model_data_pair.actor_data.name}.pth"
+    #     )
     # model_data_pairs[0].model.load_checkpoint(
     #     path=f"saved_files/ckpt/{config.path}/{model_data_pairs[0].actor_data.name}.pth"
     # )
@@ -109,11 +111,14 @@ def main(config: SACConfig, run_name: str, price_model: PriceModel):
     df["converted_time_stamp"] = (df["time_stamp"] - config.json_hr[config.city] * 60) // config.json_tstep
     travel_time_dict = df.groupby(["origin", "destination", "converted_time_stamp"])["travel_time"].mean().to_dict()
     if config.include_price:
-        logger.info(f"VOT {value_of_time(df.price, df.travel_time, demand_ratio=config.demand_ratio[config.city]):.2f}")
+        current_vot = value_of_time(
+            np.array(df.price), np.array(df.travel_time), demand_ratio=config.demand_ratio[config.city]
+        )
+        logger.info(f"VOT {current_vot:.2f}")
 
         # Used for price diff
-        init_price_dict = df.groupby(["origin", "destination"]).price.mean().to_dict()
-        init_price_mean = df.price.mean()
+    init_price_dict = df.groupby(["origin", "destination"]).price.mean().to_dict()
+    init_price_mean = df.price.mean()
 
     wandb_config_log = {**vars(config)}
     for model in model_data_pairs:
@@ -127,82 +132,96 @@ def main(config: SACConfig, run_name: str, price_model: PriceModel):
             model_data_pair.actor_data.model_log = ModelLog()
 
         env.reset(model_data_pairs)  # initialize environment
-        episode_reward = [0 for _ in range(config.no_actors)]
+        episode_reward = [0.0 for _ in range(config.no_actors)]
         episode_served_demand = 0
         episode_rebalancing_cost = 0
         done = False
         step = 0
-        o = [None for _ in range(config.no_actors)]
+        current_state: T.List[T.Optional[Data]] = [None for _ in range(config.no_actors)]
         action_rl = [None for _ in range(config.no_actors)]
-        obs_list = [None for _ in range(config.no_actors)]
-        if config.include_price:
-            prices = {i: [] for i in range(config.no_actors)}
+        previous_state: T.List[T.Optional[Data]] = [None for _ in range(config.no_actors)]
+        prices: T.Dict[int, T.List[float]] = {i: [] for i in range(config.no_actors)}
+        prices_new: T.Dict[int, T.List[float]] = {i: [] for i in range(config.no_actors)}
+        critic_loss: T.Dict[int, T.List[float]] = {i: [] for i in range(config.no_actors)}
         while not done:
             # take matching step (Step 1 in paper)
             if step > 0:
+                prices_new = {i: [] for i in range(config.no_actors)}
                 for i in range(config.no_actors):
-                    obs_list[i] = copy.deepcopy(o[i])
+                    previous_state[i] = copy.deepcopy(current_state[i])
 
             done = env.pax_step(
                 model_data_pairs=model_data_pairs,
                 cplex_path=config.cplex_path,
                 path=config.path,
             )
+
             for idx, model_data_pair in enumerate(model_data_pairs):
-                o[idx] = parser.parse_obs(model_data_pair.actor_data.graph_state)
+                current_state[idx] = parser.parse_obs(model_data_pair.actor_data.graph_state)
+
+            for idx, model_data_pair in enumerate(model_data_pairs):
                 episode_reward[idx] += model_data_pair.actor_data.rewards.pax_reward
+                if config.include_price:
+                    action_rl[idx], price = model_data_pair.model.select_action(
+                        *[current_state[i] for i in range(config.no_actors)]
+                    )
+                else:
+                    action_rl[idx] = model_data_pair.model.select_action(
+                        *[current_state[i] for i in range(config.no_actors)]
+                    )
+
+                for i in range(config.n_regions[config.city]):
+                    for j in range(config.n_regions[config.city]):
+                        tt = travel_time_dict.get((i, j, step * config.json_tstep), 1)
+                        model_data_pair.actor_data.flow.value_of_time[i, j][step + 1] = price[0][0]
+
+                        model_data_pair.actor_data.flow.travel_time[i, j][step + 1] = tt
+
+                        match price_model:
+                            case PriceModel.REG_MODEL:
+                                model_data_pair.actor_data.graph_state.price[i, j][step + 1] = max(
+                                    (price[0][0] * tt), 0
+                                )
+                            case PriceModel.DIFF_MODEL:
+                                model_data_pair.actor_data.graph_state.price[i, j][step + 1] = (
+                                    init_price_dict.get((i, j), init_price_mean) + price[0][0]
+                                )
+                            case PriceModel.ZERO_DIFF_MODEL:
+                                model_data_pair.actor_data.graph_state.price[i, j][step + 1] = init_price_dict.get(
+                                    (i, j), init_price_mean
+                                )
+                            case _:
+                                raise ValueError("Invalid price model")
+
+                    prices[idx].append(price[0])
+                    prices_new[idx].append(price[0])
+
+            for idx, model_data_pair in enumerate(model_data_pairs):
                 if step > 0:
                     # store transition in memory
                     rl_reward = (
                         model_data_pair.actor_data.rewards.pax_reward + model_data_pair.actor_data.rewards.reb_reward
                     )
-                    if config.include_price:
-                        model_data_pair.model.replay_buffer.store(
-                            obs_list[idx],
-                            action_rl[idx],
-                            config.rew_scale * rl_reward,
-                            o[idx],
-                            prices[idx],
-                        )
+                    if isinstance(model_data_pair.model.replay_buffer, ReplayData):
+                        if config.include_price:
+                            model_data_pair.model.replay_buffer.store(
+                                [previous_state[idx], previous_state[idx ^ 1]],
+                                [action_rl[idx], action_rl[idx ^ 1]],
+                                config.rew_scale * rl_reward,
+                                [current_state[idx], current_state[idx ^ 1]],
+                                [prices_new[idx], prices_new[idx ^ 1]],
+                            )
+                        else:
+                            model_data_pair.model.replay_buffer.store(
+                                previous_state[idx],
+                                action_rl[idx],
+                                config.rew_scale * rl_reward,
+                                current_state[idx],
+                                None,
+                            )
                     else:
-                        model_data_pair.model.replay_buffer.store(
-                            obs_list[idx],
-                            action_rl[idx],
-                            config.rew_scale * rl_reward,
-                            o[idx],
-                            None,
-                        )
+                        raise TypeError("replay_buffer not of type ReplayData")
 
-                if config.include_price:
-                    action_rl[idx], price = model_data_pair.model.select_action(o[idx])
-
-                    for i in range(config.n_regions[config.city]):
-                        for j in range(config.n_regions[config.city]):
-                            tt = travel_time_dict.get((i, j, step * config.json_tstep), 1)
-                            model_data_pair.actor_data.flow.value_of_time[i, j][step + 1] = price[0][0]
-
-                            model_data_pair.actor_data.flow.travel_time[i, j][step + 1] = tt
-
-                            if price_model == PriceModel.REG_MODEL:
-                                model_data_pair.actor_data.graph_state.price[i, j][step + 1] = max(
-                                    (price[0][0] * tt), 0
-                                )
-                            elif price_model == PriceModel.DIFF_MODEL:
-                                model_data_pair.actor_data.graph_state.price[i, j][step + 1] = (
-                                    init_price_dict.get((i, j), init_price_mean) + price[0][0]
-                                )
-                            elif price_model == PriceModel.ZERO_DIFF_MODEL:
-                                model_data_pair.actor_data.graph_state.price[i, j][step + 1] = init_price_dict.get(
-                                    (i, j), init_price_mean
-                                )
-                    prices[idx].append(price)
-                else:
-                    action_rl[idx] = model_data_pair.model.select_action(o[idx])
-                    for i in range(config.n_regions[config.city]):
-                        for j in range(config.n_regions[config.city]):
-                            tt = travel_time_dict.get((i, j, step * config.json_tstep), 1)
-
-                            model_data_pair.actor_data.flow.travel_time[i, j][step + 1] = tt
             for idx, model in enumerate(model_data_pairs):
                 # transform sample from Dirichlet into actual vehicle counts (i.e. (x1*x2*..*xn)*num_vehicles)
                 model.actor_data.flow.desired_acc = {
@@ -243,11 +262,13 @@ def main(config: SACConfig, run_name: str, price_model: PriceModel):
                 )
                 model_data_pair.model.rewards.append(reward_for_episode)
             step += 1
-            for model in model_data_pairs:
+            for idx, model in enumerate(model_data_pairs):
                 if i_episode > 10:
                     # sample from memory and update model
                     batch = model.model.replay_buffer.sample_batch(config.batch_size, norm=False)
-                    model.model.update(data=batch)
+                    critic_loss[idx].append(
+                        model.model.update(data=batch, second_actor=model_data_pairs[idx ^ 1].model.actor)
+                    )
 
         description = (
             f"Episode {i_episode+1} | "
@@ -288,6 +309,7 @@ def main(config: SACConfig, run_name: str, price_model: PriceModel):
 
         for idx, model_data_pair in enumerate(model_data_pairs):
             logging_dict.update(model_data_pair.actor_data.model_log.dict(model_data_pair.actor_data.name))
+            logging_dict.update({f"{model_data_pair.actor_data.name} Mean critic loss": np.mean(critic_loss[idx])})
             if config.include_price:
                 logging_dict.update({f"{model_data_pair.actor_data.name} Mean Price": np.mean(prices[idx])})
         if i_episode + 1 == train_episodes:
@@ -313,19 +335,19 @@ def main(config: SACConfig, run_name: str, price_model: PriceModel):
 
 if __name__ == "__main__":
     torch.manual_seed(42)
-    city = City.brooklyn
+    city = City.san_francisco
     config = args_to_config(city, cuda=True)
     config.tf = 20
 
     if config.run_name == "":
-        config.run_name = "Transfer to brooklyn"
+        config.run_name = "Perfect information"
 
-    config.max_episodes = 1000
+    config.max_episodes = 5000
     config.no_actors = 2
     config.include_price = True
     config.dynamic_scaling = False
     config.cancellation = True
-    config.no_cars = 1500
+    config.no_cars = 374
     # config.test = True
     # config.wandb_mode = "disabled"
     price_model = PriceModel.REG_MODEL
